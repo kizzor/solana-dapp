@@ -1,70 +1,153 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js'
+import { useState } from 'react'
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  TransactionInstruction,
+} from '@solana/web3.js'
 
 export default function Home() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
 
-  // Connect Phantom
   const connectWallet = async () => {
-    try {
-      const provider = (window as any).solana
-      if (provider) {
-        const resp = await provider.connect()
-        setWalletAddress(resp.publicKey.toString())
-      } else {
-        alert('Phantom wallet not found. Please install it.')
-      }
-    } catch (err) {
-      console.error(err)
+    const provider = (window as any).solana
+    if (!provider) {
+      alert('Phantom wallet not found')
+      return
     }
+    const resp = await provider.connect()
+    setWalletAddress(resp.publicKey.toString())
   }
 
-  // Send 0.01 SOL to a test address
-  const sendTransaction = async () => {
-    try {
-      const provider = (window as any).solana
-      if (!provider || !walletAddress) {
-        alert('Connect your wallet first!')
-        return
-      }
+  const callProgram = async (instructionIndex: number, accounts: any[]) => {
+    if (!walletAddress) return
 
-      const connection = new Connection('https://api.devnet.solana.com', 'confirmed')
+    const provider = (window as any).solana
+    const connection = new Connection('https://api.devnet.solana.com', 'confirmed')
 
-      // Replace with your own test recipient address
-      const recipient = new PublicKey('7krVZgg69yQBCiHunnsDERCP1hJ9gpds8fTESzc66CgH')
+    const programId = new PublicKey('CZmrXHfMXuP3uUPGApinsKH9dfQZVdNehAmsnpLqTw6d')
+    const userPubkey = new PublicKey(walletAddress)
 
-      const transaction = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: new PublicKey(walletAddress),
-          toPubkey: recipient,
-          lamports: 0.01 * 1e9, // 0.01 SOL in lamports
-        })
-      )
+    const data = Buffer.from(Uint8Array.of(instructionIndex))
 
-      transaction.feePayer = new PublicKey(walletAddress)
-      const { blockhash } = await connection.getLatestBlockhash()
-      transaction.recentBlockhash = blockhash
+    const instruction = new TransactionInstruction({
+      keys: accounts,
+      programId,
+      data,
+    })
 
-      const signed = await provider.signTransaction(transaction)
-      const signature = await connection.sendRawTransaction(signed.serialize())
-      await connection.confirmTransaction(signature)
+    const transaction = new Transaction().add(instruction)
+    transaction.feePayer = userPubkey
+    const { blockhash } = await connection.getLatestBlockhash()
+    transaction.recentBlockhash = blockhash
 
-      alert(`Transaction successful! Signature: ${signature}`)
-    } catch (err) {
-      console.error(err)
-      alert('Transaction failed. Check console for details.')
-    }
+    const signed = await provider.signTransaction(transaction)
+    const signature = await connection.sendRawTransaction(signed.serialize())
+    await connection.confirmTransaction(signature)
+
+    alert(`Instruction ${instructionIndex} successful! Signature: ${signature}`)
   }
 
   return (
     <main>
-      <h1>Solana dApp</h1>
+      <h1>Ransome dApp</h1>
       {walletAddress ? (
         <>
           <p>Connected: {walletAddress}</p>
-          <button onClick={sendTransaction}>Send 0.01 SOL</button>
+
+          {/* Validate Clickables */}
+          <button
+            onClick={async () => {
+              const programId = new PublicKey('CZmrXHfMXuP3uUPGApinsKH9dfQZVdNehAmsnpLqTw6d')
+              const userPubkey = new PublicKey(walletAddress)
+              const [devicePda] = await PublicKey.findProgramAddress(
+                [Buffer.from("device"), userPubkey.toBuffer()],
+                programId
+              )
+              callProgram(0, [
+                { pubkey: devicePda, isSigner: false, isWritable: true },
+                { pubkey: userPubkey, isSigner: true, isWritable: false },
+              ])
+            }}
+          >
+            Validate Clickables
+          </button>
+
+          {/* Trigger Claim Window */}
+          <button
+            onClick={async () => {
+              const programId = new PublicKey('CZmrXHfMXuP3uUPGApinsKH9dfQZVdNehAmsnpLqTw6d')
+              const [claimQueuePda] = await PublicKey.findProgramAddress(
+                [Buffer.from("claim_queue")],
+                programId
+              )
+              callProgram(1, [
+                { pubkey: claimQueuePda, isSigner: false, isWritable: true },
+                { pubkey: new PublicKey(walletAddress), isSigner: true, isWritable: false },
+              ])
+            }}
+          >
+            Trigger Claim Window
+          </button>
+
+          {/* Distribute Payouts */}
+          <button
+            onClick={async () => {
+              const programId = new PublicKey('CZmrXHfMXuP3uUPGApinsKH9dfQZVdNehAmsnpLqTw6d')
+              const [distributionPda] = await PublicKey.findProgramAddress(
+                [Buffer.from("distribution")],
+                programId
+              )
+              const [bankPda] = await PublicKey.findProgramAddress(
+                [Buffer.from("bank")],
+                programId
+              )
+              callProgram(2, [
+                { pubkey: distributionPda, isSigner: false, isWritable: true },
+                { pubkey: bankPda, isSigner: false, isWritable: false },
+                { pubkey: new PublicKey(walletAddress), isSigner: true, isWritable: false },
+              ])
+            }}
+          >
+            Distribute Payouts
+          </button>
+
+          {/* Trigger Bankrupt Sequence */}
+          <button
+            onClick={async () => {
+              const programId = new PublicKey('CZmrXHfMXuP3uUPGApinsKH9dfQZVdNehAmsnpLqTw6d')
+              const [bankPda] = await PublicKey.findProgramAddress(
+                [Buffer.from("bank")],
+                programId
+              )
+              callProgram(3, [
+                { pubkey: bankPda, isSigner: false, isWritable: true },
+                { pubkey: new PublicKey(walletAddress), isSigner: true, isWritable: false },
+              ])
+            }}
+          >
+            Trigger Bankrupt Sequence
+          </button>
+
+          {/* Trash Devices */}
+          <button
+            onClick={async () => {
+              const programId = new PublicKey('CZmrXHfMXuP3uUPGApinsKH9dfQZVdNehAmsnpLqTw6d')
+              const userPubkey = new PublicKey(walletAddress)
+              const [devicePda] = await PublicKey.findProgramAddress(
+                [Buffer.from("device"), userPubkey.toBuffer()],
+                programId
+              )
+              callProgram(4, [
+                { pubkey: devicePda, isSigner: false, isWritable: true },
+                { pubkey: userPubkey, isSigner: true, isWritable: false },
+              ])
+            }}
+          >
+            Trash Devices
+          </button>
         </>
       ) : (
         <button onClick={connectWallet}>Connect Phantom Wallet</button>
