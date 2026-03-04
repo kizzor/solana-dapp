@@ -36,7 +36,7 @@ function generateDevice(id: number): Device {
   
   // Each row gets exactly 5 numbers, distributed across columns
   for (let row = 0; row < 3; row++) {
-    const colIndices = Array.from({length:9},(_,i)=>i)
+    const colIndices = [...Array(9).keys()]
     const chosen = colIndices.sort(() => Math.random()-0.5).slice(0,5).sort((a,b)=>a-b)
     for (const ci of chosen) {
       const [lo, hi] = cols[ci]
@@ -108,7 +108,7 @@ function DeviceCard({
   winEvents: WinEvent[]
 }) {
   const myWins = winEvents.filter(w => w.deviceId === device.id)
-  const lastNum = Array.from(calledNums).at(-1)
+  const lastNum = [...calledNums].at(-1)
 
   return (
     <div style={{
@@ -161,7 +161,7 @@ function DeviceCard({
             {lastNum ?? '--'}
           </span>
           <span style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#1e4a6e' }}>
-            [{Array.from(calledNums).slice(-3).join(', ')}]
+            [{[...calledNums].slice(-3).join(', ')}]
           </span>
         </div>
       )}
@@ -359,11 +359,11 @@ export default function Ransome() {
 
   // Game tick — draw number every 60s
   const drawNumber = useCallback(() => {
-    const available = Array.from({length:90},(_,i)=>i+1).filter(function(n){return !calledNums.has(n)})
+    const available = Array.from({length:90},(_,i)=>i+1).filter(n=>!calledNums.has(n))
     if (available.length === 0) return
     const num = available[Math.floor(Math.random()*available.length)]
-    setCalledNums(prev => new Set(Array.from(prev).concat([num])))
-    setCalledOrder(prev => Array.from(prev).concat([num]))
+    setCalledNums(prev => new Set([...prev, num]))
+    setCalledOrder(prev => [...prev, num])
     setTimer(60)
 
     // Auto-mark matched cells for active devices
@@ -502,7 +502,7 @@ export default function Ransome() {
           </div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          {String(phase) === 'game' && (
+          {phase === 'game' && (
             <div style={{ fontFamily:'"DM Mono",monospace', fontSize:12, color:'#ff5722', background:'#ff572211', border:'1px solid #ff572233', padding:'4px 12px', borderRadius:6, display:'flex', alignItems:'center', gap:6 }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:'#ff5722', display:'inline-block', animation:'pulse 1s infinite' }}/>
               LIVE · {calledNums.size}/90
@@ -524,7 +524,7 @@ export default function Ransome() {
       </header>
 
       {/* ── LOBBY ── */}
-      {String(phase) === 'lobby' && (
+      {phase === 'lobby' && (
         <main style={{ maxWidth:1000, margin:'0 auto', padding:'60px 24px' }}>
           {/* Hero */}
           <div style={{ textAlign:'center', marginBottom:64 }}>
@@ -569,7 +569,7 @@ export default function Ransome() {
               { label:'BANK FUND', value:`${bankFund} RNSM`, color:'#f7c948' },
               { label:'PARTICIPANTS', value:participants, color:'#00e5a0' },
               { label:'YOUR DEVICES', value:devices.length, color:'#00b8ff' },
-              { label:'GAME STATE', value:phase!=='lobby'?'LIVE':'STANDBY', color:'#ff5722' },
+              { label:'GAME STATE', value:phase==='game'?'LIVE':'STANDBY', color:'#ff5722' },
             ].map(s => (
               <div key={s.label} style={{ background:'#0a1628', border:'1px solid #1e3a5f', borderRadius:14, padding:'20px 24px' }}>
                 <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#4a7fa5', letterSpacing:'.12em', marginBottom:8 }}>{s.label}</div>
@@ -627,7 +627,7 @@ export default function Ransome() {
       )}
 
       {/* ── GAME ── */}
-      {String(phase) === 'game' && (
+      {phase === 'game' && (
         <main style={{ maxWidth:1200, margin:'0 auto', padding:'24px' }}>
           <div style={{ display:'grid', gridTemplateColumns:'320px 1fr', gap:24 }}>
 
@@ -647,6 +647,7 @@ export default function Ransome() {
                   background:'linear-gradient(135deg,#ff3c3c,#ff8c00)',
                   WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
                   marginBottom:12, animation:'float 3s ease-in-out infinite',
+                  key: calledOrder.at(-1),
                 }}>
                   {calledOrder.at(-1) ?? '--'}
                 </div>
@@ -699,7 +700,7 @@ export default function Ransome() {
                 <div style={{ background:'#0a1628', border:'1px solid #f7c94833', borderRadius:16, padding:20, marginTop:16 }}>
                   <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#f7c948', letterSpacing:'.12em', marginBottom:14 }}>WIN LOG</div>
                   {winEvents.slice().reverse().map((w,i) => (
-                    <div key={i} style={{ padding:'8px 0', borderBottom:'1px solid #0e2233' }}>
+                    <div key={i} style={{ padding:'8px 0', borderBottom:'1px solid #0e2233', lastChild:{border:'none'} }}>
                       <div style={{ fontSize:12, fontWeight:700, marginBottom:2 }}>{w.label}</div>
                       <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#4a7fa5' }}>Device #{w.deviceId}</div>
                     </div>
