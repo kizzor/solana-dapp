@@ -699,7 +699,7 @@ export default function Ransome() {
                 <div style={{ background:'#0a1628', border:'1px solid #f7c94833', borderRadius:16, padding:20, marginTop:16 }}>
                   <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#f7c948', letterSpacing:'.12em', marginBottom:14 }}>WIN LOG</div>
                   {winEvents.slice().reverse().map((w,i) => (
-                    <div key={i} style={{ padding:'8px 0', borderBottom:'1px solid #0e2233', lastChild:{border:'none'} }}>
+                    <div key={i} style={{ padding:'8px 0', borderBottom:'1px solid #0e2233' }}>
                       <div style={{ fontSize:12, fontWeight:700, marginBottom:2 }}>{w.label}</div>
                       <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#4a7fa5' }}>Device #{w.deviceId}</div>
                     </div>
