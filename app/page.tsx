@@ -363,7 +363,7 @@ export default function Ransome() {
     if (available.length === 0) return
     const num = available[Math.floor(Math.random()*available.length)]
     setCalledNums(prev => new Set(Array.from(prev).concat([num])))
-    setCalledOrder(prev => [...prev, num])
+    setCalledOrder(prev => Array.from(prev).concat([num]))
     setTimer(60)
 
     // Auto-mark matched cells for active devices
