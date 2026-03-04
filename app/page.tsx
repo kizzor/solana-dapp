@@ -502,7 +502,7 @@ export default function Ransome() {
           </div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          {phase === 'game' && (
+          {String(phase) === 'game' && (
             <div style={{ fontFamily:'"DM Mono",monospace', fontSize:12, color:'#ff5722', background:'#ff572211', border:'1px solid #ff572233', padding:'4px 12px', borderRadius:6, display:'flex', alignItems:'center', gap:6 }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:'#ff5722', display:'inline-block', animation:'pulse 1s infinite' }}/>
               LIVE · {calledNums.size}/90
@@ -524,7 +524,7 @@ export default function Ransome() {
       </header>
 
       {/* ── LOBBY ── */}
-      {phase === 'lobby' && (
+      {String(phase) === 'lobby' && (
         <main style={{ maxWidth:1000, margin:'0 auto', padding:'60px 24px' }}>
           {/* Hero */}
           <div style={{ textAlign:'center', marginBottom:64 }}>
@@ -627,7 +627,7 @@ export default function Ransome() {
       )}
 
       {/* ── GAME ── */}
-      {phase === 'game' && (
+      {String(phase) === 'game' && (
         <main style={{ maxWidth:1200, margin:'0 auto', padding:'24px' }}>
           <div style={{ display:'grid', gridTemplateColumns:'320px 1fr', gap:24 }}>
 
