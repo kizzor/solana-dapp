@@ -6,11 +6,11 @@ const PID = 'CZmrXHfMXuP3uUPGApinsKH9dfQZVdNehAmsnpLqTw6d'
 const RPC = 'https://api.devnet.solana.com'
 const trunc = (a: string) => a.slice(0,6)+'...'+a.slice(-4)
 const ACTIONS = [
-  {id:0,key:'validate',label:'Validate Clickables',color:'#00e5a0',cat:'Device',desc:'Verify device clickable state via PDA'},
-  {id:1,key:'claim',label:'Trigger Claim Window',color:'#00b8ff',cat:'Rewards',desc:'Open claim window in queue PDA'},
-  {id:2,key:'distribute',label:'Distribute Payouts',color:'#f7c948',cat:'Finance',desc:'Execute payout distribution from bank PDA'},
-  {id:3,key:'bankrupt',label:'Trigger Bankrupt Sequence',color:'#ff6b6b',cat:'Admin',desc:'Initiate bankruptcy sequence against bank'},
-  {id:4,key:'trash',label:'Trash Devices',color:'#b47cf7',cat:'Device',desc:'Deregister and wipe device PDAs'},
+  {id:0,key:'validate',label:'Validate Clickables',color:'#00e5a0',cat:'Device',desc:'Verify device clickable state via PDA',disc:[202,41,83,18,198,210,164,74]},
+  {id:1,key:'claim',label:'Trigger Claim Window',color:'#00b8ff',cat:'Rewards',desc:'Open claim window in queue PDA',disc:[207,176,244,90,254,236,166,172]},
+  {id:2,key:'distribute',label:'Distribute Payouts',color:'#f7c948',cat:'Finance',desc:'Execute payout distribution from bank PDA',disc:[226,196,33,224,8,117,184,243]},
+  {id:3,key:'bankrupt',label:'Trigger Bankrupt Sequence',color:'#ff6b6b',cat:'Admin',desc:'Initiate bankruptcy sequence against bank',disc:[69,173,97,35,30,34,56,65]},
+  {id:4,key:'trash',label:'Trash Devices',color:'#b47cf7',cat:'Device',desc:'Deregister and wipe device PDAs',disc:[98,104,235,118,235,56,81,63]},
 ]
 export default function Home() {
   const [wallet, setWallet] = useState<string|null>(null)
@@ -48,7 +48,7 @@ export default function Home() {
         const [b] = await PublicKey.findProgramAddress([Buffer.from('bank')],pid)
         accounts = [{pubkey:b,isSigner:false,isWritable:true},{pubkey:user,isSigner:true,isWritable:false}]
       }
-      const tx = new Transaction().add(new TransactionInstruction({keys:accounts,programId:pid,data:Buffer.from(Uint8Array.of(a.id))}))
+      const tx = new Transaction().add(new TransactionInstruction({keys:accounts,programId:pid,data:Buffer.from(Uint8Array.of(...a.disc))}))
       tx.feePayer = user
       tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash
       setStatus(s=>({...s,[a.key]:'sending'}))
