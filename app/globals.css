@@ -1,45 +1,13 @@
-@import "tailwindcss";
-
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #080c10; --bg2: #0e1318; --bg3: #141b22;
+  --border: rgba(255,255,255,0.07); --border-bright: rgba(255,255,255,0.13);
+  --accent: #00e5a0; --accent2: #00b8ff; --text: #e8f0f7;
+  --text2: #7a8fa6; --text3: #4a5a6a;
+  --font-display: 'Syne', sans-serif; --font-mono: 'DM Mono', monospace;
 }
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-/* app/globals.css */
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family: sans-serif;
-}
-/* app/globals.css */
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family: sans-serif;
-}
-/* app/globals.css */
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family: sans-serif;
-}
-
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+html, body { background: var(--bg); color: var(--text); font-family: var(--font-display); min-height: 100vh; overflow-x: hidden; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
