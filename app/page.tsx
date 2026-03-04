@@ -36,7 +36,7 @@ function generateDevice(id: number): Device {
   
   // Each row gets exactly 5 numbers, distributed across columns
   for (let row = 0; row < 3; row++) {
-    const colIndices = [...Array(9).keys()]
+    const colIndices = Array.from({length:9},(_,i)=>i)
     const chosen = colIndices.sort(() => Math.random()-0.5).slice(0,5).sort((a,b)=>a-b)
     for (const ci of chosen) {
       const [lo, hi] = cols[ci]
@@ -108,7 +108,7 @@ function DeviceCard({
   winEvents: WinEvent[]
 }) {
   const myWins = winEvents.filter(w => w.deviceId === device.id)
-  const lastNum = [...calledNums].at(-1)
+  const lastNum = Array.from(calledNums).at(-1)
 
   return (
     <div style={{
@@ -161,7 +161,7 @@ function DeviceCard({
             {lastNum ?? '--'}
           </span>
           <span style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#1e4a6e' }}>
-            [{[...calledNums].slice(-3).join(', ')}]
+            [{Array.from(calledNums).slice(-3).join(', ')}]
           </span>
         </div>
       )}
@@ -359,10 +359,10 @@ export default function Ransome() {
 
   // Game tick — draw number every 60s
   const drawNumber = useCallback(() => {
-    const available = Array.from({length:90},(_,i)=>i+1).filter(n=>!calledNums.has(n))
+    const available = Array.from({length:90},(_,i)=>i+1).filter(function(n){return !calledNums.has(n)})
     if (available.length === 0) return
     const num = available[Math.floor(Math.random()*available.length)]
-    setCalledNums(prev => new Set([...prev, num]))
+    setCalledNums(prev => new Set(Array.from(prev).concat([num])))
     setCalledOrder(prev => [...prev, num])
     setTimer(60)
 
