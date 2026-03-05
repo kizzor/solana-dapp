@@ -647,7 +647,6 @@ export default function Ransome() {
                   background:'linear-gradient(135deg,#ff3c3c,#ff8c00)',
                   WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
                   marginBottom:12, animation:'float 3s ease-in-out infinite',
-                  key: calledOrder.at(-1),
                 }}>
                   {calledOrder.at(-1) ?? '--'}
                 </div>
