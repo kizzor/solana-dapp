@@ -13,7 +13,6 @@ type Device = {
 }
 type WinType = 'EARLY_FIVE' | 'TOP_LINE' | 'MIDDLE_LINE' | 'BOTTOM_LINE' | 'FULL_HOUSE_1' | 'FULL_HOUSE_2' | 'FULL_HOUSE_3'
 type WinEvent = { deviceId: number; type: WinType; label: string; numbers: number[] }
-type Phase = string
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const WIN_LABELS: Record<WinType, string> = {
