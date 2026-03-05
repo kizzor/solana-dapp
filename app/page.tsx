@@ -569,7 +569,6 @@ export default function Ransome() {
               { label:'PARTICIPANTS', value:participants, color:'#00e5a0' },
               { label:'YOUR DEVICES', value:devices.length, color:'#00b8ff' },
               { label:'GAME STATE', value:phase!=='lobby'?'LIVE':'STANDBY', color:'#ff5722' },
-            ].map(s => (
               <div key={s.label} style={{ background:'#0a1628', border:'1px solid #1e3a5f', borderRadius:14, padding:'20px 24px' }}>
                 <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#4a7fa5', letterSpacing:'.12em', marginBottom:8 }}>{s.label}</div>
                 <div style={{ fontFamily:'"DM Mono",monospace', fontSize:22, fontWeight:700, color:s.color }}>{s.value}</div>
