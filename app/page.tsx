@@ -254,7 +254,7 @@ function DeviceCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Ransome() {
-  const [phase, setPhase] = useState<Phase>('lobby')
+  const [phase, setPhase] = useState<string>('lobby')
   const [wallet, setWallet] = useState<string|null>(null)
   const [devices, setDevices] = useState<Device[]>([])
   const [calledNums, setCalledNums] = useState<Set<number>>(new Set())
