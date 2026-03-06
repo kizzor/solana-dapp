@@ -13,6 +13,7 @@ type Device = {
 }
 type WinType = 'EARLY_FIVE' | 'TOP_LINE' | 'MIDDLE_LINE' | 'BOTTOM_LINE' | 'FULL_HOUSE_1' | 'FULL_HOUSE_2' | 'FULL_HOUSE_3'
 type WinEvent = { deviceId: number; type: WinType; label: string; numbers: number[] }
+type Phase = 'lobby' | 'game'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const WIN_LABELS: Record<WinType, string> = {
@@ -35,7 +36,7 @@ function generateDevice(id: number): Device {
   
   // Each row gets exactly 5 numbers, distributed across columns
   for (let row = 0; row < 3; row++) {
-    const colIndices = Array.from({length:9},(_,i)=>i)
+    const colIndices = [...Array(9).keys()]
     const chosen = colIndices.sort(() => Math.random()-0.5).slice(0,5).sort((a,b)=>a-b)
     for (const ci of chosen) {
       const [lo, hi] = cols[ci]
@@ -254,7 +255,7 @@ function DeviceCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Ransome() {
-  const [phase, setPhase] = useState<string>('lobby')
+  const [phase, setPhase] = useState<Phase>('lobby')
   const [wallet, setWallet] = useState<string|null>(null)
   const [devices, setDevices] = useState<Device[]>([])
   const [calledNums, setCalledNums] = useState<Set<number>>(new Set())
@@ -397,6 +398,30 @@ export default function Ransome() {
 
   return (
     <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500;700&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #050b14; color: #c8d8e8; font-family: Syne, sans-serif; min-height: 100vh; overflow-x: hidden; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #050b14; } ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 2px; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes ballPop { 0%{transform:scale(0) rotate(-180deg);opacity:0} 60%{transform:scale(1.2)} 100%{transform:scale(1);opacity:1} }
+        @keyframes glow { 0%,100%{box-shadow:inset 0 0 8px #ff572233} 50%{box-shadow:inset 0 0 16px #ff572266} }
+        @keyframes ransomePulse { 0%,100%{border-color:#ff3c3c44;box-shadow:none} 50%{border-color:#ff3c3caa;box-shadow:0 0 12px #ff3c3c33} }
+        @keyframes slideDown { from{transform:translateY(-20px);opacity:0} to{transform:translateY(0);opacity:1} }
+        @keyframes bankScan { 0%{background-position:0 0} 100%{background-position:0 100px} }
+        @keyframes numberDrop { 0%{transform:translateY(-40px) scale(0.5);opacity:0} 100%{transform:translateY(0) scale(1);opacity:1} }
+        @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+        .scan-line {
+          background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,229,160,0.015) 2px, rgba(0,229,160,0.015) 4px);
+          pointer-events: none;
+        }
+        .btn-primary { background: linear-gradient(135deg,#00e5a0,#00b8ff); color: #050b14; border: none; font-family: Syne,sans-serif; font-weight: 700; cursor: pointer; border-radius: 10px; transition: all 0.2s; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,229,160,0.3); }
+        .btn-ghost { background: transparent; border: 1px solid #1e3a5f; color: #4a7fa5; font-family: 'DM Mono',monospace; cursor: pointer; border-radius: 8px; transition: all 0.2s; }
+        .btn-ghost:hover { border-color: #00e5a066; color: #00e5a0; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(5,11,20,0.9); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-box { background: #0a1628; border: 1px solid #1e3a5f; border-radius: 20px; padding: 32px; width: 360px; animation: slideDown 0.3s ease; }
+      `}</style>
 
       {/* Announcement Banner */}
       {announcement && (
@@ -544,7 +569,8 @@ export default function Ransome() {
               { label:'BANK FUND', value:`${bankFund} RNSM`, color:'#f7c948' },
               { label:'PARTICIPANTS', value:participants, color:'#00e5a0' },
               { label:'YOUR DEVICES', value:devices.length, color:'#00b8ff' },
-              { label:'GAME STATE', value:phase!=='lobby'?'LIVE':'STANDBY', color:'#ff5722' },
+              { label:'GAME STATE', value:phase==='game'?'LIVE':'STANDBY', color:'#ff5722' },
+            ].map(s => (
               <div key={s.label} style={{ background:'#0a1628', border:'1px solid #1e3a5f', borderRadius:14, padding:'20px 24px' }}>
                 <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#4a7fa5', letterSpacing:'.12em', marginBottom:8 }}>{s.label}</div>
                 <div style={{ fontFamily:'"DM Mono",monospace', fontSize:22, fontWeight:700, color:s.color }}>{s.value}</div>
@@ -621,6 +647,7 @@ export default function Ransome() {
                   background:'linear-gradient(135deg,#ff3c3c,#ff8c00)',
                   WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
                   marginBottom:12, animation:'float 3s ease-in-out infinite',
+                  key: calledOrder.at(-1),
                 }}>
                   {calledOrder.at(-1) ?? '--'}
                 </div>
@@ -673,7 +700,7 @@ export default function Ransome() {
                 <div style={{ background:'#0a1628', border:'1px solid #f7c94833', borderRadius:16, padding:20, marginTop:16 }}>
                   <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#f7c948', letterSpacing:'.12em', marginBottom:14 }}>WIN LOG</div>
                   {winEvents.slice().reverse().map((w,i) => (
-                    <div key={i} style={{ padding:'8px 0', borderBottom:'1px solid #0e2233' }}>
+                    <div key={i} style={{ padding:'8px 0', borderBottom:'1px solid #0e2233', lastChild:{border:'none'} }}>
                       <div style={{ fontSize:12, fontWeight:700, marginBottom:2 }}>{w.label}</div>
                       <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#4a7fa5' }}>Device #{w.deviceId}</div>
                     </div>
@@ -719,4 +746,3 @@ export default function Ransome() {
     </>
   )
 }
-
