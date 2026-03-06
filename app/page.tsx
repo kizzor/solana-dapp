@@ -35,7 +35,7 @@ function generateDevice(id: number): Device {
   
   // Each row gets exactly 5 numbers, distributed across columns
   for (let row = 0; row < 3; row++) {
-    const colIndices = [...Array(9).keys()]
+    const colIndices = Array.from({length:9},(_,i)=>i)
     const chosen = colIndices.sort(() => Math.random()-0.5).slice(0,5).sort((a,b)=>a-b)
     for (const ci of chosen) {
       const [lo, hi] = cols[ci]
