@@ -149,11 +149,41 @@ function WorldMap({ selectedBank, onSelect, currentHour }: { selectedBank:number
   )
 }
 
-// ─── Hacking Device (matches image: number grid top, LED strip, RANSOM button) ──
-function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCellClick, onClaim, winStates, bankruptCount }: {
+// ─── Mini Stopwatch (inside device) ──────────────────────────────────────────
+function MiniStopwatch({ seconds, total }: { seconds:number; total:number }) {
+  const pct = seconds / total
+  const secs = seconds % 60
+  const danger = seconds <= 10
+  const r = 14
+  const circ = 2 * Math.PI * r
+  const dash = circ * pct
+  return (
+    <div style={{ position:'relative', width:40, height:40, flexShrink:0 }}>
+      <svg width="40" height="40" style={{ transform:'rotate(-90deg)' }}>
+        <circle cx="20" cy="20" r={r} fill="none" stroke="#0a1628" strokeWidth="3"/>
+        <circle cx="20" cy="20" r={r} fill="none"
+          stroke={danger?'#ef4444':'#00e5a0'} strokeWidth="3"
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+          style={{ transition:'stroke-dasharray 0.9s linear, stroke 0.3s' }}
+        />
+      </svg>
+      <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, fontWeight:700,
+          color:danger?'#ef4444':'#00e5a0', lineHeight:1,
+          textShadow:danger?'0 0 6px #ef4444':'0 0 6px #00e5a0' }}>
+          {String(secs).padStart(2,'0')}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Hacking Device — skeleton from image ────────────────────────────────────
+function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCellClick, onClaim, winStates, bankruptCount, timer, totalTimer }: {
   device:Device; currentNum:number|null; clickWindowOpen:boolean; calledNums:Set<number>;
   onCellClick:(id:number,r:number,c:number)=>void; onClaim:(id:number,w:WinType)=>void;
-  winStates:Record<WinType,{claimed:boolean;claimable:boolean}>; bankruptCount:number
+  winStates:Record<WinType,{claimed:boolean;claimable:boolean}>; bankruptCount:number;
+  timer:number; totalTimer:number
 }) {
   const flat = device.grid.flat()
   const clickedN = flat.filter(c=>c.clicked).length
@@ -170,99 +200,96 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
   if (row2Done && !device.claimed.has('BOTTOM_LINE') && winStates.BOTTOM_LINE.claimable && !winStates.BOTTOM_LINE.claimed) wins.push('BOTTOM_LINE')
   if (allDone && winStates[fhKey]?.claimable && !winStates[fhKey]?.claimed && !device.claimed.has(fhKey)) wins.push(fhKey)
   const canClaim = wins.length > 0
-
   const doClaim = () => { if (wins.length) onClaim(device.id, wins[0]) }
 
-  // LED indicator states — 7 LEDs matching each win type
   const LED_TYPES: WinType[] = ['EARLY_FIVE','TOP_LINE','MIDDLE_LINE','BOTTOM_LINE','FULL_HOUSE_1','FULL_HOUSE_2','FULL_HOUSE_3']
+
+  // Row neon colors matching image (each row different color family)
+  const ROW_COLORS = ['#ef4444','#f97316','#f59e0b','#22c55e','#06b6d4']
 
   return (
     <div style={{
-      background:'linear-gradient(180deg,#0d1f3c 0%,#07111f 100%)',
-      border:`2px solid ${canClaim?'#ec4899':'#1e3a5f'}`,
-      borderRadius:14,
-      padding:'10px 8px 8px',
+      background:'linear-gradient(180deg,#0d1a2e 0%,#060e1a 100%)',
+      border:`2px solid ${canClaim?'#ec4899':'#162438'}`,
+      borderRadius:16,
+      padding:0,
       boxShadow: canClaim
-        ? '0 0 0 2px rgba(236,72,153,0.3), 0 8px 32px rgba(236,72,153,0.2), inset 0 1px 0 rgba(255,255,255,0.05)'
-        : '0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)',
-      display:'flex', flexDirection:'column', gap:6,
+        ? '0 0 0 2px rgba(236,72,153,0.3), 0 8px 32px rgba(236,72,153,0.2)'
+        : '0 6px 24px rgba(0,0,0,0.7)',
+      display:'flex', flexDirection:'column', overflow:'hidden',
+      userSelect:'none',
     }}>
-      {/* Device ID + cables visual */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:4, borderBottom:'1px solid #1e3a5f' }}>
-        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:7, color:'#2a5a7a', letterSpacing:'0.1em' }}>
-          DEV-{String(device.id).padStart(5,'0')}
-        </div>
-        {/* Mini cable connectors */}
-        <div style={{ display:'flex', gap:3 }}>
-          {[0,1,2].map(i=>(
-            <div key={i} style={{ width:5, height:8, background:'#1e3a5f', borderRadius:'2px 2px 0 0', borderTop:'2px solid #2a5a7a' }}/>
-          ))}
-        </div>
-      </div>
 
-      {/* NUMBER GRID — main display (dark screen with neon numbers) */}
-      <div style={{
-        background:'#020d1a',
-        borderRadius:8,
-        padding:'8px 6px 6px',
-        border:'1px solid #0a2a4a',
-        boxShadow:'inset 0 2px 8px rgba(0,0,0,0.8)',
-      }}>
-        {/* Column header numbers (1-9 like the image col labels) */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(9,1fr)', gap:2, marginBottom:4 }}>
-          {Array.from({length:9},(_,i)=>(
-            <div key={i} style={{
-              textAlign:'center', fontFamily:'"DM Mono",monospace', fontSize:8, fontWeight:700,
-              color: COL_NEON[i],
-              textShadow:`0 0 6px ${COL_NEON[i]}`,
-            }}>{i+1}</div>
-          ))}
-        </div>
-        {/* Grid rows */}
-        {device.grid.map((row, ri) => (
-          <div key={ri} style={{ display:'grid', gridTemplateColumns:'repeat(9,1fr)', gap:2, marginBottom:2 }}>
-            {row.map((cell, ci) => {
-              const isCurrent   = cell.num !== null && cell.num === currentNum
-              const isClickable = isCurrent && clickWindowOpen && !cell.clicked
-              const isClicked   = cell.clicked
-              const isEmpty     = cell.num === null
-              const neonColor   = COL_NEON[ci]
-              const glitchAnim  = `gx${(ri*9+ci)%3} ${2.5+(ri*9+ci)%2}s ${(ri*9+ci)*0.08}s infinite`
-
-              return (
-                <button key={ci}
-                  onClick={() => isClickable && onCellClick(device.id, ri, ci)}
-                  style={{
-                    height:22, borderRadius:4, border:'none', padding:0,
-                    cursor: isClickable ? 'pointer' : 'default',
-                    background: isEmpty ? 'transparent'
-                      : isClicked ? `rgba(${neonColor==='#22c55e'?'34,197,94':neonColor==='#f59e0b'?'245,158,11':'0,229,160'},0.15)` : 'transparent',
-                    color: isEmpty ? 'transparent'
-                      : isClicked ? neonColor
-                      : isClickable ? '#fff'
-                      : neonColor,
-                    fontFamily:'"DM Mono",monospace',
-                    fontSize:10, fontWeight:700,
-                    textShadow: isEmpty ? 'none'
-                      : isClicked ? `0 0 8px ${neonColor}, 0 0 16px ${neonColor}`
-                      : isClickable ? '0 0 12px #fff'
-                      : `0 0 4px ${neonColor}60`,
-                    opacity: isEmpty ? 0 : isClicked ? 1 : isClickable ? 1 : 0.55,
-                    animation: (!isEmpty && !isClickable && !isClicked) ? glitchAnim : 'none',
-                    boxShadow: isClickable ? `0 0 0 1px ${neonColor}` : 'none',
-                    transition:'all 0.15s',
-                  }}
-                >
-                  {cell.num ?? ''}
-                </button>
-              )
-            })}
+      {/* TOP: cable connectors strip (image shows cables coming out top) */}
+      <div style={{ background:'#0a1628', padding:'6px 12px 4px', display:'flex', justifyContent:'center', gap:10, borderBottom:'2px solid #0d1f3a' }}>
+        {[0,1,2].map(i=>(
+          <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:1 }}>
+            <div style={{ width:6, height:10, background:'linear-gradient(180deg,#1e3a5f,#0a1628)', borderRadius:'3px 3px 0 0', border:'1px solid #2a5a7a', borderBottom:'none' }}/>
+            <div style={{ width:3, height:4, background:'#1e3a5f' }}/>
           </div>
         ))}
+        <div style={{ flex:1 }}/>
+        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:7, color:'#1e3a5f', alignSelf:'flex-end', paddingBottom:2 }}>
+          DEV-{String(device.id).padStart(5,'0')}
+        </div>
       </div>
 
-      {/* LED strip — 7 LEDs matching win types (like the colored squares in image) */}
-      <div style={{ display:'flex', gap:4, justifyContent:'center', padding:'4px 0' }}>
+      {/* MAIN DISPLAY — number grid, dark screen like image */}
+      <div style={{ background:'#030a12', margin:'8px 8px 0', borderRadius:10, border:'2px solid #0d2035', padding:'8px 6px', boxShadow:'inset 0 0 20px rgba(0,0,0,0.9), inset 0 0 1px rgba(0,229,160,0.05)', position:'relative' }}>
+        {/* Scanline effect */}
+        <div style={{ position:'absolute', inset:0, borderRadius:10, backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.08) 3px,rgba(0,0,0,0.08) 4px)', pointerEvents:'none', zIndex:1 }}/>
+        <div style={{ position:'relative', zIndex:2 }}>
+          {device.grid.map((row, ri) => (
+            <div key={ri} style={{ display:'grid', gridTemplateColumns:'repeat(9,1fr)', gap:2, marginBottom: ri<2 ? 3 : 0 }}>
+              {row.map((cell, ci) => {
+                const isCurrent   = cell.num !== null && cell.num === currentNum
+                const isClickable = isCurrent && clickWindowOpen && !cell.clicked
+                const isClicked   = cell.clicked
+                const isEmpty     = cell.num === null
+                const rowColor    = ROW_COLORS[ri % ROW_COLORS.length]
+                const glitchAnim  = `gx${(ri*9+ci)%3} ${2.5+(ri*9+ci)%2}s ${(ri*9+ci)*0.09}s infinite`
+
+                return (
+                  <button key={ci}
+                    onClick={() => isClickable && onCellClick(device.id, ri, ci)}
+                    style={{
+                      height:24, borderRadius:4, border:'none', padding:0,
+                      cursor: isClickable ? 'pointer' : 'default',
+                      background: isEmpty ? 'transparent'
+                        : isClicked ? 'rgba(0,229,160,0.12)' : 'transparent',
+                      color: isEmpty ? 'transparent'
+                        : isClicked ? '#00e5a0'
+                        : isClickable ? '#ffffff'
+                        : rowColor,
+                      fontFamily:'"DM Mono",monospace',
+                      fontSize:11, fontWeight:700,
+                      textShadow: isEmpty ? 'none'
+                        : isClicked ? '0 0 10px #00e5a0, 0 0 20px #00e5a060'
+                        : isClickable ? '0 0 14px #fff, 0 0 6px #fff'
+                        : `0 0 5px ${rowColor}80`,
+                      opacity: isEmpty ? 0 : isClicked ? 1 : isClickable ? 1 : 0.7,
+                      // Glitch ONLY on non-clickable, non-clicked, non-empty cells
+                      animation: (!isEmpty && !isClickable && !isClicked) ? glitchAnim : 'none',
+                      boxShadow: isClickable ? `inset 0 0 0 1px ${rowColor}` : 'none',
+                      transition:'opacity 0.15s, text-shadow 0.15s',
+                    }}
+                  >
+                    {cell.num ?? ''}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* LED STRIP — 7 LEDs below display (like colored squares in image) */}
+      <div style={{ display:'flex', justifyContent:'center', gap:5, padding:'6px 8px 2px', alignItems:'center' }}>
+        {/* Left decorative squares */}
+        <div style={{ display:'flex', gap:2 }}>
+          {[0,1].map(i=><div key={i} style={{ width:8,height:6,borderRadius:1,background:'#0a1628',border:'1px solid #162438' }}/>)}
+        </div>
+        {/* Win LEDs */}
         {LED_TYPES.map((type, i) => {
           const st = winStates[type]
           const devClaimed = device.claimed.has(type)
@@ -270,55 +297,68 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
           const won = devClaimed
           const dead = st.claimed && !devClaimed
           return (
-            <div key={type} style={{
-              width:14, height:10, borderRadius:2,
-              background: won ? LED_COLORS[type]
-                : lit ? LED_COLORS[type]
-                : dead ? '#1e293b'
-                : '#0a1628',
-              border:`1px solid ${won||lit ? LED_COLORS[type] : '#1e3a5f'}`,
-              boxShadow: (won||lit) ? `0 0 6px ${LED_COLORS[type]}, 0 0 12px ${LED_COLORS[type]}60` : 'none',
-              opacity: dead ? 0.3 : 1,
-              animation: lit ? `ledBlink 0.5s ${i*0.08}s infinite` : 'none',
+            <div key={type} title={WIN_LABELS[type]} style={{
+              width:12, height:9, borderRadius:2,
+              background: (won||lit) ? LED_COLORS[type] : dead ? '#050d17' : '#0a1628',
+              border:`1px solid ${(won||lit) ? LED_COLORS[type] : '#162438'}`,
+              boxShadow:(won||lit)?`0 0 5px ${LED_COLORS[type]}, 0 0 10px ${LED_COLORS[type]}60`:'none',
+              opacity: dead ? 0.25 : 1,
+              animation: lit && !won ? `ledBlink 0.5s ${i*0.07}s infinite` : 'none',
+              cursor:'default',
             }}/>
           )
         })}
+        {/* Right decorative squares */}
+        <div style={{ display:'flex', gap:2 }}>
+          {[0,1,2,3].map(i=><div key={i} style={{ width:8,height:6,borderRadius:1,background:'#0a1628',border:'1px solid #162438' }}/>)}
+        </div>
       </div>
 
-      {/* Bottom section: stopwatch + RANSOM button + knobs */}
-      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-        {/* Mini orange square buttons (like image bottom left) */}
+      {/* BOTTOM SECTION — left buttons + stopwatch + RANSOM button + knobs */}
+      <div style={{ display:'flex', gap:6, alignItems:'center', padding:'4px 8px 8px' }}>
+
+        {/* Left: 3 stacked orange/red square indicator buttons */}
         <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-          {[0,1,2].map(i=>(
-            <div key={i} style={{ width:8, height:8, borderRadius:2, background: i===0?'#ef4444':i===1?'#f97316':'#1e3a5f', boxShadow:i<2?`0 0 4px ${i===0?'#ef4444':'#f97316'}`:'none' }}/>
-          ))}
+          <div style={{ width:9,height:9,borderRadius:2,background:'#ef4444',boxShadow:'0 0 5px #ef4444, 0 0 10px #ef444460' }}/>
+          <div style={{ width:9,height:9,borderRadius:2,background:'#f97316',boxShadow:'0 0 5px #f97316, 0 0 10px #f9731660' }}/>
+          <div style={{ width:9,height:9,borderRadius:2,background:'#0a1628',border:'1px solid #162438' }}/>
         </div>
 
-        {/* RANSOM button — big neon red like the image */}
+        {/* Mini circular stopwatch */}
+        <MiniStopwatch seconds={timer} total={totalTimer} />
+
+        {/* RANSOM button — neon red display panel style */}
         <button onClick={doClaim} disabled={!canClaim} style={{
           flex:1,
           background: canClaim
-            ? 'linear-gradient(180deg,#ff2a2a 0%,#b91c1c 50%,#7f1d1d 100%)'
-            : 'linear-gradient(180deg,#1e3a5f 0%,#0a1628 100%)',
-          color: canClaim ? '#fff' : '#2a5a7a',
-          border: `2px solid ${canClaim?'#ff4040':'#1e3a5f'}`,
-          borderRadius:8, padding:'10px 4px',
-          fontFamily:'"Syne",sans-serif', fontSize:13, fontWeight:800, letterSpacing:'0.1em',
+            ? 'linear-gradient(180deg,#1a0000 0%,#0d0000 100%)'
+            : 'linear-gradient(180deg,#080f18 0%,#040a10 100%)',
+          border: `2px solid ${canClaim?'#ff2020':'#162438'}`,
+          borderRadius:8,
+          padding:'7px 4px',
           cursor: canClaim?'pointer':'default',
-          boxShadow: canClaim
-            ? 'inset 0 -3px 0 rgba(0,0,0,0.4), 0 0 16px rgba(239,68,68,0.5), 0 0 32px rgba(239,68,68,0.2)'
-            : 'inset 0 -2px 0 rgba(0,0,0,0.3)',
-          textShadow: canClaim ? '0 0 10px #fff' : 'none',
+          display:'flex', alignItems:'center', justifyContent:'center',
           transition:'all 0.2s',
           animation: canClaim ? 'ransomPulse 1s infinite' : 'none',
+          boxShadow: canClaim
+            ? 'inset 0 0 12px rgba(255,32,32,0.3), 0 0 12px rgba(255,32,32,0.4)'
+            : 'inset 0 0 6px rgba(0,0,0,0.5)',
         }}>
-          RANSOM
+          {/* Neon text style like image — red LED text */}
+          <span style={{
+            fontFamily:'"Syne",sans-serif', fontSize:14, fontWeight:800, letterSpacing:'0.12em',
+            color: canClaim ? '#ff4040' : '#1e3a5f',
+            textShadow: canClaim ? '0 0 8px #ff2020, 0 0 20px #ff202080, 0 0 40px #ff202040' : 'none',
+          }}>RANSOM</span>
         </button>
 
-        {/* Knobs (right side like image) */}
-        <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+        {/* Right: 2 round knobs */}
+        <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
           {[0,1].map(i=>(
-            <div key={i} style={{ width:14, height:14, borderRadius:'50%', background:'radial-gradient(circle at 35% 35%,#2a5a7a,#0a1628)', border:'1px solid #1e3a5f', boxShadow:'inset 0 1px 2px rgba(0,0,0,0.8)' }}/>
+            <div key={i} style={{ width:16,height:16,borderRadius:'50%',
+              background:'radial-gradient(circle at 35% 30%,#2a4a6a,#050d17)',
+              border:'1.5px solid #1e3a5f',
+              boxShadow:'inset 0 1px 3px rgba(0,0,0,0.9), 0 1px 0 rgba(255,255,255,0.05)' }}/>
           ))}
         </div>
       </div>
@@ -360,13 +400,17 @@ function MatrixDisplay({ calledNums, calledOrder, timer, clickWindowOpen, totalT
         <div style={{ position:'relative', zIndex:2 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
             <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#2a5a7a', letterSpacing:'0.2em' }}>◉ RANSOME BANK BROADCAST</div>
-            {/* History toggle */}
-            <button onClick={()=>setShowHistory(s=>!s)} style={{
-              background: showHistory?'#0a3a5a':'transparent',
-              border:'1px solid #1e3a5f', borderRadius:6, padding:'3px 8px',
-              fontFamily:'"DM Mono",monospace', fontSize:8, color:'#4a7fa5', cursor:'pointer',
+            {/* Small 'i' history toggle */}
+            <button onClick={()=>setShowHistory(s=>!s)} title={showHistory?'Show Live':'Show Draw History'} style={{
+              width:22, height:22, borderRadius:'50%',
+              background: showHistory?'#00e5a020':'transparent',
+              border:`1px solid ${showHistory?'#00e5a060':'#1e3a5f'}`,
+              color: showHistory?'#00e5a0':'#4a7fa5',
+              fontFamily:'"DM Mono",monospace', fontSize:10, fontWeight:700,
+              cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+              flexShrink:0,
             }}>
-              {showHistory ? '◉ LIVE' : 'ℹ HISTORY'}
+              {showHistory ? '×' : 'i'}
             </button>
           </div>
 
@@ -437,11 +481,8 @@ function MatrixDisplay({ calledNums, calledOrder, timer, clickWindowOpen, totalT
         </div>
       </div>
 
-      {/* Stopwatch + number board */}
-      <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-        <Stopwatch seconds={timer} total={totalTimer} />
-        {/* Number board 1-90 */}
-        <div style={{ flex:1, background:'#020d1a', border:'1px solid #0a2535', borderRadius:10, padding:'8px 8px 6px' }}>
+      {/* Number board 1-90 */}
+      <div style={{ background:'#020d1a', border:'1px solid #0a2535', borderRadius:10, padding:'8px 8px 6px' }}>
           <div style={{ fontFamily:'"DM Mono",monospace', fontSize:7, color:'#1e4a6a', marginBottom:5, letterSpacing:'0.1em' }}>NUMBERS BROADCAST</div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(10,1fr)', gap:2 }}>
             {Array.from({length:90},(_,i)=>i+1).map(n=>(
@@ -456,7 +497,6 @@ function MatrixDisplay({ calledNums, calledOrder, timer, clickWindowOpen, totalT
               }}>{n}</div>
             ))}
           </div>
-        </div>
       </div>
     </div>
   )
@@ -885,7 +925,7 @@ export default function Ransome() {
                 <div key={d.id} style={{ width:'min(46vw,210px)', flexShrink:0 }}>
                   <HackingDevice device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
                     calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim}
-                    winStates={winStates} bankruptCount={bankruptCount}/>
+                    winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer}/>
                 </div>
               ))}
             </div>
@@ -895,7 +935,7 @@ export default function Ransome() {
             {devices.map(d=>(
               <HackingDevice key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
                 calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim}
-                winStates={winStates} bankruptCount={bankruptCount}/>
+                winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer}/>
             ))}
           </div>
         )}
