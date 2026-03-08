@@ -3,45 +3,15 @@ import './globals.css'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-type Cell = { num: number | null; matched: boolean; clicked: boolean }
+type Cell = { num: number | null; matched: boolean; clicked: boolean; justCalled: boolean }
 type Device = {
   id: number
   grid: Cell[][]
   claimed: Set<string>
   corrupted: boolean
   active: boolean
-  matchCount: number
-  clickedCount: number
 }
 type WinType = 'EARLY_FIVE' | 'TOP_LINE' | 'MIDDLE_LINE' | 'BOTTOM_LINE' | 'FULL_HOUSE_1' | 'FULL_HOUSE_2' | 'FULL_HOUSE_3'
-type Phase = string
-
-// ─── 23 World Banks ──────────────────────────────────────────────────────────
-const BANKS = [
-  { id: 0,  name: 'Pacific Reserve',     city: 'Auckland',      tz: 12,  x: 88, y: 75 },
-  { id: 1,  name: 'Sakura Central',      city: 'Tokyo',         tz: 9,   x: 80, y: 30 },
-  { id: 2,  name: 'Dragon Vault',        city: 'Shanghai',      tz: 8,   x: 76, y: 33 },
-  { id: 3,  name: 'Tiger Bank',          city: 'Singapore',     tz: 8,   x: 74, y: 52 },
-  { id: 4,  name: 'Indus Capital',       city: 'Mumbai',        tz: 5.5, x: 65, y: 38 },
-  { id: 5,  name: 'Gulf Reserve',        city: 'Dubai',         tz: 4,   x: 60, y: 38 },
-  { id: 6,  name: 'Red Sea Bank',        city: 'Riyadh',        tz: 3,   x: 57, y: 38 },
-  { id: 7,  name: 'Nile Treasury',       city: 'Cairo',         tz: 2,   x: 53, y: 35 },
-  { id: 8,  name: 'Savanna Vault',       city: 'Nairobi',       tz: 3,   x: 56, y: 56 },
-  { id: 9,  name: 'Cape Reserve',        city: 'Cape Town',     tz: 2,   x: 52, y: 73 },
-  { id: 10, name: 'Colosseum Bank',      city: 'Rome',          tz: 1,   x: 49, y: 27 },
-  { id: 11, name: 'Rhine Vault',         city: 'Frankfurt',     tz: 1,   x: 49, y: 22 },
-  { id: 12, name: 'Thames Capital',      city: 'London',        tz: 0,   x: 46, y: 21 },
-  { id: 13, name: 'Nordic Reserve',      city: 'Oslo',          tz: 1,   x: 49, y: 16 },
-  { id: 14, name: 'Kremlin Bank',        city: 'Moscow',        tz: 3,   x: 56, y: 18 },
-  { id: 15, name: 'Azores Vault',        city: 'Lisbon',        tz: 0,   x: 44, y: 27 },
-  { id: 16, name: 'Atlas Treasury',      city: 'Casablanca',    tz: 1,   x: 44, y: 33 },
-  { id: 17, name: 'Amazon Reserve',      city: 'São Paulo',     tz: -3,  x: 32, y: 66 },
-  { id: 18, name: 'Carnival Bank',       city: 'Rio',           tz: -3,  x: 33, y: 68 },
-  { id: 19, name: 'Andes Vault',         city: 'Bogotá',        tz: -5,  x: 25, y: 54 },
-  { id: 20, name: 'Manhattan Capital',   city: 'New York',      tz: -5,  x: 22, y: 28 },
-  { id: 21, name: 'Silicon Reserve',     city: 'San Francisco', tz: -8,  x: 10, y: 30 },
-  { id: 22, name: 'Maple Treasury',      city: 'Toronto',       tz: -5,  x: 21, y: 24 },
-]
 
 const WIN_LABELS: Record<WinType, string> = {
   EARLY_FIVE:   '5 Digit Accounts Hacked',
@@ -54,222 +24,269 @@ const WIN_LABELS: Record<WinType, string> = {
 }
 
 const ANTENNA_COLORS: Record<WinType, string> = {
-  EARLY_FIVE:   '#ffe600',
-  TOP_LINE:     '#00cfff',
-  MIDDLE_LINE:  '#39ff14',
-  BOTTOM_LINE:  '#8b4513',
-  FULL_HOUSE_1: '#ff69b4',
-  FULL_HOUSE_2: '#ff1493',
-  FULL_HOUSE_3: '#ff007f',
+  EARLY_FIVE:   '#f59e0b',
+  TOP_LINE:     '#0ea5e9',
+  MIDDLE_LINE:  '#22c55e',
+  BOTTOM_LINE:  '#92400e',
+  FULL_HOUSE_1: '#f472b6',
+  FULL_HOUSE_2: '#ec4899',
+  FULL_HOUSE_3: '#db2777',
 }
 
-const TERMINAL_CMDS = [
-  'INIT PAYLOAD INJECTION...', 'BYPASSING FIREWALL LAYER 3...', 'SCANNING PORT 8443...',
-  'BRUTE FORCE SHA-256 HASH...', 'DECRYPTING TLS HANDSHAKE...', 'EXPLOITING CVE-2024-1337...',
-  'INJECTING SQL PAYLOAD...', 'PIVOTING THROUGH SUBNET...', 'EXFILTRATING VAULT KEYS...',
-  'SPOOFING MAC ADDRESS...', 'ARP POISONING GATEWAY...', 'DUMPING LSASS MEMORY...',
-  'LATERAL MOVEMENT DETECTED...', 'ESCALATING PRIVILEGES...', 'DEPLOYING ROOTKIT...',
-  'TUNNELING THROUGH SSH...', 'SNIFFING PACKETS ON ETH0...', 'CRACKING WPA2 HANDSHAKE...',
-  'EXPLOITING BUFFER OVERFLOW...', 'UPLOADING RANSOMWARE PAYLOAD...', 'COVERING TRACKS...',
+const BANKS = [
+  { id: 0,  name: 'Pacific Reserve',   city: 'Auckland',      tz: 12,  x: 88, y: 72 },
+  { id: 1,  name: 'Sakura Central',    city: 'Tokyo',         tz: 9,   x: 80, y: 30 },
+  { id: 2,  name: 'Dragon Vault',      city: 'Shanghai',      tz: 8,   x: 76, y: 34 },
+  { id: 3,  name: 'Tiger Bank',        city: 'Singapore',     tz: 8,   x: 74, y: 53 },
+  { id: 4,  name: 'Indus Capital',     city: 'Mumbai',        tz: 5.5, x: 65, y: 40 },
+  { id: 5,  name: 'Gulf Reserve',      city: 'Dubai',         tz: 4,   x: 61, y: 39 },
+  { id: 6,  name: 'Nile Treasury',     city: 'Cairo',         tz: 2,   x: 53, y: 36 },
+  { id: 7,  name: 'Savanna Vault',     city: 'Nairobi',       tz: 3,   x: 56, y: 57 },
+  { id: 8,  name: 'Cape Reserve',      city: 'Cape Town',     tz: 2,   x: 52, y: 74 },
+  { id: 9,  name: 'Colosseum Bank',    city: 'Rome',          tz: 1,   x: 49, y: 28 },
+  { id: 10, name: 'Rhine Vault',       city: 'Frankfurt',     tz: 1,   x: 49, y: 22 },
+  { id: 11, name: 'Thames Capital',    city: 'London',        tz: 0,   x: 46, y: 22 },
+  { id: 12, name: 'Nordic Reserve',    city: 'Oslo',          tz: 1,   x: 49, y: 16 },
+  { id: 13, name: 'Kremlin Bank',      city: 'Moscow',        tz: 3,   x: 57, y: 19 },
+  { id: 14, name: 'Azores Vault',      city: 'Lisbon',        tz: 0,   x: 44, y: 28 },
+  { id: 15, name: 'Atlas Treasury',    city: 'Casablanca',    tz: 1,   x: 44, y: 34 },
+  { id: 16, name: 'Amazon Reserve',    city: 'São Paulo',     tz: -3,  x: 32, y: 67 },
+  { id: 17, name: 'Andes Vault',       city: 'Bogotá',        tz: -5,  x: 25, y: 54 },
+  { id: 18, name: 'Manhattan Capital', city: 'New York',      tz: -5,  x: 22, y: 28 },
+  { id: 19, name: 'Silicon Reserve',   city: 'San Francisco', tz: -8,  x: 10, y: 31 },
+  { id: 20, name: 'Maple Treasury',    city: 'Toronto',       tz: -5,  x: 21, y: 24 },
+  { id: 21, name: 'Red Sea Bank',      city: 'Riyadh',        tz: 3,   x: 58, y: 39 },
+  { id: 22, name: 'Carnival Bank',     city: 'Rio',           tz: -3,  x: 33, y: 68 },
 ]
 
-// ─── Ticket Generator ────────────────────────────────────────────────────────
+const TERMINAL_CMDS = [
+  'INIT PAYLOAD INJECTION', 'BYPASSING FIREWALL LAYER 3', 'SCANNING PORT 8443',
+  'BRUTE FORCE SHA-256', 'DECRYPTING TLS HANDSHAKE', 'EXPLOITING CVE-2024-1337',
+  'INJECTING SQL PAYLOAD', 'PIVOTING THROUGH SUBNET', 'EXFILTRATING VAULT KEYS',
+  'SPOOFING MAC ADDRESS', 'ARP POISONING GATEWAY', 'DUMPING LSASS MEMORY',
+  'ESCALATING PRIVILEGES', 'DEPLOYING ROOTKIT', 'TUNNELING THROUGH SSH',
+  'SNIFFING PACKETS ETH0', 'CRACKING WPA2 HANDSHAKE', 'BUFFER OVERFLOW EXPLOIT',
+  'UPLOADING RANSOMWARE', 'COVERING TRACKS', 'KERNEL PANIC INJECTED',
+]
+
+function getLiveBank(hour: number) { return hour % 23 }
+
 function generateDevice(id: number): Device {
   const cols = [[1,10],[11,20],[21,30],[31,40],[41,50],[51,60],[61,70],[71,80],[81,90]]
-  const grid: Cell[][] = Array.from({length:3}, () => Array(9).fill(null).map(() => ({num:null,matched:false,clicked:false})))
+  const grid: Cell[][] = Array.from({length:3}, () =>
+    Array(9).fill(null).map(() => ({num:null,matched:false,clicked:false,justCalled:false}))
+  )
   for (let row = 0; row < 3; row++) {
-    const colIndices = Array.from({length:9},(_,i)=>i)
-    const chosen = colIndices.sort(() => Math.random()-0.5).slice(0,5).sort((a,b)=>a-b)
+    const chosen = Array.from({length:9},(_,i)=>i).sort(()=>Math.random()-0.5).slice(0,5).sort((a,b)=>a-b)
     for (const ci of chosen) {
       const [lo, hi] = cols[ci]
       let num: number
-      do { num = Math.floor(Math.random()*(hi-lo+1))+lo } while (
-        grid.some(r => r[ci].num === num)
-      )
-      grid[row][ci] = { num, matched: false, clicked: false }
+      do { num = Math.floor(Math.random()*(hi-lo+1))+lo } while (grid.some(r => r[ci].num === num))
+      grid[row][ci] = { num, matched: false, clicked: false, justCalled: false }
     }
   }
-  return { id, grid, claimed: new Set(), corrupted: false, active: false, matchCount: 0, clickedCount: 0 }
+  return { id, grid, claimed: new Set(), corrupted: false, active: true }
 }
 
-// ─── World Map SVG ───────────────────────────────────────────────────────────
-function WorldMap({ activeBank, onSelectBank, currentHour }: {
-  activeBank: number | null
-  onSelectBank: (id: number) => void
-  currentHour: number
+// ─── World Map ───────────────────────────────────────────────────────────────
+function WorldMap({ selectedBank, onSelect, currentHour }: {
+  selectedBank: number | null; onSelect:(id:number)=>void; currentHour: number
 }) {
+  const liveBank = getLiveBank(currentHour)
   return (
-    <div style={{ position:'relative', width:'100%', background:'#020d1a', border:'1px solid #0a3a5a', borderRadius:16, overflow:'hidden', paddingTop:'50%' }}>
+    <div style={{ position:'relative', width:'100%', paddingTop:'48%', borderRadius:14, overflow:'hidden', background:'rgba(14,30,54,0.12)', border:'1px solid rgba(14,30,54,0.15)' }}>
       <div style={{ position:'absolute', inset:0 }}>
-        {/* Grid lines */}
-        {Array.from({length:12},(_,i) => (
-          <div key={i} style={{ position:'absolute', left:`${(i/12)*100}%`, top:0, bottom:0, borderLeft:'1px solid #0a2535', width:1 }} />
-        ))}
-        {Array.from({length:6},(_,i) => (
-          <div key={i} style={{ position:'absolute', top:`${(i/6)*100}%`, left:0, right:0, borderTop:'1px solid #0a2535', height:1 }} />
-        ))}
-        {/* Continent blobs (simplified SVG paths as background) */}
-        <svg viewBox="0 0 100 100" style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0.15 }}>
-          {/* North America */}
-          <ellipse cx="18" cy="28" rx="12" ry="14" fill="#1e4a7a" />
-          {/* South America */}
-          <ellipse cx="28" cy="62" rx="7" ry="14" fill="#1e4a7a" />
-          {/* Europe */}
-          <ellipse cx="49" cy="22" rx="6" ry="8" fill="#1e4a7a" />
-          {/* Africa */}
-          <ellipse cx="50" cy="52" rx="7" ry="16" fill="#1e4a7a" />
-          {/* Asia */}
-          <ellipse cx="70" cy="28" rx="18" ry="14" fill="#1e4a7a" />
-          {/* Australia */}
-          <ellipse cx="82" cy="65" rx="7" ry="6" fill="#1e4a7a" />
+        <svg viewBox="0 0 100 100" style={{ width:'100%', height:'100%' }}>
+          {/* Grid */}
+          {Array.from({length:13},(_,i)=>(
+            <line key={`v${i}`} x1={i*100/12} y1="0" x2={i*100/12} y2="100" stroke="rgba(14,30,54,0.08)" strokeWidth="0.3"/>
+          ))}
+          {Array.from({length:7},(_,i)=>(
+            <line key={`h${i}`} x1="0" y1={i*100/6} x2="100" y2={i*100/6} stroke="rgba(14,30,54,0.08)" strokeWidth="0.3"/>
+          ))}
+          {/* Continent shapes */}
+          <ellipse cx="18" cy="28" rx="12" ry="14" fill="rgba(14,30,54,0.12)" stroke="rgba(14,30,54,0.2)" strokeWidth="0.4"/>
+          <ellipse cx="28" cy="63" rx="7" ry="13" fill="rgba(14,30,54,0.12)" stroke="rgba(14,30,54,0.2)" strokeWidth="0.4"/>
+          <ellipse cx="49" cy="23" rx="6" ry="8" fill="rgba(14,30,54,0.12)" stroke="rgba(14,30,54,0.2)" strokeWidth="0.4"/>
+          <ellipse cx="50" cy="53" rx="7" ry="16" fill="rgba(14,30,54,0.12)" stroke="rgba(14,30,54,0.2)" strokeWidth="0.4"/>
+          <ellipse cx="70" cy="29" rx="18" ry="14" fill="rgba(14,30,54,0.12)" stroke="rgba(14,30,54,0.2)" strokeWidth="0.4"/>
+          <ellipse cx="82" cy="65" rx="7" ry="6" fill="rgba(14,30,54,0.12)" stroke="rgba(14,30,54,0.2)" strokeWidth="0.4"/>
+          {/* Bank dots */}
+          {BANKS.map(bank => {
+            const isLive = bank.id === liveBank
+            const isSel = bank.id === selectedBank
+            return (
+              <g key={bank.id} onClick={()=>onSelect(bank.id)} style={{cursor:'pointer'}}>
+                {isLive && <circle cx={bank.x} cy={bank.y} r="3" fill="rgba(239,68,68,0.2)"><animate attributeName="r" values="2;4;2" dur="1.5s" repeatCount="indefinite"/></circle>}
+                <circle cx={bank.x} cy={bank.y} r={isLive?2.2:isSel?1.8:1.2}
+                  fill={isLive?'#ef4444':isSel?'#0ea5e9':'rgba(14,30,54,0.4)'}
+                  stroke={isLive?'#fca5a5':isSel?'#7dd3fc':'rgba(14,30,54,0.3)'}
+                  strokeWidth="0.4"
+                />
+                {isSel && <text x={bank.x} y={bank.y-3} textAnchor="middle" fontSize="2.5" fill="#0369a1">{bank.city}</text>}
+              </g>
+            )
+          })}
+          {/* Live label */}
+          {(() => {
+            const b = BANKS[liveBank]
+            return <text x={b.x} y={b.y-3.5} textAnchor="middle" fontSize="2.8" fill="#ef4444" fontWeight="bold">● {b.city}</text>
+          })()}
         </svg>
-        {/* Bank dots */}
-        {BANKS.map(bank => {
-          const bankHour = ((currentHour + bank.tz) % 24 + 24) % 24
-          const isActive = Math.floor(bankHour) === activeBank ? true : bank.id === activeBank
-          const isLive = bank.id === getLiveBank(currentHour)
-          return (
-            <button key={bank.id} onClick={() => onSelectBank(bank.id)} style={{
-              position:'absolute', left:`${bank.x}%`, top:`${bank.y}%`,
-              transform:'translate(-50%,-50%)',
-              width: isLive ? 14 : 10,
-              height: isLive ? 14 : 10,
-              borderRadius:'50%',
-              background: isLive ? '#ff0040' : bank.id === activeBank ? '#00e5a0' : '#1e4a7a',
-              border: isLive ? '2px solid #ff4060' : '1px solid #00b8ff',
-              cursor:'pointer', padding:0,
-              boxShadow: isLive ? '0 0 12px #ff0040, 0 0 24px #ff004060' : bank.id === activeBank ? '0 0 8px #00e5a0' : 'none',
-              animation: isLive ? 'pulse 1s infinite' : 'none',
-              zIndex: isLive ? 10 : 1,
-            }} title={`${bank.name} - ${bank.city}`} />
-          )
-        })}
-        {/* Live bank label */}
-        {(() => {
-          const live = BANKS[getLiveBank(currentHour)]
-          return (
-            <div style={{ position:'absolute', left:`${live.x}%`, top:`${live.y - 8}%`, transform:'translateX(-50%)', whiteSpace:'nowrap', fontFamily:'"DM Mono",monospace', fontSize:9, color:'#ff4060', background:'#020d1a', padding:'2px 6px', borderRadius:4, border:'1px solid #ff004040' }}>
-              🔴 LIVE: {live.name}
-            </div>
-          )
-        })()}
       </div>
     </div>
   )
 }
 
-function getLiveBank(hour: number): number {
-  return hour % 23
-}
-
-// ─── Antenna Component ───────────────────────────────────────────────────────
-function Antenna({ color, broken, blinking }: { color: string; broken: boolean; blinking: boolean }) {
+// ─── Antenna SVG ─────────────────────────────────────────────────────────────
+function AntennaIcon({ color, broken, blinking, size=18 }: { color:string; broken:boolean; blinking:boolean; size?:number }) {
+  if (broken) return (
+    <svg width={size} height={size} viewBox="0 0 18 18">
+      <line x1="9" y1="16" x2="6" y2="8" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="6" y1="8" x2="10" y2="4" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="9" y1="5" x2="13" y2="2" stroke="#94a3b8" strokeWidth="1" strokeLinecap="round" opacity="0.4"/>
+    </svg>
+  )
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:1 }}>
-      {broken ? (
-        <div style={{ display:'flex', gap:1, alignItems:'flex-end' }}>
-          <div style={{ width:2, height:6, background:'#444', transform:'rotate(20deg)' }} />
-          <div style={{ width:2, height:4, background:'#444', transform:'rotate(-15deg)' }} />
-        </div>
-      ) : (
-        <>
-          <div style={{
-            width:6, height:6, borderRadius:'50%',
-            background: color,
-            boxShadow: blinking ? `0 0 8px ${color}, 0 0 16px ${color}60` : 'none',
-            animation: blinking ? 'antennaBlink 0.5s infinite' : 'none',
-          }} />
-          <div style={{ width:2, height:8, background: color, opacity: broken ? 0.2 : 0.8 }} />
-        </>
-      )}
-    </div>
+    <svg width={size} height={size} viewBox="0 0 18 18">
+      <line x1="9" y1="16" x2="9" y2="6" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity={blinking ? undefined : '0.7'}>
+        {blinking && <animate attributeName="opacity" values="1;0.1;1" dur="0.6s" repeatCount="indefinite"/>}
+      </line>
+      {/* Rings */}
+      <path d="M6,8 Q9,5 12,8" stroke={color} strokeWidth="1" fill="none" opacity="0.8"/>
+      <path d="M4,11 Q9,6 14,11" stroke={color} strokeWidth="0.8" fill="none" opacity="0.5"/>
+      {/* Tip bulb */}
+      <circle cx="9" cy="5" r="1.8" fill={color} opacity={blinking ? undefined : '0.8'}>
+        {blinking && <animate attributeName="opacity" values="1;0.2;1" dur="0.6s" repeatCount="indefinite"/>}
+        {blinking && <animate attributeName="r" values="1.8;2.6;1.8" dur="0.6s" repeatCount="indefinite"/>}
+      </circle>
+      {blinking && <circle cx="9" cy="5" r="3" fill={color} opacity="0.2"><animate attributeName="r" values="2;5;2" dur="0.6s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.3;0;0.3" dur="0.6s" repeatCount="indefinite"/></circle>}
+    </svg>
   )
 }
 
 // ─── Hacking Device ──────────────────────────────────────────────────────────
-function HackingDevice({ device, calledNums, onCellClick, onClaim, winStates, bankruptCount }: {
+function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCellClick, onClaim, winStates, bankruptCount }: {
   device: Device
+  currentNum: number | null
+  clickWindowOpen: boolean
   calledNums: Set<number>
-  onCellClick: (deviceId: number, row: number, col: number) => void
-  onClaim: (deviceId: number, winType: WinType) => void
-  winStates: Record<WinType, { claimed: boolean; claimable: boolean }>
+  onCellClick: (deviceId:number, row:number, col:number) => void
+  onClaim: (deviceId:number, winType:WinType) => void
+  winStates: Record<WinType,{claimed:boolean;claimable:boolean}>
   bankruptCount: number
 }) {
-  const clickedCount = device.grid.flat().filter(c => c.clicked).length
-  const canClaimEarly = clickedCount >= 5 && !device.claimed.has('EARLY_FIVE') && winStates.EARLY_FIVE.claimable && !winStates.EARLY_FIVE.claimed
-  const row0All = device.grid[0].filter(c=>c.num).every(c=>c.clicked)
-  const row1All = device.grid[1].filter(c=>c.num).every(c=>c.clicked)
-  const row2All = device.grid[2].filter(c=>c.num).every(c=>c.clicked)
-  const allClicked = device.grid.flat().filter(c=>c.num).every(c=>c.clicked)
+  const clicked = device.grid.flat().filter(c=>c.clicked).length
+  const row0Done = device.grid[0].filter(c=>c.num).every(c=>c.clicked)
+  const row1Done = device.grid[1].filter(c=>c.num).every(c=>c.clicked)
+  const row2Done = device.grid[2].filter(c=>c.num).every(c=>c.clicked)
+  const allDone  = device.grid.flat().filter(c=>c.num).every(c=>c.clicked)
+  const fhKey    = `FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType
 
-  const canClaimTop = row0All && !device.claimed.has('TOP_LINE') && winStates.TOP_LINE.claimable && !winStates.TOP_LINE.claimed
-  const canClaimMid = row1All && !device.claimed.has('MIDDLE_LINE') && winStates.MIDDLE_LINE.claimable && !winStates.MIDDLE_LINE.claimed
-  const canClaimBot = row2All && !device.claimed.has('BOTTOM_LINE') && winStates.BOTTOM_LINE.claimable && !winStates.BOTTOM_LINE.claimed
-  const canClaimFH = allClicked && !device.claimed.has(`FULL_HOUSE_${bankruptCount+1}`) && winStates[`FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType]?.claimable
+  const canClaim = (
+    (clicked >= 5 && !device.claimed.has('EARLY_FIVE') && winStates.EARLY_FIVE.claimable && !winStates.EARLY_FIVE.claimed) ||
+    (row0Done && !device.claimed.has('TOP_LINE') && winStates.TOP_LINE.claimable && !winStates.TOP_LINE.claimed) ||
+    (row1Done && !device.claimed.has('MIDDLE_LINE') && winStates.MIDDLE_LINE.claimable && !winStates.MIDDLE_LINE.claimed) ||
+    (row2Done && !device.claimed.has('BOTTOM_LINE') && winStates.BOTTOM_LINE.claimable && !winStates.BOTTOM_LINE.claimed) ||
+    (allDone && winStates[fhKey]?.claimable && !winStates[fhKey]?.claimed && !device.claimed.has(fhKey))
+  )
 
-  const anyClaim = canClaimEarly || canClaimTop || canClaimMid || canClaimBot || canClaimFH
+  const antennae: WinType[] = ['EARLY_FIVE','TOP_LINE','MIDDLE_LINE','BOTTOM_LINE','FULL_HOUSE_1','FULL_HOUSE_2','FULL_HOUSE_3']
 
-  // Determine which antennae to show
-  const antennae: { type: WinType; color: string }[] = [
-    { type: 'EARLY_FIVE', color: '#ffe600' },
-    { type: 'TOP_LINE', color: '#00cfff' },
-    { type: 'MIDDLE_LINE', color: '#39ff14' },
-    { type: 'BOTTOM_LINE', color: '#8b4513' },
-    { type: 'FULL_HOUSE_1', color: '#ff69b4' },
-    { type: 'FULL_HOUSE_2', color: '#ff1493' },
-    { type: 'FULL_HOUSE_3', color: '#ff007f' },
-  ]
+  const doClaim = () => {
+    if (clicked >= 5 && !device.claimed.has('EARLY_FIVE') && winStates.EARLY_FIVE.claimable && !winStates.EARLY_FIVE.claimed) { onClaim(device.id,'EARLY_FIVE'); return }
+    if (row0Done && !device.claimed.has('TOP_LINE') && winStates.TOP_LINE.claimable && !winStates.TOP_LINE.claimed) { onClaim(device.id,'TOP_LINE'); return }
+    if (row1Done && !device.claimed.has('MIDDLE_LINE') && winStates.MIDDLE_LINE.claimable && !winStates.MIDDLE_LINE.claimed) { onClaim(device.id,'MIDDLE_LINE'); return }
+    if (row2Done && !device.claimed.has('BOTTOM_LINE') && winStates.BOTTOM_LINE.claimable && !winStates.BOTTOM_LINE.claimed) { onClaim(device.id,'BOTTOM_LINE'); return }
+    if (allDone && winStates[fhKey]?.claimable) onClaim(device.id, fhKey)
+  }
 
   return (
     <div style={{
-      background: device.corrupted ? '#1a0808' : '#040f1e',
-      border: anyClaim ? '2px solid #ff69b4' : device.corrupted ? '1px solid #5a0010' : '1px solid #0a2a4a',
-      borderRadius:12, padding:'10px 8px',
-      boxShadow: anyClaim ? '0 0 20px #ff69b460' : device.corrupted ? '0 0 10px #5a001040' : '0 4px 16px #00000080',
-      display:'flex', flexDirection:'column', gap:6,
-      opacity: device.corrupted ? 0.6 : 1,
-      position:'relative', overflow:'hidden',
+      background: 'rgba(255,255,255,0.72)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
+      border: canClaim ? '2px solid #ec4899' : '1.5px solid rgba(14,30,54,0.15)',
+      borderRadius: 16,
+      padding: '10px 8px 8px',
+      boxShadow: canClaim
+        ? '0 0 0 3px rgba(236,72,153,0.2), 0 8px 24px rgba(14,30,54,0.12)'
+        : '0 4px 16px rgba(14,30,54,0.08)',
+      display: 'flex', flexDirection: 'column', gap: 6,
+      position: 'relative',
     }}>
-      {/* Antennae row */}
-      <div style={{ display:'flex', justifyContent:'space-around', paddingBottom:4, borderBottom:'1px solid #0a2a4a' }}>
+      {/* Antennae row — top of device like the image */}
+      <div style={{ display:'flex', justifyContent:'space-around', paddingBottom:6, borderBottom:'1px solid rgba(14,30,54,0.1)' }}>
         {antennae.map(a => (
-          <Antenna key={a.type}
-            color={a.color}
-            broken={winStates[a.type]?.claimed && !device.claimed.has(a.type)}
-            blinking={winStates[a.type]?.claimable && !winStates[a.type]?.claimed}
+          <AntennaIcon key={a}
+            color={ANTENNA_COLORS[a]}
+            broken={winStates[a]?.claimed && !device.claimed.has(a)}
+            blinking={winStates[a]?.claimable && !winStates[a]?.claimed}
+            size={20}
           />
         ))}
       </div>
 
       {/* Device ID */}
-      <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#2a5a7a', textAlign:'center' }}>
-        DEV#{String(device.id).padStart(6,'0')}
+      <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8', textAlign:'center', letterSpacing:'0.1em' }}>
+        DEV-{String(device.id).padStart(5,'0')}
       </div>
 
-      {/* Grid */}
+      {/* RANSOM button (big red button like the image) */}
+      <button onClick={doClaim} disabled={!canClaim} style={{
+        background: canClaim
+          ? 'linear-gradient(180deg,#f87171 0%,#dc2626 60%,#b91c1c 100%)'
+          : 'linear-gradient(180deg,#cbd5e1 0%,#94a3b8 100%)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 10,
+        padding: '10px 0',
+        fontFamily: '"Syne",sans-serif',
+        fontSize: 13,
+        fontWeight: 800,
+        letterSpacing: '0.12em',
+        cursor: canClaim ? 'pointer' : 'default',
+        boxShadow: canClaim
+          ? 'inset 0 -3px 0 rgba(0,0,0,0.3), 0 4px 12px rgba(220,38,38,0.4)'
+          : 'inset 0 -2px 0 rgba(0,0,0,0.15)',
+        transition: 'all 0.15s',
+      }}>
+        RANSOME
+      </button>
+
+      {/* Number grid */}
       {device.grid.map((row, ri) => (
         <div key={ri} style={{ display:'grid', gridTemplateColumns:'repeat(9,1fr)', gap:2 }}>
           {row.map((cell, ci) => {
-            const isClickable = cell.num !== null && calledNums.has(cell.num) && !cell.clicked
-            const isClicked = cell.clicked
-            const isEmpty = cell.num === null
+            const isCurrentNum = cell.num !== null && cell.num === currentNum
+            const isClickable  = isCurrentNum && clickWindowOpen && !cell.clicked
+            const isClicked    = cell.clicked
+            const isEmpty      = cell.num === null
+            const glitchAnim   = `glitch${(ri*9+ci)%3} ${2+((ri*9+ci)%3)}s ${(ri*9+ci)*0.07}s infinite`
+
             return (
-              <button key={ci} onClick={() => !isEmpty && !isClicked && onCellClick(device.id, ri, ci)}
+              <button key={ci}
+                onClick={() => isClickable && onCellClick(device.id, ri, ci)}
                 style={{
-                  height:22, borderRadius:3, border:'none', cursor: isClickable ? 'pointer' : 'default',
-                  background: isEmpty ? 'transparent' :
-                    isClicked ? '#00e5a0' :
-                    isClickable ? '#0a3a2a' : '#040f1e',
-                  color: isEmpty ? 'transparent' :
-                    isClicked ? '#000' :
-                    isClickable ? '#00e5a0' : '#1a3a5a',
-                  fontFamily:'"DM Mono",monospace',
+                  height: 24,
+                  borderRadius: 5,
+                  border: isClicked ? 'none' : isClickable ? '1.5px solid #22c55e' : '1px solid rgba(14,30,54,0.12)',
+                  cursor: isClickable ? 'pointer' : 'default',
+                  background: isEmpty ? 'transparent'
+                    : isClicked ? 'linear-gradient(135deg,#22c55e,#16a34a)'
+                    : isClickable ? 'rgba(34,197,94,0.1)'
+                    : 'rgba(14,30,54,0.06)',
+                  color: isEmpty ? 'transparent'
+                    : isClicked ? '#fff'
+                    : isClickable ? '#15803d'
+                    : '#64748b',
+                  fontFamily: '"DM Mono",monospace',
                   fontSize: 9,
                   fontWeight: isClicked ? 700 : 400,
-                  position:'relative', overflow:'hidden',
-                  boxShadow: isClicked ? '0 0 6px #00e5a060' : 'none',
-                  // Glitch effect only on non-clickable non-empty cells
-                  animation: (!isEmpty && !isClickable && !isClicked) ? `glitch${(ri*9+ci)%3} 3s ${(ri*9+ci)*0.1}s infinite` : 'none',
+                  boxShadow: isClicked ? '0 2px 6px rgba(34,197,94,0.35)' : 'none',
+                  // Glitch ONLY on non-clickable non-empty non-clicked cells
+                  animation: (!isEmpty && !isClickable && !isClicked) ? glitchAnim : 'none',
+                  padding: 0,
                 }}
               >
                 {cell.num ?? ''}
@@ -278,166 +295,147 @@ function HackingDevice({ device, calledNums, onCellClick, onClaim, winStates, ba
           })}
         </div>
       ))}
-
-      {/* Claim button */}
-      <button onClick={() => {
-        if (canClaimEarly) onClaim(device.id, 'EARLY_FIVE')
-        else if (canClaimTop) onClaim(device.id, 'TOP_LINE')
-        else if (canClaimMid) onClaim(device.id, 'MIDDLE_LINE')
-        else if (canClaimBot) onClaim(device.id, 'BOTTOM_LINE')
-        else if (canClaimFH) onClaim(device.id, `FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType)
-      }} disabled={!anyClaim} style={{
-        background: anyClaim ? 'linear-gradient(135deg,#ff69b4,#ff1493)' : '#0a1a2a',
-        color: anyClaim ? '#fff' : '#1a4a6a',
-        border: anyClaim ? '1px solid #ff69b4' : '1px solid #0a2a4a',
-        borderRadius:6, padding:'5px 0',
-        fontFamily:'"DM Mono",monospace', fontSize:9, letterSpacing:'0.1em',
-        cursor: anyClaim ? 'pointer' : 'default',
-        boxShadow: anyClaim ? '0 0 12px #ff69b460' : 'none',
-        fontWeight: 700,
-      }}>
-        {anyClaim ? '⚡ CLAIM RANSOME' : 'RANSOME'}
-      </button>
     </div>
   )
 }
 
-// ─── Hacking Matrix Terminal ─────────────────────────────────────────────────
-function HackingMatrix({ calledNums, calledOrder, timer }: {
-  calledNums: Set<number>
-  calledOrder: number[]
-  timer: number
+// ─── Hacking Matrix (centre panel) ───────────────────────────────────────────
+function HackingMatrix({ calledNums, calledOrder, timer, clickWindowOpen }: {
+  calledNums: Set<number>; calledOrder: number[]; timer: number; clickWindowOpen: boolean
 }) {
-  const [termLines, setTermLines] = useState<string[]>([])
-  const [displayNum, setDisplayNum] = useState<number | null>(null)
-  const termRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const cmd = TERMINAL_CMDS[Math.floor(Math.random() * TERMINAL_CMDS.length)]
-      const hex = Math.random().toString(16).slice(2,10).toUpperCase()
-      setTermLines(prev => [...prev.slice(-20), `> ${cmd} [${hex}]`])
-      if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight
-    }, 600 + Math.random() * 800)
-    return () => clearInterval(interval)
-  }, [])
-
-  useEffect(() => {
-    // Random number popup 60-90s
-    const delay = (60 + Math.random() * 30) * 1000
-    const t = setTimeout(() => {
-      const n = calledOrder[calledOrder.length - 1]
-      if (n) { setDisplayNum(n); setTimeout(() => setDisplayNum(null), 3000) }
-    }, delay)
-    return () => clearTimeout(t)
-  }, [calledOrder])
-
   const lastNum = calledOrder[calledOrder.length - 1]
+  const prev5   = calledOrder.slice(-6,-1).reverse()
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:8, height:'100%' }}>
-      {/* Main number display */}
+    <div style={{ display:'flex', flexDirection:'column', gap:10, height:'100%' }}>
+      {/* Big broadcast number */}
       <div style={{
-        background:'#020d1a', border:'2px solid #00e5a0', borderRadius:12,
-        padding:'16px', textAlign:'center', position:'relative', overflow:'hidden',
+        background: 'rgba(255,255,255,0.8)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: '1.5px solid rgba(14,30,54,0.12)',
+        borderRadius: 16,
+        padding: '20px 16px',
+        textAlign: 'center',
+        position: 'relative',
       }}>
-        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5', letterSpacing:'0.2em', marginBottom:4 }}>RANSOME BANK BROADCAST</div>
-        <div style={{
-          fontFamily:'"Syne",sans-serif', fontSize:64, fontWeight:800,
-          color:'#00e5a0', lineHeight:1,
-          textShadow:'0 0 20px #00e5a0, 0 0 40px #00e5a060',
-          animation:'numberPulse 0.3s ease',
+        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#94a3b8', letterSpacing:'0.2em', marginBottom:4 }}>RANSOME BANK BROADCAST</div>
+        <div key={lastNum} style={{
+          fontFamily: '"Syne",sans-serif', fontSize: 72, fontWeight: 800,
+          color: '#0f172a', lineHeight: 1,
+          animation: 'numDrop 0.35s cubic-bezier(.34,1.56,.64,1)',
         }}>
-          {lastNum ?? '--'}
+          {lastNum ?? '—'}
         </div>
-        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5', marginTop:4 }}>
-          NEXT IN: <span style={{ color:'#ff5722' }}>{timer}s</span>
-        </div>
-        {/* Popup number */}
-        {displayNum && (
-          <div style={{
-            position:'absolute', top:'10%', right:'10%',
-            background:'#ff004040', border:'1px solid #ff0040',
-            borderRadius:8, padding:'4px 10px',
-            fontFamily:'"DM Mono",monospace', fontSize:14, color:'#ff4060',
-            animation:'popIn 0.3s ease',
-          }}>
-            {displayNum}
+        {/* Click window indicator */}
+        <div style={{
+          marginTop: 8,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: clickWindowOpen ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.08)',
+          border: `1px solid ${clickWindowOpen ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.2)'}`,
+          borderRadius: 20, padding: '3px 10px',
+        }}>
+          <div style={{ width:6, height:6, borderRadius:'50%', background: clickWindowOpen ? '#22c55e' : '#ef4444' }} />
+          <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color: clickWindowOpen ? '#15803d' : '#dc2626' }}>
+            {clickWindowOpen ? `CLICK WINDOW OPEN — ${timer}s` : 'WINDOW CLOSED'}
           </div>
-        )}
+        </div>
+        {/* Last 5 numbers */}
+        <div style={{ display:'flex', gap:6, justifyContent:'center', marginTop:10 }}>
+          {prev5.map((n,i) => (
+            <div key={i} style={{
+              width:28, height:28, borderRadius:6,
+              background:'rgba(14,30,54,0.06)', border:'1px solid rgba(14,30,54,0.12)',
+              fontFamily:'"DM Mono",monospace', fontSize:10, color:'#64748b',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              opacity: 1 - i*0.15,
+            }}>{n}</div>
+          ))}
+        </div>
       </div>
 
-      {/* Called numbers */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:3, justifyContent:'center' }}>
-        {Array.from({length:90},(_,i)=>i+1).map(n => (
-          <div key={n} style={{
-            width:20, height:20, borderRadius:3,
-            background: calledNums.has(n) ? '#00e5a020' : '#020d1a',
-            border: calledNums.has(n) ? '1px solid #00e5a060' : '1px solid #0a2535',
-            color: calledNums.has(n) ? '#00e5a0' : '#0a2535',
-            fontFamily:'"DM Mono",monospace', fontSize:7,
-            display:'flex', alignItems:'center', justifyContent:'center',
-          }}>
-            {n}
-          </div>
-        ))}
+      {/* Number board 1-90 */}
+      <div style={{
+        background: 'rgba(255,255,255,0.7)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: '1.5px solid rgba(14,30,54,0.1)',
+        borderRadius: 14, padding: 10, flex: 1,
+      }}>
+        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8', marginBottom:6, letterSpacing:'0.1em' }}>NUMBERS BROADCAST</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(10,1fr)', gap:3 }}>
+          {Array.from({length:90},(_,i)=>i+1).map(n => (
+            <div key={n} style={{
+              height:20, borderRadius:4,
+              background: n===lastNum ? '#0f172a' : calledNums.has(n) ? 'rgba(14,30,54,0.15)' : 'transparent',
+              border: n===lastNum ? 'none' : calledNums.has(n) ? '1px solid rgba(14,30,54,0.2)' : '1px solid rgba(14,30,54,0.06)',
+              color: n===lastNum ? '#fff' : calledNums.has(n) ? '#475569' : '#cbd5e1',
+              fontFamily: '"DM Mono",monospace', fontSize: 8,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: n===lastNum ? 700 : 400,
+            }}>{n}</div>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
-// ─── Terminal Chat ───────────────────────────────────────────────────────────
-function TerminalChat() {
-  const [lines, setLines] = useState<{text:string;type:'system'|'user'|'cmd'}[]>([
-    { text:'HACKING MATRIX v3.7.1 INITIALIZED', type:'system' },
-    { text:'SECURE CHANNEL ESTABLISHED', type:'system' },
-    { text:'23 BANK NODES DETECTED', type:'system' },
+// ─── Chat Terminal ───────────────────────────────────────────────────────────
+function ChatTerminal({ nickname }: { nickname: string }) {
+  const [lines, setLines] = useState<{text:string;type:'sys'|'user'|'cmd'}[]>([
+    {text:'HACKING MATRIX v3.7.1 INITIALIZED',type:'sys'},
+    {text:'SECURE CHANNEL ACTIVE',type:'sys'},
+    {text:`AGENT ${nickname.toUpperCase()} CONNECTED`,type:'sys'},
   ])
   const [input, setInput] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior:'smooth' })
-  }, [lines])
+  useEffect(() => { endRef.current?.scrollIntoView({behavior:'smooth'}) }, [lines])
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const cmd = TERMINAL_CMDS[Math.floor(Math.random() * TERMINAL_CMDS.length)]
-      setLines(prev => [...prev.slice(-40), { text: cmd, type:'cmd' }])
-    }, 3000 + Math.random() * 4000)
-    return () => clearInterval(interval)
+    const t = setInterval(() => {
+      const cmd = TERMINAL_CMDS[Math.floor(Math.random()*TERMINAL_CMDS.length)]
+      const hex  = Math.random().toString(16).slice(2,8).toUpperCase()
+      setLines(p => [...p.slice(-50), {text:`> ${cmd}... [0x${hex}]`,type:'cmd'}])
+    }, 2000 + Math.random()*3000)
+    return () => clearInterval(t)
   }, [])
 
   const send = () => {
     if (!input.trim()) return
-    setLines(prev => [...prev, { text: `USER: ${input}`, type:'user' }])
+    setLines(p => [...p, {text:`${nickname}: ${input}`,type:'user'}])
     setInput('')
-    setTimeout(() => {
-      setLines(prev => [...prev, { text: `> ${TERMINAL_CMDS[Math.floor(Math.random()*TERMINAL_CMDS.length)]}`, type:'cmd' }])
-    }, 500)
   }
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#010810', border:'1px solid #0a2535', borderRadius:12, overflow:'hidden' }}>
-      <div style={{ padding:'8px 12px', borderBottom:'1px solid #0a2535', fontFamily:'"DM Mono",monospace', fontSize:9, color:'#00e5a0', letterSpacing:'0.15em' }}>
-        ⬡ HACKING MATRIX — SECURE CHANNEL
+    <div style={{ display:'flex', flexDirection:'column', height:'100%',
+      background:'rgba(255,255,255,0.75)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)',
+      border:'1.5px solid rgba(14,30,54,0.12)', borderRadius:14, overflow:'hidden' }}>
+      <div style={{ padding:'8px 12px', borderBottom:'1px solid rgba(14,30,54,0.08)',
+        fontFamily:'"DM Mono",monospace', fontSize:9, color:'#475569', letterSpacing:'0.12em',
+        display:'flex', alignItems:'center', gap:6 }}>
+        <div style={{ width:6, height:6, borderRadius:'50%', background:'#22c55e' }} />
+        HACKING MATRIX — SECURE CHAT
       </div>
-      <div style={{ flex:1, overflow:'auto', padding:10, display:'flex', flexDirection:'column', gap:4 }}>
-        {lines.map((l, i) => (
+      <div style={{ flex:1, overflow:'auto', padding:'8px 10px', display:'flex', flexDirection:'column', gap:3 }}>
+        {lines.map((l,i) => (
           <div key={i} style={{
             fontFamily:'"DM Mono",monospace', fontSize:9,
-            color: l.type==='system' ? '#00e5a0' : l.type==='user' ? '#00b8ff' : '#ff5722',
-            opacity: l.type==='cmd' ? 0.7 : 1,
+            color: l.type==='sys'?'#0369a1' : l.type==='user'?'#0f172a' : '#94a3b8',
+            fontWeight: l.type==='user'?600:400,
           }}>{l.text}</div>
         ))}
-        <div ref={endRef} />
+        <div ref={endRef}/>
       </div>
-      <div style={{ display:'flex', borderTop:'1px solid #0a2535' }}>
+      <div style={{ display:'flex', borderTop:'1px solid rgba(14,30,54,0.08)' }}>
         <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()}
-          placeholder="ENTER COMMAND..."
-          style={{ flex:1, background:'transparent', border:'none', padding:'8px 12px', fontFamily:'"DM Mono",monospace', fontSize:9, color:'#00b8ff', outline:'none' }}
+          placeholder="TYPE COMMAND..."
+          style={{ flex:1, background:'transparent', border:'none', padding:'8px 12px',
+            fontFamily:'"DM Mono",monospace', fontSize:9, color:'#0f172a', outline:'none' }}
         />
-        <button onClick={send} style={{ background:'#00e5a020', border:'none', borderLeft:'1px solid #0a2535', padding:'8px 12px', color:'#00e5a0', cursor:'pointer', fontFamily:'"DM Mono",monospace', fontSize:9 }}>
+        <button onClick={send} style={{ background:'rgba(14,30,54,0.05)', border:'none', borderLeft:'1px solid rgba(14,30,54,0.08)',
+          padding:'8px 12px', color:'#475569', cursor:'pointer', fontFamily:'"DM Mono",monospace', fontSize:9 }}>
           SEND
         </button>
       </div>
@@ -445,44 +443,100 @@ function TerminalChat() {
   )
 }
 
-// ─── Server Stats Panel ──────────────────────────────────────────────────────
-function ServerStats({ devices, calledNums, bankruptCount }: { devices: Device[]; calledNums: Set<number>; bankruptCount: number }) {
-  const activeDevices = devices.filter(d => d.active && !d.corrupted).length
-  const totalClaims = devices.reduce((a, d) => a + d.claimed.size, 0)
+// ─── Game Stats Panel ─────────────────────────────────────────────────────────
+function GameStats({ devices, calledNums, bankruptCount, liveBank, nickname }: {
+  devices:Device[]; calledNums:Set<number>; bankruptCount:number; liveBank:number; nickname:string
+}) {
   return (
-    <div style={{ background:'#010810', border:'1px solid #0a2535', borderRadius:12, padding:12, fontFamily:'"DM Mono",monospace' }}>
-      <div style={{ fontSize:9, color:'#00e5a0', letterSpacing:'0.15em', marginBottom:8 }}>⬡ SERVER STATS</div>
-      {[
-        ['NUMBERS DRAWN', `${calledNums.size}/90`],
-        ['ACTIVE DEVICES', `${activeDevices}/${devices.length}`],
-        ['TOTAL CLAIMS', totalClaims],
-        ['BANKRUPTS', `${bankruptCount}/3`],
-        ['VAULT STATUS', bankruptCount>=3 ? '💀 BANKRUPT' : '🔴 LIVE'],
-      ].map(([k,v]) => (
-        <div key={k as string} style={{ display:'flex', justifyContent:'space-between', marginBottom:4, fontSize:8 }}>
-          <span style={{ color:'#4a7fa5' }}>{k}</span>
-          <span style={{ color:'#00e5a0' }}>{v}</span>
+    <div style={{ display:'flex', flexDirection:'column', gap:8, height:'100%' }}>
+      <div style={{ background:'rgba(255,255,255,0.8)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)',
+        border:'1.5px solid rgba(14,30,54,0.12)', borderRadius:14, padding:14, flex:1 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+          <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#94a3b8', letterSpacing:'0.12em' }}>GAME STATS</div>
+          <div style={{ width:28, height:28, borderRadius:'50%', background:'rgba(14,30,54,0.08)',
+            display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>💬</div>
         </div>
-      ))}
+        {[
+          ['AGENT', nickname.toUpperCase()],
+          ['TARGET BANK', BANKS[liveBank].name],
+          ['NUMBERS DRAWN', `${calledNums.size}/90`],
+          ['YOUR DEVICES', devices.length],
+          ['ACTIVE', devices.filter(d=>d.active&&!d.corrupted).length],
+          ['BANKRUPTS', `${bankruptCount}/3`],
+          ['VAULT', bankruptCount>=3?'💀 BANKRUPT':'🔴 LIVE'],
+        ].map(([k,v]) => (
+          <div key={k as string} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid rgba(14,30,54,0.06)' }}>
+            <span style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8' }}>{k}</span>
+            <span style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#0f172a', fontWeight:600 }}>{v as string}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Win conditions legend */}
+      <div style={{ background:'rgba(255,255,255,0.75)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)',
+        border:'1.5px solid rgba(14,30,54,0.1)', borderRadius:12, padding:10 }}>
+        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8', marginBottom:8, letterSpacing:'0.1em' }}>ANTENNA KEY</div>
+        {(Object.entries(ANTENNA_COLORS) as [WinType,string][]).map(([type,color]) => (
+          <div key={type} style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+            <div style={{ width:8, height:8, borderRadius:'50%', background:color, flexShrink:0 }}/>
+            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:7.5, color:'#475569' }}>{WIN_LABELS[type]}</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// ─── Nickname Modal ───────────────────────────────────────────────────────────
+function NicknameModal({ onConfirm }: { onConfirm: (name:string)=>void }) {
+  const [name, setName] = useState('')
+  const [err, setErr] = useState('')
+  const submit = () => {
+    if (name.trim().length < 3) { setErr('Min 3 characters'); return }
+    if (name.trim().length > 16) { setErr('Max 16 characters'); return }
+    onConfirm(name.trim())
+  }
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(248,250,252,0.85)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
+      <div style={{ background:'rgba(255,255,255,0.95)', border:'1.5px solid rgba(14,30,54,0.12)', borderRadius:20, padding:32, maxWidth:360, width:'90%',
+        boxShadow:'0 24px 48px rgba(14,30,54,0.12)' }}>
+        <div style={{ fontFamily:'"Syne",sans-serif', fontSize:22, fontWeight:800, color:'#0f172a', marginBottom:6 }}>RANSOME</div>
+        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#94a3b8', letterSpacing:'0.15em', marginBottom:24 }}>HACK THE BANKS — CLAIM THE VAULT</div>
+        <div style={{ fontFamily:'"DM Mono",monospace', fontSize:10, color:'#475569', marginBottom:8 }}>CHOOSE YOUR AGENT NAME</div>
+        <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()}
+          placeholder="e.g. GHOST_ZERO"
+          maxLength={16}
+          style={{ width:'100%', background:'rgba(14,30,54,0.04)', border:'1.5px solid rgba(14,30,54,0.15)', borderRadius:10, padding:'10px 14px',
+            fontFamily:'"DM Mono",monospace', fontSize:13, color:'#0f172a', outline:'none', boxSizing:'border-box', marginBottom:6 }}
+        />
+        {err && <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#ef4444', marginBottom:8 }}>{err}</div>}
+        <button onClick={submit} style={{ width:'100%', background:'#0f172a', color:'#fff', border:'none', borderRadius:10,
+          padding:'12px', fontFamily:'"Syne",sans-serif', fontSize:14, fontWeight:700, cursor:'pointer', marginTop:4 }}>
+          ENTER THE MATRIX
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Ransome() {
-  const [phase, setPhase] = useState<string>('lobby')
+  const [phase, setPhase] = useState<string>('setup')  // setup | lobby | game
+  const [nickname, setNickname] = useState('')
   const [wallet, setWallet] = useState<string|null>(null)
   const [devices, setDevices] = useState<Device[]>([])
   const [calledNums, setCalledNums] = useState<Set<number>>(new Set())
   const [calledOrder, setCalledOrder] = useState<number[]>([])
   const [timer, setTimer] = useState(60)
+  const [clickWindowOpen, setClickWindowOpen] = useState(false)
   const [announcement, setAnnouncement] = useState<string|null>(null)
   const [bankruptCount, setBankruptCount] = useState(0)
   const [mintCount, setMintCount] = useState(1)
-  const [devicesExpanded, setDevicesExpanded] = useState(false)
-  const [selectedBank, setSelectedBank] = useState<number | null>(null)
   const [mintToken, setMintToken] = useState('USDT')
-  const [winStates, setWinStates] = useState<Record<WinType, {claimed:boolean;claimable:boolean}>>({
+  const [selectedBank, setSelectedBank] = useState<number|null>(null)
+  const [devicesExpanded, setDevicesExpanded] = useState(false)
+  const [winStates, setWinStates] = useState<Record<WinType,{claimed:boolean;claimable:boolean}>>({
     EARLY_FIVE:   {claimed:false,claimable:false},
     TOP_LINE:     {claimed:false,claimable:false},
     MIDDLE_LINE:  {claimed:false,claimable:false},
@@ -492,383 +546,327 @@ export default function Ransome() {
     FULL_HOUSE_3: {claimed:false,claimable:false},
   })
 
-  const gameRunning = useRef(false)
-  const timerRef = useRef<ReturnType<typeof setInterval>|null>(null)
+  const timerRef   = useRef<ReturnType<typeof setInterval>|null>(null)
   const currentHour = new Date().getUTCHours()
-  const liveBank = getLiveBank(currentHour)
+  const liveBank   = getLiveBank(currentHour)
+  const currentNum = calledOrder[calledOrder.length - 1] ?? null
 
-  const announce = (msg: string) => {
-    setAnnouncement(msg)
-    setTimeout(() => setAnnouncement(null), 4000)
-  }
+  const announce = (msg: string) => { setAnnouncement(msg); setTimeout(()=>setAnnouncement(null), 4000) }
 
   const drawNumber = useCallback(() => {
+    setClickWindowOpen(false)
     setCalledNums(prev => {
       if (prev.size >= 90) return prev
-      const remaining = Array.from({length:90},(_,i)=>i+1).filter(n => !prev.has(n))
+      const remaining = Array.from({length:90},(_,i)=>i+1).filter(n=>!prev.has(n))
       if (!remaining.length) return prev
       const num = remaining[Math.floor(Math.random()*remaining.length)]
       setCalledOrder(o => [...o, num])
-
-      // Update devices for matches
+      // Mark matched on devices
       setDevices(ds => ds.map(d => {
         if (!d.active || d.corrupted) return d
         const newGrid = d.grid.map(row => row.map(cell => {
-          if (cell.num === num) return { ...cell, matched: true }
-          return cell
+          if (cell.num === num) return {...cell, matched:true, justCalled:true}
+          return {...cell, justCalled:false}
         }))
-        return { ...d, grid: newGrid }
+        return {...d, grid:newGrid}
       }))
-
+      // Open click window
+      setTimeout(() => setClickWindowOpen(true), 100)
       return new Set(Array.from(prev).concat([num]))
     })
   }, [])
 
-  // Check win conditions
+  // Close click window when timer expires (next number draws)
+  const handleTimerTick = useCallback(() => {
+    setTimer(t => {
+      if (t <= 1) {
+        setClickWindowOpen(false)
+        drawNumber()
+        return 60 + Math.floor(Math.random()*30)
+      }
+      return t - 1
+    })
+  }, [drawNumber])
+
   useEffect(() => {
     if (phase !== 'game') return
-    setDevices(ds => {
-      const newWinStates = { ...winStates }
-      ds.forEach(d => {
+    timerRef.current = setInterval(handleTimerTick, 1000)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [phase, handleTimerTick])
+
+  // Check win conditions whenever devices change
+  useEffect(() => {
+    if (phase !== 'game') return
+    setWinStates(prev => {
+      const next = {...prev}
+      devices.forEach(d => {
         if (!d.active || d.corrupted) return
-        const clicked = d.grid.flat().filter(c => c.clicked)
-        if (clicked.length >= 5) newWinStates.EARLY_FIVE = { ...newWinStates.EARLY_FIVE, claimable: true }
-        if (d.grid[0].filter(c=>c.num).every(c=>c.clicked)) newWinStates.TOP_LINE = { ...newWinStates.TOP_LINE, claimable: true }
-        if (d.grid[1].filter(c=>c.num).every(c=>c.clicked)) newWinStates.MIDDLE_LINE = { ...newWinStates.MIDDLE_LINE, claimable: true }
-        if (d.grid[2].filter(c=>c.num).every(c=>c.clicked)) newWinStates.BOTTOM_LINE = { ...newWinStates.BOTTOM_LINE, claimable: true }
-        if (d.grid.flat().filter(c=>c.num).every(c=>c.clicked)) {
+        const allCells = d.grid.flat()
+        const clicked = allCells.filter(c=>c.clicked)
+        if (clicked.length >= 5) next.EARLY_FIVE = {...next.EARLY_FIVE, claimable:true}
+        if (d.grid[0].filter(c=>c.num).every(c=>c.clicked)) next.TOP_LINE = {...next.TOP_LINE, claimable:true}
+        if (d.grid[1].filter(c=>c.num).every(c=>c.clicked)) next.MIDDLE_LINE = {...next.MIDDLE_LINE, claimable:true}
+        if (d.grid[2].filter(c=>c.num).every(c=>c.clicked)) next.BOTTOM_LINE = {...next.BOTTOM_LINE, claimable:true}
+        if (allCells.filter(c=>c.num).every(c=>c.clicked)) {
           const fhKey = `FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType
-          newWinStates[fhKey] = { ...newWinStates[fhKey], claimable: true }
+          next[fhKey] = {...next[fhKey], claimable:true}
         }
       })
-      setWinStates(newWinStates)
-      return ds
+      return next
     })
-  }, [calledNums, phase])
+  }, [devices, phase])
+
+  const handleCellClick = (deviceId:number, row:number, col:number) => {
+    if (!clickWindowOpen) return
+    setDevices(ds => ds.map(d => {
+      if (d.id !== deviceId) return d
+      const cell = d.grid[row][col]
+      if (!cell.num || cell.num !== currentNum || cell.clicked) return d
+      const newGrid = d.grid.map((r,ri) => r.map((c,ci) =>
+        ri===row && ci===col ? {...c, clicked:true, justCalled:false} : c
+      ))
+      return {...d, grid:newGrid}
+    }))
+  }
+
+  const handleClaim = (deviceId:number, winType:WinType) => {
+    if (winStates[winType].claimed) return
+    setDevices(ds => ds.map(d => {
+      if (d.id !== deviceId) return d
+      return {...d, claimed: new Set(Array.from(d.claimed).concat([winType]))}
+    }))
+    setWinStates(prev => ({...prev, [winType]: {...prev[winType], claimed:true}}))
+    announce(`✅ ${WIN_LABELS[winType]} — CLAIMED!`)
+    if (winType.startsWith('FULL_HOUSE')) setBankruptCount(b=>Math.min(b+1,3))
+  }
 
   const startGame = () => {
     setPhase('game')
-    gameRunning.current = true
     drawNumber()
     announce('🔴 HACK INITIATED — RANSOME BANK BROADCAST LIVE')
   }
 
-  useEffect(() => {
-    if (phase !== 'game') return
-    timerRef.current = setInterval(() => {
-      setTimer(t => {
-        if (t <= 1) { drawNumber(); return 60 + Math.floor(Math.random() * 30) }
-        return t - 1
-      })
-    }, 1000)
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [phase, drawNumber])
-
-  const handleCellClick = (deviceId: number, row: number, col: number) => {
-    setDevices(ds => ds.map(d => {
-      if (d.id !== deviceId) return d
-      const cell = d.grid[row][col]
-      if (!cell.num || !calledNums.has(cell.num) || cell.clicked) return d
-      const newGrid = d.grid.map((r,ri) => r.map((c,ci) => {
-        if (ri===row && ci===col) return { ...c, clicked: true }
-        return c
-      }))
-      return { ...d, grid: newGrid, clickedCount: d.clickedCount + 1 }
-    }))
-  }
-
-  const handleClaim = (deviceId: number, winType: WinType) => {
-    if (winStates[winType].claimed) return
-    setDevices(ds => ds.map(d => {
-      if (d.id !== deviceId) return d
-      const newClaimed = new Set(Array.from(d.claimed).concat([winType]))
-      return { ...d, claimed: newClaimed }
-    }))
-    setWinStates(prev => ({ ...prev, [winType]: { ...prev[winType], claimed: true } }))
-    announce(`✅ ${WIN_LABELS[winType]} CLAIMED!`)
-    if (winType.startsWith('FULL_HOUSE')) setBankruptCount(b => Math.min(b+1, 3))
-  }
-
   const mintDevices = () => {
-    if (!wallet) return
-    const bank = selectedBank ?? liveBank
-    const newDevices = Array.from({length: mintCount}, (_, i) =>
-      generateDevice(devices.length + i)
-    )
+    const newDevices = Array.from({length:mintCount},(_,i)=>generateDevice(devices.length+i))
     setDevices(prev => [...prev, ...newDevices])
-    announce(`⚡ ${mintCount} HACKING DEVICE${mintCount>1?'S':''} MINTED — TARGETING ${BANKS[bank].name}`)
+    announce(`⚡ ${mintCount} DEVICE${mintCount>1?'S':''} MINTED — TARGET: ${BANKS[selectedBank??liveBank].name}`)
   }
 
-  const connectWallet = () => {
-    setWallet('HaCk...3r0x')
-    announce('🔓 WALLET CONNECTED — ACCESS GRANTED')
+  // ── Setup / Nickname screen ───────────────────────────────────────────────
+  if (phase === 'setup') {
+    return (
+      <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#f0f4f8 0%,#e8eef7 100%)' }}>
+        <NicknameModal onConfirm={name => { setNickname(name); setPhase('lobby') }} />
+      </div>
+    )
   }
 
-  const lastCalled = calledOrder.slice(-5).reverse()
-
-  // ── Lobby ──────────────────────────────────────────────────────────────────
+  // ── Lobby ────────────────────────────────────────────────────────────────
   if (phase === 'lobby') {
     return (
-      <div style={{ minHeight:'100vh', background:'#010810', color:'#c8d8e8', padding:'20px 16px' }}>
-
+      <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#f0f4f8 0%,#e8eef7 100%)', color:'#0f172a', padding:'20px 16px' }}>
         {/* Header */}
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, borderBottom:'1px solid #0a2535', paddingBottom:16 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
           <div>
-            <div style={{ fontFamily:'"Syne",sans-serif', fontSize:28, fontWeight:800, color:'#00e5a0', letterSpacing:'-0.02em' }}>RANSOME</div>
-            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5', letterSpacing:'0.2em' }}>HACK THE BANKS — CLAIM THE VAULT</div>
+            <div style={{ fontFamily:'"Syne",sans-serif', fontSize:26, fontWeight:800, color:'#0f172a' }}>RANSOME</div>
+            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8', letterSpacing:'0.18em' }}>HACK THE BANKS — CLAIM THE VAULT</div>
           </div>
-          <button onClick={connectWallet} style={{
-            background: wallet ? '#00e5a020' : 'linear-gradient(135deg,#00e5a0,#00b8ff)',
-            color: wallet ? '#00e5a0' : '#000', border: wallet ? '1px solid #00e5a040' : 'none',
-            borderRadius:8, padding:'8px 16px', fontFamily:'"DM Mono",monospace', fontSize:10, cursor:'pointer', fontWeight:700,
-          }}>
-            {wallet ? `✓ ${wallet}` : 'CONNECT WALLET'}
-          </button>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#475569', background:'rgba(14,30,54,0.06)', border:'1px solid rgba(14,30,54,0.1)', borderRadius:8, padding:'5px 10px' }}>
+              👤 {nickname}
+            </div>
+            <button onClick={()=>setWallet('HaCk...3r0x')} style={{
+              background: wallet ? 'rgba(34,197,94,0.1)' : '#0f172a', color: wallet ? '#15803d' : '#fff',
+              border: wallet ? '1px solid rgba(34,197,94,0.3)' : 'none',
+              borderRadius:8, padding:'6px 14px', fontFamily:'"DM Mono",monospace', fontSize:9, cursor:'pointer', fontWeight:600,
+            }}>
+              {wallet ? `✓ ${wallet}` : 'CONNECT WALLET'}
+            </button>
+          </div>
         </div>
 
-        {/* Live bank info */}
-        <div style={{ background:'#ff004010', border:'1px solid #ff004040', borderRadius:12, padding:'12px 16px', marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        {/* Live bank */}
+        <div style={{ background:'rgba(239,68,68,0.06)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:14, padding:'14px 16px', marginBottom:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
-            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#ff4060', letterSpacing:'0.15em' }}>🔴 LIVE NOW</div>
-            <div style={{ fontFamily:'"Syne",sans-serif', fontSize:18, fontWeight:700, color:'#fff' }}>{BANKS[liveBank].name}</div>
-            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5' }}>{BANKS[liveBank].city} · UTC{BANKS[liveBank].tz >= 0 ? '+' : ''}{BANKS[liveBank].tz}</div>
+            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#ef4444', letterSpacing:'0.15em', marginBottom:2 }}>🔴 LIVE NOW — 1 HOUR WINDOW</div>
+            <div style={{ fontFamily:'"Syne",sans-serif', fontSize:20, fontWeight:800, color:'#0f172a' }}>{BANKS[liveBank].name}</div>
+            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8' }}>{BANKS[liveBank].city} · UTC{BANKS[liveBank].tz>=0?'+':''}{BANKS[liveBank].tz}</div>
           </div>
           <div style={{ textAlign:'right' }}>
-            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5' }}>VAULT SIZE</div>
-            <div style={{ fontFamily:'"Syne",sans-serif', fontSize:20, fontWeight:800, color:'#00e5a0' }}>$1,000,000</div>
-            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#4a7fa5' }}>1M DEVICES @ $1 EACH</div>
+            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8' }}>VAULT</div>
+            <div style={{ fontFamily:'"Syne",sans-serif', fontSize:22, fontWeight:800, color:'#0f172a' }}>$1,000,000</div>
+            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:7, color:'#94a3b8' }}>1M DEVICES @ $1</div>
           </div>
         </div>
 
-        {/* World Map */}
-        <div style={{ marginBottom:16 }}>
-          <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5', letterSpacing:'0.15em', marginBottom:8 }}>⬡ GLOBAL BANK NETWORK — SELECT TARGET</div>
-          <WorldMap activeBank={selectedBank} onSelectBank={setSelectedBank} currentHour={currentHour} />
-          <div style={{ display:'flex', gap:12, marginTop:8, justifyContent:'center' }}>
-            <div style={{ display:'flex', gap:4, alignItems:'center', fontFamily:'"DM Mono",monospace', fontSize:8, color:'#4a7fa5' }}>
-              <div style={{ width:8, height:8, borderRadius:'50%', background:'#ff0040' }} /> LIVE
-            </div>
-            <div style={{ display:'flex', gap:4, alignItems:'center', fontFamily:'"DM Mono",monospace', fontSize:8, color:'#4a7fa5' }}>
-              <div style={{ width:8, height:8, borderRadius:'50%', background:'#00e5a0' }} /> SELECTED
-            </div>
-            <div style={{ display:'flex', gap:4, alignItems:'center', fontFamily:'"DM Mono",monospace', fontSize:8, color:'#4a7fa5' }}>
-              <div style={{ width:8, height:8, borderRadius:'50%', background:'#1e4a7a' }} /> SCHEDULED
-            </div>
-          </div>
+        {/* World map */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8', letterSpacing:'0.12em', marginBottom:6 }}>GLOBAL BANK NETWORK — TAP TO SELECT TARGET</div>
+          <WorldMap selectedBank={selectedBank} onSelect={setSelectedBank} currentHour={currentHour} />
         </div>
 
-        {/* Selected bank info */}
-        {selectedBank !== null && (
-          <div style={{ background:'#00e5a010', border:'1px solid #00e5a040', borderRadius:10, padding:'10px 14px', marginBottom:16 }}>
-            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#00e5a0' }}>TARGET: {BANKS[selectedBank].name} — {BANKS[selectedBank].city}</div>
-            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#4a7fa5', marginTop:2 }}>
-              ACTIVE WINDOW: UTC{BANKS[selectedBank].tz >= 0 ? '+' : ''}{BANKS[selectedBank].tz} HOUR ONLY
-            </div>
-          </div>
-        )}
-
-        {/* Mint section */}
+        {/* Mint */}
         {wallet && (
-          <div style={{ background:'#040f1e', border:'1px solid #0a2a4a', borderRadius:12, padding:'14px', marginBottom:16 }}>
-            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5', letterSpacing:'0.15em', marginBottom:10 }}>⬡ MINT HACKING DEVICES</div>
-            <div style={{ display:'flex', gap:8, marginBottom:10, flexWrap:'wrap' }}>
-              {['USDT','USDC','SOL','RNSM'].map(t => (
-                <button key={t} onClick={() => setMintToken(t)} style={{
-                  background: mintToken===t ? '#00e5a020' : '#020d1a',
-                  border: mintToken===t ? '1px solid #00e5a0' : '1px solid #0a2535',
-                  color: mintToken===t ? '#00e5a0' : '#4a7fa5',
-                  borderRadius:6, padding:'4px 10px', fontFamily:'"DM Mono",monospace', fontSize:9, cursor:'pointer',
+          <div style={{ background:'rgba(255,255,255,0.8)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)', border:'1.5px solid rgba(14,30,54,0.1)', borderRadius:14, padding:14, marginBottom:14 }}>
+            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#94a3b8', letterSpacing:'0.12em', marginBottom:10 }}>MINT HACKING DEVICES</div>
+            <div style={{ display:'flex', gap:6, marginBottom:10, flexWrap:'wrap' }}>
+              {['USDT','USDC','SOL','RNSM'].map(t=>(
+                <button key={t} onClick={()=>setMintToken(t)} style={{
+                  background:mintToken===t?'#0f172a':'transparent', color:mintToken===t?'#fff':'#64748b',
+                  border:`1px solid ${mintToken===t?'#0f172a':'rgba(14,30,54,0.15)'}`,
+                  borderRadius:7, padding:'5px 12px', fontFamily:'"DM Mono",monospace', fontSize:9, cursor:'pointer',
                 }}>{t}</button>
               ))}
             </div>
-            <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:10 }}>
-              <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5' }}>QUANTITY:</div>
-              {[1,3,5,10].map(n => (
-                <button key={n} onClick={() => setMintCount(n)} style={{
-                  background: mintCount===n ? '#00e5a020' : '#020d1a',
-                  border: mintCount===n ? '1px solid #00e5a0' : '1px solid #0a2535',
-                  color: mintCount===n ? '#00e5a0' : '#4a7fa5',
-                  borderRadius:6, padding:'4px 10px', fontFamily:'"DM Mono",monospace', fontSize:9, cursor:'pointer',
+            <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:10, flexWrap:'wrap' }}>
+              <span style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8' }}>QTY:</span>
+              {[1,3,5,10].map(n=>(
+                <button key={n} onClick={()=>setMintCount(n)} style={{
+                  background:mintCount===n?'#0f172a':'transparent', color:mintCount===n?'#fff':'#64748b',
+                  border:`1px solid ${mintCount===n?'#0f172a':'rgba(14,30,54,0.15)'}`,
+                  borderRadius:7, padding:'4px 10px', fontFamily:'"DM Mono",monospace', fontSize:9, cursor:'pointer',
                 }}>{n}</button>
               ))}
-              <input type="number" value={mintCount} onChange={e=>setMintCount(Math.max(1,parseInt(e.target.value)||1))} style={{
-                width:60, background:'#020d1a', border:'1px solid #0a2535', borderRadius:6, padding:'4px 8px', color:'#00e5a0', fontFamily:'"DM Mono",monospace', fontSize:9, outline:'none',
-              }} />
+              <input type="number" value={mintCount} onChange={e=>setMintCount(Math.max(1,parseInt(e.target.value)||1))}
+                style={{ width:56, background:'transparent', border:'1px solid rgba(14,30,54,0.15)', borderRadius:7, padding:'4px 8px', fontFamily:'"DM Mono",monospace', fontSize:9, color:'#0f172a', outline:'none' }}
+              />
             </div>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <div style={{ fontFamily:'"DM Mono",monospace', fontSize:11, color:'#fff' }}>
-                TOTAL: <span style={{ color:'#00e5a0' }}>{mintCount} {mintToken}</span>
+              <div style={{ fontFamily:'"DM Mono",monospace', fontSize:11, color:'#0f172a', fontWeight:600 }}>
+                {mintCount} {mintToken}
               </div>
-              <button onClick={mintDevices} style={{
-                background:'linear-gradient(135deg,#00e5a0,#00b8ff)', color:'#000',
-                border:'none', borderRadius:8, padding:'8px 20px',
-                fontFamily:'"DM Mono",monospace', fontSize:10, cursor:'pointer', fontWeight:700,
-              }}>
-                ⚡ MINT {mintCount} DEVICE{mintCount>1?'S':''}
+              <button onClick={mintDevices} style={{ background:'#0f172a', color:'#fff', border:'none', borderRadius:9, padding:'9px 20px', fontFamily:'"DM Mono",monospace', fontSize:10, cursor:'pointer', fontWeight:600 }}>
+                MINT DEVICES →
               </button>
             </div>
           </div>
         )}
 
-        {/* Start game */}
         {devices.length > 0 && (
-          <button onClick={startGame} style={{
-            width:'100%', background:'linear-gradient(135deg,#ff0040,#ff4060)',
-            color:'#fff', border:'none', borderRadius:10, padding:'14px',
-            fontFamily:'"Syne",sans-serif', fontSize:16, fontWeight:800, cursor:'pointer',
-            boxShadow:'0 0 20px #ff004060',
-          }}>
+          <button onClick={startGame} style={{ width:'100%', background:'#ef4444', color:'#fff', border:'none', borderRadius:12, padding:'14px', fontFamily:'"Syne",sans-serif', fontSize:16, fontWeight:800, cursor:'pointer', boxShadow:'0 4px 16px rgba(239,68,68,0.3)' }}>
             🔴 INITIATE HACK — {devices.length} DEVICE{devices.length>1?'S':''} READY
           </button>
         )}
 
         {announcement && (
-          <div style={{
-            position:'fixed', bottom:20, left:'50%', transform:'translateX(-50%)',
-            background:'#040f1e', border:'1px solid #00e5a040', borderRadius:10,
-            padding:'10px 20px', fontFamily:'"DM Mono",monospace', fontSize:11,
-            color:'#00e5a0', zIndex:999, whiteSpace:'nowrap', animation:'slideDown 0.3s ease',
-          }}>{announcement}</div>
+          <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:'rgba(255,255,255,0.95)', border:'1px solid rgba(14,30,54,0.12)', borderRadius:10, padding:'10px 20px', fontFamily:'"DM Mono",monospace', fontSize:10, color:'#0f172a', zIndex:999, whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(14,30,54,0.12)' }}>
+            {announcement}
+          </div>
         )}
       </div>
     )
   }
 
-  // ── Game Phase ─────────────────────────────────────────────────────────────
+  // ── Game ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight:'100vh', background:'#010810', color:'#c8d8e8' }}>
-
-      {/* Top bar */}
-      <div style={{ padding:'8px 16px', borderBottom:'1px solid #0a2535', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div style={{ fontFamily:'"Syne",sans-serif', fontSize:18, fontWeight:800, color:'#00e5a0' }}>RANSOME</div>
+    <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#f0f4f8 0%,#e8eef7 100%)', color:'#0f172a' }}>
+      {/* Header */}
+      <div style={{ padding:'8px 16px', borderBottom:'1px solid rgba(14,30,54,0.08)', display:'flex', justifyContent:'space-between', alignItems:'center', background:'rgba(255,255,255,0.6)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)' }}>
+        <div style={{ fontFamily:'"Syne",sans-serif', fontSize:18, fontWeight:800, color:'#0f172a' }}>RANSOME</div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-          <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#ff4060', background:'#ff004010', border:'1px solid #ff004040', borderRadius:6, padding:'3px 8px' }}>
-            🔴 {BANKS[liveBank].name.toUpperCase()}
+          <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#ef4444', background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:6, padding:'3px 8px' }}>
+            🔴 {BANKS[liveBank].name}
           </div>
-          <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5' }}>{wallet}</div>
+          <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#64748b', background:'rgba(14,30,54,0.06)', borderRadius:6, padding:'3px 8px' }}>
+            👤 {nickname}
+          </div>
         </div>
       </div>
 
-      {/* Main layout */}
-      <div style={{ padding:'12px 16px', display:'grid', gridTemplateColumns:'1fr', gap:12 }}>
+      {/* 3-column layout */}
+      <div style={{ padding:'12px 14px', display:'grid', gridTemplateColumns:'1fr 1.8fr 1fr', gap:12, height:'calc(60vh - 48px)', minHeight:380 }}>
+        {/* Left: Game stats */}
+        <GameStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} liveBank={liveBank} nickname={nickname} />
 
-        {/* Centre broadcast + servers + terminal */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr 1fr', gap:10, alignItems:'start' }}>
+        {/* Centre: Matrix numbers */}
+        <HackingMatrix calledNums={calledNums} calledOrder={calledOrder} timer={timer} clickWindowOpen={clickWindowOpen} />
 
-          {/* Left server rack */}
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            <ServerStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} />
-            {/* Wired server decorations */}
-            <div style={{ background:'#010810', border:'1px solid #0a2535', borderRadius:10, padding:10 }}>
-              <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#4a7fa5', marginBottom:6 }}>⬡ BANK NODES</div>
-              {BANKS.slice(0,8).map(b => (
-                <div key={b.id} style={{ display:'flex', alignItems:'center', gap:4, marginBottom:3 }}>
-                  <div style={{ width:4, height:4, borderRadius:'50%', background: b.id===liveBank ? '#ff0040' : '#0a2535', boxShadow: b.id===liveBank ? '0 0 4px #ff0040' : 'none' }} />
-                  <div style={{ fontFamily:'"DM Mono",monospace', fontSize:7, color: b.id===liveBank ? '#ff4060' : '#2a4a6a', flex:1, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{b.city}</div>
+        {/* Right: Minted devices list + chat */}
+        <div style={{ display:'flex', flexDirection:'column', gap:10, height:'100%' }}>
+          {/* Devices summary */}
+          <div style={{ background:'rgba(255,255,255,0.8)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)', border:'1.5px solid rgba(14,30,54,0.1)', borderRadius:12, padding:10 }}>
+            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color:'#94a3b8', marginBottom:6, letterSpacing:'0.1em' }}>MINTED DEVICES</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:4, maxHeight:100, overflow:'auto' }}>
+              {devices.map(d => (
+                <div key={d.id} style={{ display:'flex', justifyContent:'space-between', fontFamily:'"DM Mono",monospace', fontSize:8 }}>
+                  <span style={{ color:'#64748b' }}>DEV-{String(d.id).padStart(5,'0')}</span>
+                  <span style={{ color:'#22c55e' }}>{d.grid.flat().filter(c=>c.clicked).length} clicked</span>
                 </div>
               ))}
             </div>
+            <button onClick={() => {
+              const d = generateDevice(devices.length)
+              setDevices(prev => [...prev, d])
+            }} style={{ marginTop:8, width:'100%', background:'rgba(14,30,54,0.06)', border:'1px solid rgba(14,30,54,0.1)', borderRadius:7, padding:'5px', fontFamily:'"DM Mono",monospace', fontSize:8, color:'#475569', cursor:'pointer' }}>
+              + MINT DEVICE
+            </button>
           </div>
-
-          {/* Centre broadcast */}
-          <HackingMatrix calledNums={calledNums} calledOrder={calledOrder} timer={timer} />
-
-          {/* Right terminal */}
-          <div style={{ height:380 }}>
-            <TerminalChat />
+          {/* Chat */}
+          <div style={{ flex:1 }}>
+            <ChatTerminal nickname={nickname} />
           </div>
         </div>
+      </div>
 
-        {/* Win conditions bar */}
-        <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4 }}>
-          {(Object.entries(WIN_LABELS) as [WinType, string][]).map(([type, label]) => {
-            const state = winStates[type]
-            return (
-              <div key={type} style={{
-                background: state.claimed ? '#00e5a010' : state.claimable ? '#ff69b410' : '#040f1e',
-                border: state.claimed ? '1px solid #00e5a040' : state.claimable ? '1px solid #ff69b4' : '1px solid #0a2535',
-                borderRadius:8, padding:'6px 10px', whiteSpace:'nowrap', flexShrink:0,
-                display:'flex', gap:6, alignItems:'center',
-              }}>
-                <div style={{
-                  width:6, height:6, borderRadius:'50%',
-                  background: ANTENNA_COLORS[type],
-                  boxShadow: state.claimable && !state.claimed ? `0 0 6px ${ANTENNA_COLORS[type]}` : 'none',
-                }} />
-                <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color: state.claimed ? '#00e5a0' : state.claimable ? '#ff69b4' : '#2a4a6a' }}>
-                  {state.claimed ? '✓' : state.claimable ? '⚡' : '○'} {label}
-                </div>
+      {/* Win conditions strip */}
+      <div style={{ padding:'6px 14px', display:'flex', gap:6, overflowX:'auto', borderTop:'1px solid rgba(14,30,54,0.06)', borderBottom:'1px solid rgba(14,30,54,0.06)', background:'rgba(255,255,255,0.5)' }}>
+        {(Object.entries(WIN_LABELS) as [WinType,string][]).map(([type, label]) => {
+          const st = winStates[type]
+          return (
+            <div key={type} style={{ display:'flex', gap:5, alignItems:'center', padding:'4px 10px', borderRadius:8, flexShrink:0,
+              background: st.claimed?'rgba(34,197,94,0.08)' : st.claimable?'rgba(236,72,153,0.08)' : 'transparent',
+              border: st.claimed?'1px solid rgba(34,197,94,0.25)' : st.claimable?'1px solid rgba(236,72,153,0.35)' : '1px solid rgba(14,30,54,0.08)',
+            }}>
+              <div style={{ width:7, height:7, borderRadius:'50%', background:ANTENNA_COLORS[type], opacity: st.claimed?0.4:1 }}/>
+              <div style={{ fontFamily:'"DM Mono",monospace', fontSize:8, color: st.claimed?'#22c55e' : st.claimable?'#ec4899' : '#94a3b8' }}>
+                {st.claimed?'✓ ':st.claimable?'⚡ ':'○ '}{label}
               </div>
-            )
-          })}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Hacking devices — 2-column grid, no auto-scroll */}
+      <div style={{ padding:'12px 14px' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+          <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#94a3b8', letterSpacing:'0.1em' }}>
+            HACKING DEVICES ({devices.length})
+          </div>
+          <button onClick={()=>setDevicesExpanded(e=>!e)} style={{ background:'rgba(14,30,54,0.06)', border:'1px solid rgba(14,30,54,0.1)', color:'#475569', borderRadius:7, padding:'4px 10px', fontFamily:'"DM Mono",monospace', fontSize:8, cursor:'pointer' }}>
+            {devicesExpanded ? '⊟ COLLAPSE' : '⊞ SWIPE MODE'}
+          </button>
         </div>
 
-        {/* Devices section */}
-        <div>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-            <div style={{ fontFamily:'"DM Mono",monospace', fontSize:9, color:'#4a7fa5', letterSpacing:'0.15em' }}>
-              ⬡ HACKING DEVICES ({devices.length})
-            </div>
-            <div style={{ display:'flex', gap:8 }}>
-              {/* Mint more */}
-              <button onClick={() => {
-                const newDevices = Array.from({length:1}, (_,i) => generateDevice(devices.length + i))
-                setDevices(prev => [...prev, ...newDevices])
-              }} style={{ background:'#00e5a020', border:'1px solid #00e5a040', color:'#00e5a0', borderRadius:6, padding:'4px 10px', fontFamily:'"DM Mono",monospace', fontSize:8, cursor:'pointer' }}>
-                + MINT
-              </button>
-              <button onClick={() => setDevicesExpanded(e => !e)} style={{ background:'#040f1e', border:'1px solid #0a2535', color:'#4a7fa5', borderRadius:6, padding:'4px 10px', fontFamily:'"DM Mono",monospace', fontSize:8, cursor:'pointer' }}>
-                {devicesExpanded ? '⊟ COLLAPSE' : '⊞ EXPAND'}
-              </button>
-            </div>
-          </div>
-
-          {devicesExpanded ? (
-            // Horizontal scroll mode — 10 devices per row
-            <div style={{ overflowX:'auto', paddingBottom:8 }}>
-              <div style={{ display:'flex', gap:10, width:'max-content' }}>
-                {devices.map(device => (
-                  <div key={device.id} style={{ width:180, flexShrink:0 }}>
-                    <HackingDevice
-                      device={device}
-                      calledNums={calledNums}
-                      onCellClick={handleCellClick}
-                      onClaim={handleClaim}
-                      winStates={winStates}
-                      bankruptCount={bankruptCount}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            // 2-column grid
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10 }}>
+        {devicesExpanded ? (
+          // Horizontal swipe, ~10 devices visible
+          <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+            <div style={{ display:'flex', gap:10, paddingBottom:8, width:'max-content' }}>
               {devices.map(device => (
-                <HackingDevice
-                  key={device.id}
-                  device={device}
-                  calledNums={calledNums}
-                  onCellClick={handleCellClick}
-                  onClaim={handleClaim}
-                  winStates={winStates}
-                  bankruptCount={bankruptCount}
-                />
+                <div key={device.id} style={{ width:'min(44vw,200px)', flexShrink:0 }}>
+                  <HackingDevice device={device} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
+                    calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim}
+                    winStates={winStates} bankruptCount={bankruptCount} />
+                </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          // 2-column grid
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10 }}>
+            {devices.map(device => (
+              <HackingDevice key={device.id} device={device} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
+                calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim}
+                winStates={winStates} bankruptCount={bankruptCount} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Announcement */}
       {announcement && (
-        <div style={{
-          position:'fixed', top:60, left:'50%', transform:'translateX(-50%)',
-          background:'#040f1e', border:'1px solid #00e5a044', borderRadius:10,
-          padding:'10px 20px', fontFamily:'"DM Mono",monospace', fontSize:11,
-          color:'#00e5a0', zIndex:999, whiteSpace:'nowrap', animation:'slideDown 0.3s ease',
-          boxShadow:'0 8px 32px rgba(0,229,160,0.15)',
-        }}>{announcement}</div>
+        <div style={{ position:'fixed', top:60, left:'50%', transform:'translateX(-50%)', background:'rgba(255,255,255,0.95)', border:'1px solid rgba(14,30,54,0.1)', borderRadius:10, padding:'10px 20px', fontFamily:'"DM Mono",monospace', fontSize:10, color:'#0f172a', zIndex:999, whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(14,30,54,0.12)' }}>
+          {announcement}
+        </div>
       )}
     </div>
   )
