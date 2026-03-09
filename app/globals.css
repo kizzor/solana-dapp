@@ -99,3 +99,24 @@ body {
     rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px
   );
 }
+
+/* Rapid flicker for claimed LED — 60s then breaks */
+@keyframes rapidFlicker {
+  0%   { opacity: 1; }
+  15%  { opacity: 0; }
+  16%  { opacity: 1; }
+  33%  { opacity: 0; }
+  34%  { opacity: 1; }
+  50%  { opacity: 0.1; }
+  51%  { opacity: 1; }
+  67%  { opacity: 0; }
+  68%  { opacity: 0.8; }
+  84%  { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Broken LED filament glow */
+@keyframes filamentGlow {
+  0%,100% { opacity: 0.3; transform: scale(0.8); }
+  50%     { opacity: 0.7; transform: scale(1.2); }
+}
