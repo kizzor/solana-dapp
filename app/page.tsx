@@ -915,163 +915,7 @@ function NicknameModal({onConfirm}:{onConfirm:(name:string)=>void}){
 }
 
 // ─── Maximized Device Grid (fullscreen overlay) ───────────────────────────────
-// ─── Analog Timer Overlay ────────────────────────────────────────────────────
-function AnalogTimerOverlay({currentNum,timer,totalTimer,clickWindowOpen}:{
-  currentNum:number|null;timer:number;totalTimer:number;clickWindowOpen:boolean
-}){
-  const r=40,circ=2*Math.PI*r
-  const pct=timer/Math.max(totalTimer,1)
-  const dash=circ*pct
-  const handAngle=(1-pct)*360
-  const handRad=(handAngle-90)*Math.PI/180
-  const hx=50+34*Math.cos(handRad),hy=50+34*Math.sin(handRad)
-  const danger=timer<=10
-  return(
-    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-      background:'rgba(6,2,12,0.75)',backdropFilter:'blur(2px)',WebkitBackdropFilter:'blur(2px)',
-      borderRadius:6,zIndex:10,pointerEvents:'none'}}>
-      <svg width="96" height="96" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r="47" fill="rgba(6,2,12,0.88)" stroke="rgba(255,30,30,0.12)" strokeWidth="1.5"/>
-        {Array.from({length:12},(_,i)=>{
-          const a=(i*30-90)*Math.PI/180
-          const x1=50+38*Math.cos(a),y1=50+38*Math.sin(a)
-          const x2=50+45*Math.cos(a),y2=50+45*Math.sin(a)
-          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,30,30,0.25)" strokeWidth={i%3===0?"1.5":"0.7"}/>
-        })}
-        <circle cx="50" cy="50" r={r} fill="none"
-          stroke={danger?"#ff2020":"rgba(220,30,30,0.5)"} strokeWidth="3.5"
-          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-          transform="rotate(-90 50 50)"
-          style={{transition:'stroke-dasharray 0.9s linear,stroke 0.3s'}}/>
-        {danger&&<circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,0,0,0.12)" strokeWidth="10"/>}
-        <line x1="50" y1="50" x2={hx} y2={hy}
-          stroke={danger?"#ff3030":"rgba(255,60,60,0.85)"} strokeWidth="1.8" strokeLinecap="round"/>
-        <circle cx="50" cy="50" r="3.5" fill={danger?"#ff2020":"rgba(255,60,60,0.9)"}
-          style={{filter:danger?"drop-shadow(0 0 4px #ff0000)":"none"}}/>
-        <text x="50" y="47" textAnchor="middle" dominantBaseline="central"
-          fontSize={currentNum!==null&&currentNum>=10?"20":"24"} fontWeight="800"
-          fill={danger?"#ff5050":"rgba(255,90,90,0.95)"} fontFamily='"Syne",sans-serif'>
-          {currentNum??'—'}
-        </text>
-        <text x="50" y="68" textAnchor="middle" fontSize="5.5" fontWeight="600"
-          fill={clickWindowOpen?"rgba(34,197,94,0.9)":"rgba(239,68,68,0.7)"} fontFamily='"DM Mono",monospace'>
-          {clickWindowOpen?"● OPEN":"● CLOSED"}
-        </text>
-      </svg>
-    </div>
-  )
-}
-
-// ─── Maximized Grid Card — grid only + analog overlay ────────────────────────
-function MaxGridCard({device,currentNum,clickWindowOpen,calledNums,onCellClick,onClaim,winStates,bankruptCount,timer,totalTimer}:{
-  device:Device;currentNum:number|null;clickWindowOpen:boolean;calledNums:Set<number>;
-  onCellClick:(id:number,r:number,c:number)=>void;onClaim:(id:number,w:WinType)=>void;
-  winStates:Record<WinType,WinState>;bankruptCount:number;timer:number;totalTimer:number
-}){
-  const[showTimer,setShowTimer]=useState(true)
-  const flat=device.grid.flat()
-  const nc=flat.filter(c=>c.clicked).length
-  const r0=device.grid[0].filter(c=>c.num).every(c=>c.clicked)
-  const r1=device.grid[1].filter(c=>c.num).every(c=>c.clicked)
-  const r2=device.grid[2].filter(c=>c.num).every(c=>c.clicked)
-  const all=flat.filter(c=>c.num).every(c=>c.clicked)
-  const fhk=`FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType
-  const canClaim=(
-    (nc>=5&&!device.claimed.has('EARLY_FIVE')&&winStates.EARLY_FIVE.claimable&&!winStates.EARLY_FIVE.claimed)||
-    (r0&&!device.claimed.has('TOP_LINE')&&winStates.TOP_LINE.claimable&&!winStates.TOP_LINE.claimed)||
-    (r1&&!device.claimed.has('MIDDLE_LINE')&&winStates.MIDDLE_LINE.claimable&&!winStates.MIDDLE_LINE.claimed)||
-    (r2&&!device.claimed.has('BOTTOM_LINE')&&winStates.BOTTOM_LINE.claimable&&!winStates.BOTTOM_LINE.claimed)||
-    (all&&winStates[fhk]?.claimable&&!winStates[fhk]?.claimed&&!device.claimed.has(fhk))
-  )
-  const doClaim=()=>{
-    if(nc>=5&&!device.claimed.has('EARLY_FIVE')&&winStates.EARLY_FIVE.claimable&&!winStates.EARLY_FIVE.claimed){onClaim(device.id,'EARLY_FIVE');return}
-    if(r0&&!device.claimed.has('TOP_LINE')&&winStates.TOP_LINE.claimable&&!winStates.TOP_LINE.claimed){onClaim(device.id,'TOP_LINE');return}
-    if(r1&&!device.claimed.has('MIDDLE_LINE')&&winStates.MIDDLE_LINE.claimable&&!winStates.MIDDLE_LINE.claimed){onClaim(device.id,'MIDDLE_LINE');return}
-    if(r2&&!device.claimed.has('BOTTOM_LINE')&&winStates.BOTTOM_LINE.claimable&&!winStates.BOTTOM_LINE.claimed){onClaim(device.id,'BOTTOM_LINE');return}
-    if(all&&winStates[fhk]?.claimable)onClaim(device.id,fhk)
-  }
-  const LED_TYPES:WinType[]=["EARLY_FIVE","TOP_LINE","MIDDLE_LINE","BOTTOM_LINE","FULL_HOUSE_1","FULL_HOUSE_2","FULL_HOUSE_3"]
-  return(
-    <div style={{
-      background:'linear-gradient(180deg,#0d1a2e,#060e1a)',
-      border:`2px solid ${canClaim?'#ec4899':device.active?'#00e5a030':'#162438'}`,
-      borderRadius:10,overflow:'hidden',display:'flex',flexDirection:'column',
-      boxShadow:canClaim?'0 0 0 2px rgba(236,72,153,0.3),0 4px 16px rgba(236,72,153,0.2)':'none',
-      userSelect:'none',minHeight:0,
-    }}>
-      {/* Compact header */}
-      <div style={{background:'#0a1628',padding:'2px 5px',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:'1px solid #0d1f3a',flexShrink:0}}>
-        <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#00e5a0',fontWeight:700}}>{device.nftId}</span>
-        <div style={{display:'flex',gap:2,alignItems:'center'}}>
-          {LED_TYPES.map((type,i)=>{
-            const ws=winStates[type],won=device.claimed.has(type),lit=ws.claimable&&!ws.claimed
-            return(
-              <div key={type} style={{
-                width:6,height:5,borderRadius:1,position:'relative',overflow:'hidden',
-                background:ws.broken?'transparent':(won||lit)?LED_COLORS[type]:'#0a1628',
-                border:`1px solid ${ws.broken?LED_COLORS[type]+'30':(won||lit)?LED_COLORS[type]:'#162438'}`,
-                boxShadow:(won||lit)&&!ws.broken?`0 0 3px ${LED_COLORS[type]}`:'none',
-                animation:ws.broken?'none':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.5s ${i*0.07}s infinite`:'none',
-              }}>
-                {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}50 20%,transparent 70%)`,animation:'filamentGlow 2s infinite'}}/>}
-              </div>
-            )
-          })}
-          <span style={{fontFamily:'"DM Mono",monospace',fontSize:5.5,color:'#1e4a6a',marginLeft:2}}>{nc}/15</span>
-        </div>
-      </div>
-      {/* Grid + analog overlay */}
-      <div style={{position:'relative',flex:1,minHeight:0,cursor:'pointer'}} onClick={()=>setShowTimer(s=>!s)}>
-        <div style={{background:'#020a14',height:'100%'}}>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',borderBottom:'1px solid #0d2035'}}>
-            {COL_HEADERS.map((h,i)=><div key={i} style={{padding:'1px 0',textAlign:'center',fontFamily:'"DM Mono",monospace',fontSize:3.5,color:'#1e3a5f',borderRight:i<8?'1px solid #0d2035':'none',background:'#030a12'}}>{h}</div>)}
-          </div>
-          {device.grid.map((row,ri)=>(
-            <div key={ri} style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',borderTop:'1px solid #0d2035'}}>
-              {row.map((cell,ci)=>{
-                const isCur=cell.num!==null&&cell.num===currentNum
-                const isClick=isCur&&clickWindowOpen&&!cell.clicked&&device.active
-                const isEmpty=cell.num===null
-                return(
-                  <div key={ci} onClick={e=>{e.stopPropagation();if(isClick)onCellClick(device.id,ri,ci)}} style={{
-                    height:20,display:'flex',alignItems:'center',justifyContent:'center',
-                    borderRight:ci<8?'1px solid #0d2035':'none',
-                    background:isEmpty?'#020a14':cell.clicked?'rgba(255,255,255,0.1)':isClick?'rgba(255,255,255,0.06)':'transparent',
-                    boxShadow:isClick?'inset 0 0 0 1.5px rgba(255,255,255,0.9)':'none',
-                    color:'#ffffff',fontFamily:'"DM Mono",monospace',fontSize:9,fontWeight:700,
-                    textShadow:isEmpty?'none':cell.clicked?'0 0 6px #fff,0 0 14px rgba(255,255,255,0.7)':isClick?'0 0 10px #fff':'0 0 2px rgba(255,255,255,0.3)',
-                    opacity:isEmpty?0:cell.clicked?1:isClick?1:0.4,
-                    cursor:isClick?'pointer':'default',transition:'all 0.15s',
-                  }}>{cell.num??''}</div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-        {showTimer&&<AnalogTimerOverlay currentNum={currentNum} timer={timer} totalTimer={totalTimer} clickWindowOpen={clickWindowOpen}/>}
-        <div style={{position:'absolute',bottom:3,right:4,fontFamily:'"DM Mono",monospace',fontSize:4.5,
-          color:showTimer?'rgba(255,60,60,0.35)':'rgba(0,229,160,0.35)',zIndex:11,pointerEvents:'none'}}>
-          {showTimer?'TAP → GRID':'TAP → TIMER'}
-        </div>
-      </div>
-      {/* RANSOM */}
-      <button onClick={doClaim} disabled={!canClaim} style={{
-        background:canClaim?'linear-gradient(180deg,#1a0000,#0d0000)':'#040a10',
-        border:`2px solid ${canClaim?'#ff2020':'#162438'}`,borderRadius:'0 0 8px 8px',
-        padding:'6px 4px',cursor:canClaim?'pointer':'default',flexShrink:0,
-        display:'flex',alignItems:'center',justifyContent:'center',
-        animation:canClaim?'ransomPulse 1s infinite':'none',
-        boxShadow:canClaim?'inset 0 0 10px rgba(255,32,32,0.25),0 0 10px rgba(255,32,32,0.3)':'none',
-      }}>
-        <span style={{fontFamily:'"Syne",sans-serif',fontSize:10,fontWeight:800,letterSpacing:'0.1em',
-          color:canClaim?'#ff4040':'#1e3a5f',
-          textShadow:canClaim?'0 0 8px #ff2020,0 0 20px #ff202080':'none'}}>RANSOM</span>
-      </button>
-    </div>
-  )
-}
-
-// ─── Maximized Device Grid (fullscreen overlay) ───────────────────────────────
+// ─── Maximized Device Grid (fullscreen overlay, 2-col, 6 per page) ──────────
 function MaximizedDevices({devices,currentNum,clickWindowOpen,calledNums,onCellClick,onClaim,onActivate,winStates,bankruptCount,timer,totalTimer,liveBank,onClose}:{
   devices:Device[];currentNum:number|null;clickWindowOpen:boolean;calledNums:Set<number>;
   onCellClick:(id:number,r:number,c:number)=>void;onClaim:(id:number,w:WinType)=>void;
@@ -1079,8 +923,8 @@ function MaximizedDevices({devices,currentNum,clickWindowOpen,calledNums,onCellC
   timer:number;totalTimer:number;liveBank:number;onClose:()=>void
 }){
   const[page,setPage]=useState(0)
-  const total=Math.max(1,Math.ceil(devices.length/10))
-  const pageDevs=devices.slice(page*10,page*10+10)
+  const total=Math.max(1,Math.ceil(devices.length/6))
+  const pageDevs=devices.slice(page*6,page*6+6)
   const txRef=useRef<number|null>(null)
   const tyRef=useRef<number|null>(null)
   const onTouchStart=(e:React.TouchEvent)=>{txRef.current=e.touches[0].clientX;tyRef.current=e.touches[0].clientY}
@@ -1095,58 +939,46 @@ function MaximizedDevices({devices,currentNum,clickWindowOpen,calledNums,onCellC
     txRef.current=null;tyRef.current=null
   }
   return(
-    <div style={{position:'fixed',inset:0,background:'#010810',zIndex:100,display:'flex',flexDirection:'column',overflow:'hidden'}}
+    <div style={{position:'fixed',inset:0,background:'linear-gradient(180deg,#010810,#020d1a)',zIndex:100,display:'flex',flexDirection:'column',overflow:'hidden'}}
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      {/* Slim header */}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'5px 10px',borderBottom:'1px solid #0a1f3a',background:'rgba(2,13,26,0.98)',flexShrink:0}}>
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 12px',borderBottom:'1px solid #0a1f3a',background:'rgba(2,13,26,0.98)',flexShrink:0}}>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a'}}>◈ MAXIMIZE</span>
-          <span style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#2a5a7a'}}>{devices.filter(d=>d.active).length}/{devices.length} active</span>
-          {total>1&&<span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e3a5f'}}>pg {page+1}/{total}</span>}
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a'}}>◈ DEVICES</span>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a'}}>{devices.filter(d=>d.active).length}/{devices.length} active</span>
+          {total>1&&<span style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e3a5f'}}>pg {page+1}/{total}</span>}
         </div>
         <div style={{display:'flex',gap:4,alignItems:'center'}}>
           {total>1&&Array.from({length:total},(_,i)=>(
-            <button key={i} onClick={()=>setPage(i)} style={{width:6,height:6,borderRadius:'50%',border:'none',cursor:'pointer',padding:0,
+            <button key={i} onClick={()=>setPage(i)} style={{width:7,height:7,borderRadius:'50%',border:'none',cursor:'pointer',padding:0,
               background:i===page?'#00e5a0':'#1e3a5f',boxShadow:i===page?'0 0 5px #00e5a0':'none'}}/>
           ))}
           <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
-            style={{width:22,height:22,borderRadius:5,background:'#0a1628',border:'1px solid #1e3a5f',color:page===0?'#1e3a5f':'#4a7fa5',cursor:page===0?'default':'pointer',fontFamily:'"DM Mono",monospace',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
+            style={{width:24,height:24,borderRadius:6,background:'#0a1628',border:'1px solid #1e3a5f',color:page===0?'#1e3a5f':'#4a7fa5',cursor:page===0?'default':'pointer',fontFamily:'"DM Mono",monospace',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
           <button onClick={()=>setPage(p=>Math.min(total-1,p+1))} disabled={page>=total-1}
-            style={{width:22,height:22,borderRadius:5,background:'#0a1628',border:'1px solid #1e3a5f',color:page>=total-1?'#1e3a5f':'#4a7fa5',cursor:page>=total-1?'default':'pointer',fontFamily:'"DM Mono",monospace',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
-          <button onClick={onClose} style={{background:'#0a1628',border:'1px solid #1e3a5f',color:'#4a7fa5',borderRadius:6,padding:'3px 8px',fontFamily:'"DM Mono",monospace',fontSize:8,cursor:'pointer'}}>⊟ EXIT</button>
+            style={{width:24,height:24,borderRadius:6,background:'#0a1628',border:'1px solid #1e3a5f',color:page>=total-1?'#1e3a5f':'#4a7fa5',cursor:page>=total-1?'default':'pointer',fontFamily:'"DM Mono",monospace',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
+          <button onClick={onClose} style={{background:'#0a1628',border:'1px solid #1e3a5f',color:'#4a7fa5',borderRadius:7,padding:'4px 10px',fontFamily:'"DM Mono",monospace',fontSize:8,cursor:'pointer'}}>⊟ EXIT</button>
         </div>
       </div>
-      {/* 2 rows × 5 cols, each row takes half the remaining height */}
-      <div style={{flex:1,display:'flex',flexDirection:'column',padding:'6px 8px',gap:6,overflow:'hidden'}}>
-        <div style={{flex:1,display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,minHeight:0}}>
-          {pageDevs.slice(0,5).map(d=>(
-            <MaxGridCard key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
-              calledNums={calledNums} onCellClick={onCellClick} onClaim={onClaim}
-              winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer}/>
-          ))}
-          {Array.from({length:Math.max(0,5-pageDevs.slice(0,5).length)},(_,i)=>(
-            <div key={`ep${i}`} style={{borderRadius:8,border:'1px solid #0d1628',background:'#040c18',opacity:0.25}}/>
-          ))}
-        </div>
-        <div style={{flex:1,display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,minHeight:0}}>
-          {pageDevs.slice(5,10).map(d=>(
-            <MaxGridCard key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
-              calledNums={calledNums} onCellClick={onCellClick} onClaim={onClaim}
-              winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer}/>
-          ))}
-          {Array.from({length:Math.max(0,5-pageDevs.slice(5,10).length)},(_,i)=>(
-            <div key={`eq${i}`} style={{borderRadius:8,border:'1px solid #0d1628',background:'#040c18',opacity:0.25}}/>
+      {/* 2-col grid, 6 devices per page, scrollable */}
+      <div style={{flex:1,overflowY:'auto',padding:'10px 12px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10}}>
+          {pageDevs.map(d=>(
+            <HackingDevice key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
+              calledNums={calledNums} onCellClick={onCellClick} onClaim={onClaim} onActivate={onActivate}
+              winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank}/>
           ))}
         </div>
       </div>
       {total>1&&(
-        <div style={{textAlign:'center',padding:'4px',fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'rgba(30,58,95,0.6)',flexShrink:0}}>
-          ← SWIPE TO CHANGE PAGE · TAP GRID TO TOGGLE TIMER →
+        <div style={{textAlign:'center',padding:'5px',fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'rgba(30,58,95,0.7)',flexShrink:0}}>
+          ← SWIPE OR USE ARROWS TO NAVIGATE ·  6 DEVICES PER PAGE →
         </div>
       )}
     </div>
   )
 }
+
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Ransome(){
