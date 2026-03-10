@@ -6,369 +6,538 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 type Cell = { num:number|null; matched:boolean; clicked:boolean }
 type Device = { id:number; nftId:string; grid:Cell[][]; claimed:Set<string>; active:boolean; corrupted:boolean }
 type WinType = 'EARLY_FIVE'|'TOP_LINE'|'MIDDLE_LINE'|'BOTTOM_LINE'|'FULL_HOUSE_1'|'FULL_HOUSE_2'|'FULL_HOUSE_3'
-type WinState = { claimed:boolean; claimable:boolean; flickering:boolean; broken:boolean }
+type WinState = { claimed:boolean; claimable:boolean; flickering:boolean; broken:boolean; claimers:string[] }
 type ChatLine = { t:'sys'|'user'|'cmd'|'img'; m:string; src?:string }
+type WinRecord = { wt:WinType; claimers:string[]; round:number; split:number }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const WIN_LABELS:Record<WinType,string> = {
   EARLY_FIVE:'5 Digit Accounts Hacked', TOP_LINE:'Top Accounts Hacked',
-  MIDDLE_LINE:'Central System Hacked', BOTTOM_LINE:'Basement Hacked',
-  FULL_HOUSE_1:'Bankrupt Ransome I', FULL_HOUSE_2:'Bankrupt Ransome II', FULL_HOUSE_3:'Bankrupt Ransome III',
+  MIDDLE_LINE:'Central System Hacked',  BOTTOM_LINE:'Basement Hacked',
+  FULL_HOUSE_1:'Bankrupt Ransome I',    FULL_HOUSE_2:'Bankrupt Ransome II', FULL_HOUSE_3:'Bankrupt Ransome III',
 }
 const LED_COLORS:Record<WinType,string> = {
   EARLY_FIVE:'#f59e0b', TOP_LINE:'#0ea5e9', MIDDLE_LINE:'#22c55e', BOTTOM_LINE:'#a16207',
   FULL_HOUSE_1:'#f472b6', FULL_HOUSE_2:'#ec4899', FULL_HOUSE_3:'#db2777',
 }
-// Progress thresholds: how many clicks needed to light each LED (out of 15 total)
-const WIN_THRESHOLDS:Record<WinType,number> = {
-  EARLY_FIVE:5, TOP_LINE:5, MIDDLE_LINE:5, BOTTOM_LINE:5, FULL_HOUSE_1:15, FULL_HOUSE_2:15, FULL_HOUSE_3:15,
+const WIN_VAULT:Record<WinType,number> = {
+  EARLY_FIVE:50000, TOP_LINE:100000, MIDDLE_LINE:100000, BOTTOM_LINE:100000,
+  FULL_HOUSE_1:250000, FULL_HOUSE_2:250000, FULL_HOUSE_3:150000,
 }
 const COL_HEADERS = ['1-10','11-20','21-30','31-40','41-50','51-60','61-70','71-80','81-90']
 const COL_RANGES:[number,number][] = [[1,10],[11,20],[21,30],[31,40],[41,50],[51,60],[61,70],[71,80],[81,90]]
 const CLAIM_WALLET = 'F6bbR6ro9W4nS6uBMmSLhsknhQ6NJR523DZXkRQnkFcx'
-
-const HACK_CMDS = [
-  'INIT PAYLOAD','BYPASS FIREWALL','SCAN PORT 8443','BRUTE SHA-256','DECRYPT TLS',
-  'EXPLOIT CVE-2024','INJECT SQL','PIVOT SUBNET','EXFIL VAULT','SPOOF MAC',
-  'ARP POISON','DUMP LSASS','ESCALATE PRIV','DEPLOY ROOTKIT','TUNNEL SSH',
-  'SNIFF ETH0','CRACK WPA2','OVERFLOW STACK','UPLOAD PAYLOAD','COVER TRACKS',
-  'ENUM SHARES','MAP NETWORK','BYPASS 2FA','FORGE JWT','EXFIL DB',
-  'PIVOT VPN','DEPLOY METERP','RCE SHELL','PERSIST CRON','WIPE LOGS',
-]
-const HACK_STATUSES = ['[OK]','[ACK]','[ERR]','[WARN]','[DONE]','[LIVE]','[XMIT]','[RCVD]']
+const HACK_CMDS = ['INIT PAYLOAD','BYPASS FIREWALL','SCAN PORT 8443','BRUTE SHA-256','DECRYPT TLS','EXPLOIT CVE-2024','INJECT SQL','PIVOT SUBNET','EXFIL VAULT','SPOOF MAC','ARP POISON','DUMP LSASS','ESCALATE PRIV','DEPLOY ROOTKIT','TUNNEL SSH','SNIFF ETH0','CRACK WPA2','OVERFLOW STACK','COVER TRACKS','FORGE JWT','EXFIL DB','PIVOT VPN','DEPLOY METERP','RCE SHELL','WIPE LOGS']
+const HACK_STATUSES = ['[OK]','[ACK]','[ERR]','[WARN]','[DONE]','[LIVE]']
 
 const BANKS = [
-  {id:0, name:'Pacific Reserve',   city:'Auckland',      tz:12,  x:88,y:72, region:'APAC'},
-  {id:1, name:'Sakura Central',    city:'Tokyo',         tz:9,   x:80,y:30, region:'APAC'},
-  {id:2, name:'Dragon Vault',      city:'Shanghai',      tz:8,   x:76,y:34, region:'APAC'},
-  {id:3, name:'Tiger Bank',        city:'Singapore',     tz:8,   x:74,y:53, region:'APAC'},
-  {id:4, name:'Indus Capital',     city:'Mumbai',        tz:5.5, x:65,y:40, region:'ASIA'},
-  {id:5, name:'Gulf Reserve',      city:'Dubai',         tz:4,   x:61,y:39, region:'MENA'},
-  {id:6, name:'Nile Treasury',     city:'Cairo',         tz:2,   x:53,y:36, region:'MENA'},
-  {id:7, name:'Savanna Vault',     city:'Nairobi',       tz:3,   x:56,y:57, region:'AFR'},
-  {id:8, name:'Cape Reserve',      city:'Cape Town',     tz:2,   x:52,y:74, region:'AFR'},
-  {id:9, name:'Colosseum Bank',    city:'Rome',          tz:1,   x:49,y:28, region:'EUR'},
-  {id:10,name:'Rhine Vault',       city:'Frankfurt',     tz:1,   x:49,y:22, region:'EUR'},
-  {id:11,name:'Thames Capital',    city:'London',        tz:0,   x:46,y:22, region:'EUR'},
-  {id:12,name:'Nordic Reserve',    city:'Oslo',          tz:1,   x:49,y:16, region:'EUR'},
-  {id:13,name:'Kremlin Bank',      city:'Moscow',        tz:3,   x:57,y:19, region:'EUR'},
-  {id:14,name:'Atlas Treasury',    city:'Casablanca',    tz:1,   x:44,y:34, region:'AFR'},
-  {id:15,name:'Amazon Reserve',    city:'São Paulo',     tz:-3,  x:32,y:67, region:'AMER'},
-  {id:16,name:'Andes Vault',       city:'Bogotá',        tz:-5,  x:25,y:54, region:'AMER'},
-  {id:17,name:'Manhattan Capital', city:'New York',      tz:-5,  x:22,y:28, region:'AMER'},
-  {id:18,name:'Silicon Reserve',   city:'San Francisco', tz:-8,  x:10,y:31, region:'AMER'},
-  {id:19,name:'Maple Treasury',    city:'Toronto',       tz:-5,  x:21,y:24, region:'AMER'},
-  {id:20,name:'Red Sea Bank',      city:'Riyadh',        tz:3,   x:58,y:39, region:'MENA'},
-  {id:21,name:'Carnival Bank',     city:'Rio',           tz:-3,  x:33,y:68, region:'AMER'},
-  {id:22,name:'Azores Vault',      city:'Lisbon',        tz:0,   x:44,y:28, region:'EUR'},
+  {id:0, name:'Pacific Reserve',   city:'Auckland',       tz:12,  x:87,y:72, region:'APAC', vault:'$1.2B'},
+  {id:1, name:'Sakura Central',    city:'Tokyo',          tz:9,   x:80,y:31, region:'APAC', vault:'$2.1B'},
+  {id:2, name:'Dragon Vault',      city:'Shanghai',       tz:8,   x:76,y:35, region:'APAC', vault:'$3.8B'},
+  {id:3, name:'Tiger Bank',        city:'Singapore',      tz:8,   x:74,y:54, region:'APAC', vault:'$1.9B'},
+  {id:4, name:'Indus Capital',     city:'Mumbai',         tz:5.5, x:64,y:41, region:'ASIA', vault:'$2.4B'},
+  {id:5, name:'Gulf Reserve',      city:'Dubai',          tz:4,   x:61,y:40, region:'MENA', vault:'$4.1B'},
+  {id:6, name:'Nile Treasury',     city:'Cairo',          tz:2,   x:53,y:37, region:'MENA', vault:'$0.9B'},
+  {id:7, name:'Savanna Vault',     city:'Nairobi',        tz:3,   x:56,y:58, region:'AFR',  vault:'$0.6B'},
+  {id:8, name:'Cape Reserve',      city:'Cape Town',      tz:2,   x:52,y:75, region:'AFR',  vault:'$0.8B'},
+  {id:9, name:'Colosseum Bank',    city:'Rome',           tz:1,   x:50,y:29, region:'EUR',  vault:'$1.7B'},
+  {id:10,name:'Rhine Vault',       city:'Frankfurt',      tz:1,   x:50,y:23, region:'EUR',  vault:'$3.2B'},
+  {id:11,name:'Thames Capital',    city:'London',         tz:0,   x:46,y:23, region:'EUR',  vault:'$5.1B'},
+  {id:12,name:'Nordic Reserve',    city:'Oslo',           tz:1,   x:49,y:16, region:'EUR',  vault:'$1.1B'},
+  {id:13,name:'Kremlin Bank',      city:'Moscow',         tz:3,   x:58,y:20, region:'EUR',  vault:'$2.8B'},
+  {id:14,name:'Atlas Treasury',    city:'Casablanca',     tz:1,   x:44,y:35, region:'AFR',  vault:'$0.7B'},
+  {id:15,name:'Amazon Reserve',    city:'São Paulo',      tz:-3,  x:32,y:67, region:'AMER', vault:'$1.6B'},
+  {id:16,name:'Andes Vault',       city:'Bogotá',         tz:-5,  x:24,y:54, region:'AMER', vault:'$0.8B'},
+  {id:17,name:'Manhattan Capital', city:'New York',       tz:-5,  x:21,y:28, region:'AMER', vault:'$6.7B'},
+  {id:18,name:'Silicon Reserve',   city:'San Francisco',  tz:-8,  x:10,y:32, region:'AMER', vault:'$4.3B'},
+  {id:19,name:'Maple Treasury',    city:'Toronto',        tz:-5,  x:20,y:24, region:'AMER', vault:'$2.2B'},
+  {id:20,name:'Red Sea Bank',      city:'Riyadh',         tz:3,   x:59,y:40, region:'MENA', vault:'$3.5B'},
+  {id:21,name:'Carnival Bank',     city:'Rio',            tz:-3,  x:33,y:68, region:'AMER', vault:'$1.0B'},
+  {id:22,name:'Azores Vault',      city:'Lisbon',         tz:0,   x:43,y:29, region:'EUR',  vault:'$1.4B'},
 ]
+const REGION_COLORS:{[k:string]:string}={APAC:'#0ea5e9',EUR:'#22c55e',AMER:'#f59e0b',MENA:'#f97316',AFR:'#a855f7',ASIA:'#ec4899'}
 
-const defaultWinStates = ():Record<WinType,WinState> => ({
-  EARLY_FIVE:{claimed:false,claimable:false,flickering:false,broken:false},
-  TOP_LINE:{claimed:false,claimable:false,flickering:false,broken:false},
-  MIDDLE_LINE:{claimed:false,claimable:false,flickering:false,broken:false},
-  BOTTOM_LINE:{claimed:false,claimable:false,flickering:false,broken:false},
-  FULL_HOUSE_1:{claimed:false,claimable:false,flickering:false,broken:false},
-  FULL_HOUSE_2:{claimed:false,claimable:false,flickering:false,broken:false},
-  FULL_HOUSE_3:{claimed:false,claimable:false,flickering:false,broken:false},
+const defaultWinStates=():Record<WinType,WinState>=>({
+  EARLY_FIVE:  {claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
+  TOP_LINE:    {claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
+  MIDDLE_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
+  BOTTOM_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
+  FULL_HOUSE_1:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
+  FULL_HOUSE_2:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
+  FULL_HOUSE_3:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
 })
 
 function getLiveBank(h:number){return h%23}
 
 // ─── Ticket Generator ─────────────────────────────────────────────────────────
-function generateDevice(id:number):Device {
+function generateDevice(id:number):Device{
   const nftId=`RNSM-${String(id).padStart(4,'0')}`
   const colCounts=Array(9).fill(1)
   Array.from({length:9},(_,i)=>i).sort(()=>Math.random()-0.5).slice(0,6).forEach(i=>colCounts[i]++)
   const colRows:number[][]=colCounts.map(cnt=>[0,1,2].sort(()=>Math.random()-0.5).slice(0,cnt))
-  const rowCounts=[0,0,0]; colRows.forEach(rows=>rows.forEach(r=>rowCounts[r]++))
-  let attempts=0
-  while((rowCounts[0]!==5||rowCounts[1]!==5||rowCounts[2]!==5)&&attempts<200){
-    attempts++; colCounts.fill(1)
+  const rowCounts=[0,0,0];colRows.forEach(rows=>rows.forEach(r=>rowCounts[r]++))
+  let att=0
+  while((rowCounts[0]!==5||rowCounts[1]!==5||rowCounts[2]!==5)&&att<200){
+    att++;colCounts.fill(1)
     Array.from({length:9},(_,i)=>i).sort(()=>Math.random()-0.5).slice(0,6).forEach(i=>colCounts[i]++)
     colRows.splice(0,9,...colCounts.map(cnt=>[0,1,2].sort(()=>Math.random()-0.5).slice(0,cnt)))
-    rowCounts.fill(0); colRows.forEach(rows=>rows.forEach(r=>rowCounts[r]++))
+    rowCounts.fill(0);colRows.forEach(rows=>rows.forEach(r=>rowCounts[r]++))
   }
-  const usedNums=new Set<number>()
+  const used=new Set<number>()
   const grid:Cell[][]=Array.from({length:3},()=>Array(9).fill(null).map(()=>({num:null,matched:false,clicked:false})))
   for(let ci=0;ci<9;ci++){
-    const [lo,hi]=COL_RANGES[ci]; const rows=colRows[ci].sort((a,b)=>a-b)
-    const available:number[]=[]
-    for(let n=lo;n<=hi;n++) if(!usedNums.has(n)) available.push(n)
-    const picked=available.sort(()=>Math.random()-0.5).slice(0,rows.length).sort((a,b)=>a-b)
-    picked.forEach(n=>usedNums.add(n))
-    rows.forEach((r,i)=>{grid[r][ci]={num:picked[i],matched:false,clicked:false}})
+    const[lo,hi]=COL_RANGES[ci];const rows=colRows[ci].sort((a,b)=>a-b)
+    const avail:number[]=[];for(let n=lo;n<=hi;n++)if(!used.has(n))avail.push(n)
+    const picked=avail.sort(()=>Math.random()-0.5).slice(0,rows.length).sort((a,b)=>a-b)
+    picked.forEach(n=>used.add(n));rows.forEach((r,i)=>{grid[r][ci]={num:picked[i],matched:false,clicked:false}})
   }
-  return {id,nftId,grid,claimed:new Set(),active:false,corrupted:false}
-}
-
-function generateDemoDevice(id:number):Device {
-  const d=generateDevice(id); d.active=true; return d
+  return{id,nftId,grid,claimed:new Set(),active:false,corrupted:false}
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function useHourCountdown(){
-  const get=()=>{const now=new Date();const s=now.getUTCMinutes()*60+now.getUTCSeconds();const left=3600-s-300;return left>0?left:0}
-  const [s,setS]=useState(get)
+  const get=()=>{const now=new Date();const s=now.getUTCMinutes()*60+now.getUTCSeconds();const l=3600-s-300;return l>0?l:0}
+  const[s,setS]=useState(get)
   useEffect(()=>{const t=setInterval(()=>setS(get()),1000);return()=>clearInterval(t)},[])
   return s
 }
-function fmtTime(s:number){const m=Math.floor(s/60),ss=s%60;return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`}
+function fmtTime(s:number){const m=Math.floor(s/60),ss=s%60;return`${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`}
 
-// ─── Mini Stopwatch ───────────────────────────────────────────────────────────
+// ─── MiniStopwatch ────────────────────────────────────────────────────────────
 function MiniStopwatch({seconds,total}:{seconds:number;total:number}){
-  const danger=seconds<=10,r=14,circ=2*Math.PI*r,dash=circ*(seconds/total)
+  const danger=seconds<=10,r=12,circ=2*Math.PI*r,dash=circ*(seconds/Math.max(total,1))
   return(
-    <div style={{position:'relative',width:40,height:40,flexShrink:0}}>
-      <svg width="40" height="40" style={{transform:'rotate(-90deg)'}}>
-        <circle cx="20" cy="20" r={r} fill="none" stroke="#0a1628" strokeWidth="3"/>
-        <circle cx="20" cy="20" r={r} fill="none" stroke={danger?'#ef4444':'#00e5a0'} strokeWidth="3"
-          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-          style={{transition:'stroke-dasharray 0.9s linear,stroke 0.3s'}}/>
+    <div style={{position:'relative',width:34,height:34,flexShrink:0}}>
+      <svg width="34" height="34" style={{transform:'rotate(-90deg)'}}>
+        <circle cx="17" cy="17" r={r} fill="none" stroke="#0a1628" strokeWidth="2.5"/>
+        <circle cx="17" cy="17" r={r} fill="none" stroke={danger?'#ef4444':'#00e5a0'} strokeWidth="2.5"
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" style={{transition:'stroke-dasharray 0.9s linear,stroke 0.3s'}}/>
       </svg>
       <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-        <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,fontWeight:700,color:danger?'#ef4444':'#00e5a0',textShadow:danger?'0 0 6px #ef4444':'0 0 6px #00e5a0'}}>{String(seconds%60).padStart(2,'0')}</div>
+        <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,fontWeight:700,color:danger?'#ef4444':'#00e5a0'}}>{String(seconds%60).padStart(2,'0')}</span>
       </div>
     </div>
   )
 }
 
-// ─── World Map (Lobby) — large, with bank status table ───────────────────────
-function LobbyWorldMap({selectedBank,onSelect,currentHour,hoveredBank,onHover}:{
-  selectedBank:number|null;onSelect:(id:number)=>void;currentHour:number;hoveredBank:number|null;onHover:(id:number|null)=>void
-}){
+// ─── Outline World Map with bank sketches ────────────────────────────────────
+function WorldMapSketch({currentHour,onSelectBank}:{currentHour:number;onSelectBank?:(id:number)=>void}){
   const live=getLiveBank(currentHour)
-  const hourCountdown=useHourCountdown()
-  const regionColors:{[k:string]:string}={APAC:'#0ea5e9',EUR:'#22c55e',AMER:'#f59e0b',MENA:'#f97316',AFR:'#a855f7',ASIA:'#ec4899'}
+  const hourCd=useHourCountdown()
+  const[hov,setHov]=useState<number|null>(null)
   return(
-    <div>
-      {/* Full-width SVG map */}
-      <div style={{position:'relative',width:'100%',paddingTop:'42%',borderRadius:14,overflow:'hidden',background:'#020d1a',border:'1px solid #0a2535',boxShadow:'inset 0 0 40px rgba(0,229,160,0.03)'}}>
-        <div style={{position:'absolute',inset:0}}>
-          <svg viewBox="0 0 100 100" style={{width:'100%',height:'100%'}}>
-            {/* Grid lines */}
-            {Array.from({length:13},(_,i)=><line key={`v${i}`} x1={i*100/12} y1="0" x2={i*100/12} y2="100" stroke="#0a1628" strokeWidth="0.2"/>)}
-            {Array.from({length:7},(_,i)=><line key={`h${i}`} x1="0" y1={i*100/6} x2="100" y2={i*100/6} stroke="#0a1628" strokeWidth="0.2"/>)}
-            {/* Continents */}
-            <ellipse cx="18" cy="28" rx="12" ry="14" fill="#0d1f3a" stroke="#1e3a5f" strokeWidth="0.3"/>
-            <ellipse cx="28" cy="63" rx="7" ry="13" fill="#0d1f3a" stroke="#1e3a5f" strokeWidth="0.3"/>
-            <ellipse cx="49" cy="23" rx="6" ry="8" fill="#0d1f3a" stroke="#1e3a5f" strokeWidth="0.3"/>
-            <ellipse cx="50" cy="53" rx="7" ry="16" fill="#0d1f3a" stroke="#1e3a5f" strokeWidth="0.3"/>
-            <ellipse cx="70" cy="29" rx="18" ry="14" fill="#0d1f3a" stroke="#1e3a5f" strokeWidth="0.3"/>
-            <ellipse cx="82" cy="65" rx="7" ry="6" fill="#0d1f3a" stroke="#1e3a5f" strokeWidth="0.3"/>
-            {/* Connection lines between banks */}
-            {BANKS.filter(b=>b.id!==live).slice(0,8).map(b=>(
-              <line key={`cl${b.id}`} x1={BANKS[live].x} y1={BANKS[live].y} x2={b.x} y2={b.y}
-                stroke="#00e5a008" strokeWidth="0.3" strokeDasharray="1,2"/>
-            ))}
-            {/* Bank dots */}
-            {BANKS.map(b=>{
-              const isLive=b.id===live,isSel=b.id===selectedBank,isHov=b.id===hoveredBank
-              const rc=regionColors[b.region]||'#1e3a5f'
-              return(
-                <g key={b.id} onClick={()=>onSelect(b.id)} onMouseEnter={()=>onHover(b.id)} onMouseLeave={()=>onHover(null)} style={{cursor:'pointer'}}>
-                  {isLive&&<circle cx={b.x} cy={b.y} r="5" fill={`${rc}18`}><animate attributeName="r" values="3;6;3" dur="1.8s" repeatCount="indefinite"/></circle>}
-                  {isLive&&<circle cx={b.x} cy={b.y} r="3" fill={`${rc}30`}><animate attributeName="r" values="2;4;2" dur="1.8s" begin="0.3s" repeatCount="indefinite"/></circle>}
-                  <circle cx={b.x} cy={b.y} r={isLive?2.4:isSel||isHov?2:1.3}
-                    fill={isLive?rc:isSel||isHov?'#00e5a0':'#1e4a6a'}
-                    stroke={isLive?'#fff':isSel||isHov?'#6ee7b7':'#2a5a7a'} strokeWidth="0.3"/>
-                  {(isSel||isLive||isHov)&&(
-                    <text x={b.x} y={b.y-4} textAnchor="middle" fontSize="2.8" fill={isLive?rc:'#00e5a0'} fontWeight="bold">{b.city}</text>
-                  )}
-                  {isHov&&!isLive&&(
-                    <text x={b.x} y={b.y+5.5} textAnchor="middle" fontSize="2.2" fill="#2a5a7a">{b.name}</text>
-                  )}
-                </g>
-              )
-            })}
-            {/* Live label */}
-            <text x={BANKS[live].x} y={BANKS[live].y+5.5} textAnchor="middle" fontSize="2.5" fill="#ef4444">🔴 LIVE</text>
-          </svg>
+    <div style={{position:'relative',width:'100%',background:'#010c18',borderRadius:16,border:'1px solid #0a2535',overflow:'hidden'}}>
+      <svg viewBox="0 0 200 105" style={{width:'100%',display:'block'}}>
+        {/* Ocean grid */}
+        {Array.from({length:21},(_,i)=><line key={`vg${i}`} x1={i*10} y1="0" x2={i*10} y2="105" stroke="#0a1830" strokeWidth="0.3"/>)}
+        {Array.from({length:11},(_,i)=><line key={`hg${i}`} x1="0" y1={i*10} x2="200" y2={i*10} stroke="#0a1830" strokeWidth="0.3"/>)}
+
+        {/* ── Continent outlines (sketch style) ── */}
+        {/* North America */}
+        <path d="M20,8 L38,8 L42,14 L40,20 L44,26 L42,34 L38,38 L34,42 L28,46 L22,50 L18,44 L16,36 L14,28 L16,20 L18,12 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.6" strokeDasharray="2,1" strokeLinejoin="round"/>
+        {/* Central America */}
+        <path d="M28,46 L32,50 L30,56 L26,58 L24,54 L26,50 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.5" strokeDasharray="2,1"/>
+        {/* South America */}
+        <path d="M30,58 L40,56 L46,60 L48,68 L46,78 L40,84 L34,82 L28,74 L26,66 L28,60 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.6" strokeDasharray="2,1"/>
+        {/* Europe */}
+        <path d="M86,6 L96,6 L100,10 L100,16 L96,18 L92,22 L88,20 L84,16 L84,10 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.6" strokeDasharray="2,1"/>
+        {/* Scandinavia */}
+        <path d="M90,4 L96,4 L98,8 L94,10 L90,8 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.5" strokeDasharray="1.5,1"/>
+        {/* Africa */}
+        <path d="M88,28 L100,26 L108,30 L110,40 L108,52 L104,62 L98,70 L92,74 L86,70 L82,62 L80,50 L82,38 L86,30 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.6" strokeDasharray="2,1"/>
+        {/* Russia */}
+        <path d="M100,4 L140,4 L148,8 L150,14 L142,16 L130,14 L118,16 L108,14 L100,10 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.5" strokeDasharray="2,1"/>
+        {/* Middle East */}
+        <path d="M108,28 L122,26 L126,32 L124,38 L116,40 L110,38 L108,32 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.5" strokeDasharray="1.5,1"/>
+        {/* India */}
+        <path d="M122,30 L132,28 L136,36 L134,44 L128,50 L122,44 L120,36 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.5" strokeDasharray="2,1"/>
+        {/* China/East Asia */}
+        <path d="M136,8 L160,6 L168,12 L166,20 L158,24 L148,22 L138,18 L134,12 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.5" strokeDasharray="2,1"/>
+        {/* SE Asia */}
+        <path d="M148,28 L158,26 L162,32 L160,38 L154,40 L148,36 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.5" strokeDasharray="1.5,1"/>
+        {/* Japan */}
+        <path d="M164,16 L170,14 L172,18 L168,20 L164,18 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.5" strokeDasharray="1,1"/>
+        {/* Australia */}
+        <path d="M158,62 L178,60 L184,66 L184,74 L178,80 L166,80 L158,74 L156,68 Z"
+          fill="none" stroke="#1e3a5f" strokeWidth="0.6" strokeDasharray="2,1"/>
+
+        {/* Equator & Tropics subtle lines */}
+        <line x1="0" y1="52" x2="200" y2="52" stroke="#0a2030" strokeWidth="0.4" strokeDasharray="3,3"/>
+        <text x="2" y="51" fontSize="2.2" fill="#0a2535">EQ</text>
+
+        {/* Connection lines from live bank to others */}
+        {BANKS.filter(b=>b.id!==live).map(b=>(
+          <line key={`cl${b.id}`} x1={BANKS[live].x*2} y1={BANKS[live].y} x2={b.x*2} y2={b.y}
+            stroke="#00e5a010" strokeWidth="0.3" strokeDasharray="1,3"/>
+        ))}
+
+        {/* Bank dots */}
+        {BANKS.map(b=>{
+          const isLive=b.id===live,isHov=b.id===hov
+          const rc=REGION_COLORS[b.region]||'#1e3a5f'
+          const bx=b.x*2,by=b.y
+          return(
+            <g key={b.id} onClick={()=>onSelectBank?.(b.id)}
+              onMouseEnter={()=>setHov(b.id)} onMouseLeave={()=>setHov(null)}
+              style={{cursor:'pointer'}}>
+              {isLive&&<>
+                <circle cx={bx} cy={by} r="5" fill={`${rc}15`}><animate attributeName="r" values="3;7;3" dur="2s" repeatCount="indefinite"/></circle>
+                <circle cx={bx} cy={by} r="3" fill={`${rc}25`}><animate attributeName="r" values="2;4.5;2" dur="2s" begin="0.4s" repeatCount="indefinite"/></circle>
+              </>}
+              <circle cx={bx} cy={by} r={isLive?2.2:isHov?1.8:1.2}
+                fill={isLive?rc:isHov?'#00e5a0':'#1e4a6a'}
+                stroke={isLive?'rgba(255,255,255,0.8)':isHov?'#6ee7b7':'#2a5a7a'} strokeWidth="0.4"/>
+              {/* Bank icon — small rectangle */}
+              {(isHov||isLive)&&<>
+                <rect x={bx-2.5} y={by-6.5} width="5" height="4" rx="0.5"
+                  fill="none" stroke={isLive?rc:'#00e5a0'} strokeWidth="0.4"/>
+                <line x1={bx-2} y1={by-3} x2={bx+2} y2={by-3} stroke={isLive?rc:'#00e5a0'} strokeWidth="0.3"/>
+              </>}
+              {(isHov||isLive)&&<text x={bx} y={by+5} textAnchor="middle" fontSize="2.6" fill={isLive?rc:'#00e5a0'} fontWeight="bold">{b.city}</text>}
+              {isHov&&<text x={bx} y={by+8.5} textAnchor="middle" fontSize="2.0" fill="#2a5a7a">{b.vault}</text>}
+              {isLive&&<text x={bx} y={by+8.5} textAnchor="middle" fontSize="2.2" fill={rc}>⏱ {fmtTime(hourCd)}</text>}
+            </g>
+          )
+        })}
+        {/* Legend */}
+        <text x="2" y="100" fontSize="2.2" fill="#1e3a5f">◉ LIVE  ● SCHEDULED  — VAULT CONNECTION</text>
+      </svg>
+    </div>
+  )
+}
+
+// ─── Device Skeleton (wraps mint panel) ──────────────────────────────────────
+function DeviceSkeleton({children,title}:{children:React.ReactNode;title:string}){
+  return(
+    <div style={{background:'linear-gradient(180deg,#0d1a2e,#060e1a)',border:'2px solid #1e3a5f',borderRadius:16,overflow:'hidden',boxShadow:'0 8px 32px rgba(0,0,0,0.6)'}}>
+      {/* Device top bar */}
+      <div style={{background:'linear-gradient(90deg,#0a1628,#0d1f3a)',padding:'7px 10px',borderBottom:'1px solid #0d1f3a',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          <div style={{width:14,height:14,background:'linear-gradient(135deg,#00e5a0,#00b8ff)',clipPath:'polygon(50% 0%,100% 50%,50% 100%,0% 50%)'}}/>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:9,fontWeight:700,color:'#00e5a0',letterSpacing:'0.1em'}}>{title}</span>
+        </div>
+        <div style={{display:'flex',gap:4}}>
+          {['#ef4444','#f97316','#22c55e'].map((c,i)=><div key={i} style={{width:7,height:7,borderRadius:'50%',background:c,boxShadow:`0 0 5px ${c}`}}/>)}
         </div>
       </div>
-
-      {/* Bank status table — compact rows */}
-      <div style={{marginTop:10,background:'#020d1a',border:'1px solid #0a2535',borderRadius:10,overflow:'hidden'}}>
-        <div style={{display:'grid',gridTemplateColumns:'1fr auto auto auto',padding:'4px 10px',background:'#030a12',borderBottom:'1px solid #0a2535'}}>
-          {['BANK','REGION','TZ','STATUS'].map(h=>(
-            <div key={h} style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a',letterSpacing:'0.1em'}}>{h}</div>
-          ))}
+      {/* LED strip top */}
+      <div style={{background:'#0a1628',height:5,display:'flex',gap:3,alignItems:'center',padding:'0 8px',borderBottom:'1px solid #060e1a'}}>
+        {Array.from({length:18},(_,i)=><div key={i} style={{width:4,height:3,borderRadius:1,background:i%5===0?'#00e5a020':'#0a1a2a'}}/>)}
+      </div>
+      {/* Content */}
+      <div style={{padding:'12px 10px 10px'}}>{children}</div>
+      {/* LED strip bottom */}
+      <div style={{background:'#0a1628',height:5,display:'flex',gap:3,alignItems:'center',padding:'0 8px',borderTop:'1px solid #060e1a'}}>
+        {Array.from({length:18},(_,i)=><div key={i} style={{width:4,height:3,borderRadius:1,background:i%4===0?'#00e5a015':'#0a1a2a'}}/>)}
+      </div>
+      {/* Device bottom bar */}
+      <div style={{background:'#080f1c',padding:'6px 10px',display:'flex',justifyContent:'space-between',alignItems:'center',borderTop:'1px solid #0d1f3a'}}>
+        <div style={{display:'flex',gap:3}}>
+          {[0,1,2].map(i=><div key={i} style={{width:8,height:6,borderRadius:1,background:'#0a1628',border:'1px solid #1e3a5f'}}/>)}
         </div>
-        <div style={{maxHeight:140,overflowY:'auto'}}>
-          {BANKS.map(b=>{
-            const isLive=b.id===live,isHov=b.id===hoveredBank,isSel=b.id===selectedBank
-            const rc=regionColors[b.region]||'#1e3a5f'
+        <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e3a5f',letterSpacing:'0.1em'}}>NFT HACKING DEVICE</div>
+        <div style={{display:'flex',gap:3}}>
+          {[0,1].map(i=><div key={i} style={{width:10,height:10,borderRadius:'50%',background:'radial-gradient(circle at 35% 30%,#1a2a3a,#050d17)',border:'1px solid #1e3a5f'}}/>)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Demo Panel (inside DeviceSkeleton) ──────────────────────────────────────
+function DemoPanel(){
+  const[step,setStep]=useState(0)
+  const[demoNum,setDemoNum]=useState<number|null>(null)
+  const[localDev,setLocalDev]=useState(()=>{const d=generateDevice(999);d.active=true;return d})
+  const[demoWinStates,setDemoWinStates]=useState<Record<WinType,WinState>>(defaultWinStates)
+  const[msgs,setMsgs]=useState<string[]>(['▶ Demo starting...'])
+  const[called,setCalled]=useState<number[]>([])
+  const[running,setRunning]=useState(false)
+
+  const startDemo=()=>{
+    setStep(0);setDemoNum(null)
+    setLocalDev(()=>{const d=generateDevice(999);d.active=true;return d})
+    setDemoWinStates(defaultWinStates())
+    setMsgs(['▶ Demo started — watching live hack...'])
+    setCalled([]);setRunning(true)
+  }
+
+  useEffect(()=>{
+    if(!running)return
+    // Build a sequence that guarantees hitting each win: use fixed numbers that match the device grid
+    // We'll just auto-draw random numbers slowly until wins trigger
+    const iv=setInterval(()=>{
+      setStep(s=>{
+        if(s>=50){setRunning(false);clearInterval(iv);return s}
+        const nextStep=s+1
+        setLocalDev(prev=>{
+          const allNums=prev.grid.flat().filter(c=>c.num).map(c=>c.num as number)
+          // First 15 draws: use ticket numbers; after: random
+          const pool=nextStep<=allNums.length?allNums:Array.from({length:90},(_,i)=>i+1)
+          const notCalled=pool.filter(n=>!called.includes(n))
+          if(!notCalled.length){setRunning(false);clearInterval(iv);return prev}
+          const num=notCalled[Math.floor(Math.random()*notCalled.length)]
+          setDemoNum(num);setCalled(c=>[...c,num])
+          const nd={...prev,grid:prev.grid.map(row=>row.map(c=>c.num===num?{...c,matched:true,clicked:true}:c))}
+          const flat=nd.grid.flat()
+          const nc=flat.filter(c=>c.clicked).length
+          setDemoWinStates(ws=>{
+            const nw={...ws}
+            if(nc>=5&&!nw.EARLY_FIVE.claimable){nw.EARLY_FIVE={...nw.EARLY_FIVE,claimable:true};setMsgs(m=>[...m,'⚡ EARLY FIVE READY!'])}
+            if(nd.grid[0].filter(c=>c.num).every(c=>c.clicked)&&!nw.TOP_LINE.claimable){nw.TOP_LINE={...nw.TOP_LINE,claimable:true};setMsgs(m=>[...m,'🔵 TOP LINE READY!'])}
+            if(nd.grid[1].filter(c=>c.num).every(c=>c.clicked)&&!nw.MIDDLE_LINE.claimable){nw.MIDDLE_LINE={...nw.MIDDLE_LINE,claimable:true};setMsgs(m=>[...m,'🟢 MIDDLE LINE READY!'])}
+            if(nd.grid[2].filter(c=>c.num).every(c=>c.clicked)&&!nw.BOTTOM_LINE.claimable){nw.BOTTOM_LINE={...nw.BOTTOM_LINE,claimable:true};setMsgs(m=>[...m,'🟡 BOTTOM LINE READY!'])}
+            if(flat.filter(c=>c.num).every(c=>c.clicked)){
+              if(!nw.FULL_HOUSE_1.claimable){
+                nw.FULL_HOUSE_1={...nw.FULL_HOUSE_1,claimable:true,claimed:false}
+                setMsgs(m=>[...m,'🔥 FULL HOUSE! ALL 15 MATCHED!'])
+              }
+              // Simulate claim → flicker
+              setTimeout(()=>{
+                setDemoWinStates(wss=>({...wss,FULL_HOUSE_1:{...wss.FULL_HOUSE_1,claimed:true,flickering:true}}))
+                setMsgs(m=>[...m,'✅ RANSOM CLAIMED! Others flickering...'])
+                setTimeout(()=>{
+                  setDemoWinStates(wss=>({...wss,FULL_HOUSE_1:{...wss.FULL_HOUSE_1,flickering:false,broken:true}}))
+                  setMsgs(m=>[...m,'💀 LED BROKEN — win no longer claimable'])
+                  setRunning(false)
+                },3000)
+              },1200)
+            }
+            return nw
+          })
+          return nd
+        })
+        return nextStep
+      })
+    },700)
+    return()=>clearInterval(iv)
+  },[running])
+
+  const LED_TYPES:WinType[]=['EARLY_FIVE','TOP_LINE','MIDDLE_LINE','BOTTOM_LINE','FULL_HOUSE_1']
+
+  return(
+    <div>
+      {/* Mini ticket */}
+      <div style={{background:'#020a14',border:'1px solid #0d2035',borderRadius:6,overflow:'hidden',marginBottom:8}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',borderBottom:'1px solid #0d2035'}}>
+          {COL_HEADERS.map((h,i)=><div key={i} style={{padding:'1px 0',textAlign:'center',fontFamily:'"DM Mono",monospace',fontSize:5,color:'#1e3a5f',borderRight:i<8?'1px solid #0d2035':'none',background:'#030a12'}}>{h}</div>)}
+        </div>
+        {localDev.grid.map((row,ri)=>(
+          <div key={ri} style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',borderBottom:ri<2?'1px solid #0d2035':'none'}}>
+            {row.map((cell,ci)=>(
+              <div key={ci} style={{height:18,display:'flex',alignItems:'center',justifyContent:'center',borderRight:ci<8?'1px solid #0d2035':'none',
+                background:cell.clicked?'rgba(255,255,255,0.1)':'transparent',
+                fontFamily:'"DM Mono",monospace',fontSize:8,fontWeight:700,
+                color:!cell.num?'transparent':'#fff',
+                textShadow:cell.clicked?'0 0 6px #fff,0 0 12px rgba(255,255,255,0.8)':'0 0 2px rgba(255,255,255,0.3)',
+                opacity:!cell.num?0:cell.clicked?1:0.4,
+                transition:'all 0.3s'}}>{cell.num??''}</div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Current broadcast number + LEDs */}
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+        <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:6,padding:'4px 10px',textAlign:'center',minWidth:50}}>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a'}}>BROADCAST</div>
+          <div style={{fontFamily:'"Syne",sans-serif',fontSize:28,fontWeight:800,color:'#fff',lineHeight:1,
+            textShadow:'0 0 12px #fff,0 0 24px rgba(255,255,255,0.6)'}}>{demoNum??'—'}</div>
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a',marginBottom:4}}>WIN STATUS</div>
+          {LED_TYPES.map((type,i)=>{
+            const ws=demoWinStates[type]
+            const color=LED_COLORS[type]
             return(
-              <div key={b.id} onClick={()=>onSelect(b.id)} onMouseEnter={()=>onHover(b.id)} onMouseLeave={()=>onHover(null)}
-                style={{display:'grid',gridTemplateColumns:'1fr auto auto auto',padding:'3px 10px',cursor:'pointer',
-                  background:isHov||isSel?'rgba(0,229,160,0.04)':'transparent',
-                  borderBottom:'1px solid #0a1628',transition:'background 0.1s'}}>
-                <div style={{display:'flex',alignItems:'center',gap:5}}>
-                  <div style={{width:5,height:5,borderRadius:'50%',background:isLive?'#ef4444':'#1e4a6a',boxShadow:isLive?'0 0 5px #ef4444':'none',animation:isLive?'dot 1.5s infinite':'none',flexShrink:0}}/>
-                  <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:isLive?'#ef4444':isHov||isSel?'#00e5a0':'#2a5a7a',fontWeight:isLive?700:400}}>{b.name}</div>
+              <div key={type} style={{display:'flex',alignItems:'center',gap:5,marginBottom:3}}>
+                <div style={{
+                  width:8,height:6,borderRadius:1,flexShrink:0,
+                  background:ws.broken?'transparent':ws.claimed||ws.claimable?color:'#0a1628',
+                  border:`1px solid ${ws.broken?color+'40':ws.claimed||ws.claimable?color:'#162438'}`,
+                  boxShadow:ws.broken?'none':ws.claimable||ws.claimed?`0 0 5px ${color}`:'none',
+                  animation:ws.broken?'none':ws.flickering?'rapidFlicker 0.08s infinite':ws.claimable&&!ws.claimed?'ledBlink 0.5s infinite':'none',
+                  position:'relative',overflow:'hidden'
+                }}>
+                  {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${color}50 20%,transparent 70%)`,animation:'filamentGlow 2s infinite'}}/>}
                 </div>
-                <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:rc}}>{b.region}</div>
-                <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a'}}>UTC{b.tz>=0?'+':''}{b.tz}</div>
-                <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:isLive?'#22c55e':'#1e4a6a'}}>
-                  {isLive?`LIVE ${fmtTime(hourCountdown)}`:'CLOSED'}
+                <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:ws.claimed?'#22c55e':ws.claimable?color:'#1e4a6a',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {WIN_LABELS[type]}
                 </div>
               </div>
             )
           })}
         </div>
       </div>
+
+      {/* Messages */}
+      <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:5,padding:'5px 8px',maxHeight:60,overflowY:'auto',marginBottom:8}}>
+        {msgs.slice(-5).map((m,i)=>(
+          <div key={i} style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#00e5a0',marginBottom:1}}>{m}</div>
+        ))}
+      </div>
+
+      <button onClick={startDemo} style={{width:'100%',background:running?'#0a1628':'linear-gradient(135deg,#00e5a0,#00b8ff)',color:running?'#2a5a7a':'#000',border:running?'1px solid #1e3a5f':'none',borderRadius:8,padding:'10px',fontFamily:'"DM Mono",monospace',fontSize:10,fontWeight:700,cursor:running?'default':'pointer'}}>
+        {running?'⏳ DEMO RUNNING...':'▶ RUN DEMO HACK'}
+      </button>
     </div>
   )
 }
 
-// ─── Demo Hack Modal ──────────────────────────────────────────────────────────
-function DemoHackModal({onClose}:{onClose:()=>void}){
-  const [step,setStep]=useState(0)
-  const [demoNum,setDemoNum]=useState<number|null>(null)
-  const [localDevice,setLocalDevice]=useState(()=>generateDemoDevice(999))
-  const [winMsg,setWinMsg]=useState('')
-  const [called,setCalled]=useState<number[]>([])
-  useEffect(()=>{
-    const steps=[15,22,38,4,71,55,43,89,17,31,66,12,48,77,26]
-    let i=0
-    const t=setInterval(()=>{
-      if(i>=steps.length){clearInterval(t);return}
-      const num=steps[i]; setDemoNum(num); setCalled(p=>[...p,num])
-      setLocalDevice(prev=>{
-        const nd={...prev,grid:prev.grid.map(row=>row.map(cell=>cell.num===num?{...cell,matched:true,clicked:true}:cell))}
-        const flat=nd.grid.flat(),clicked=flat.filter(c=>c.clicked).length
-        if(clicked===5) setWinMsg('⚡ EARLY FIVE — 5 accounts hacked!')
-        if(nd.grid[0].filter(c=>c.num).every(c=>c.clicked)) setWinMsg('🔵 TOP LINE — Row 1 fully hacked!')
-        if(nd.grid[1].filter(c=>c.num).every(c=>c.clicked)) setWinMsg('🟢 MIDDLE LINE — Row 2 fully hacked!')
-        if(nd.grid[2].filter(c=>c.num).every(c=>c.clicked)) setWinMsg('🟡 BOTTOM LINE — Row 3 fully hacked!')
-        if(flat.filter(c=>c.num).every(c=>c.clicked)) setWinMsg('🔥 FULL HOUSE — ALL 15 MATCHED!')
-        return nd
-      })
-      setStep(i+1); i++
-    },900)
-    return()=>clearInterval(t)
-  },[])
+// ─── Rules Panel ─────────────────────────────────────────────────────────────
+function RulesPanel(){
   return(
-    <div style={{position:'fixed',inset:0,background:'rgba(1,8,16,0.92)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(8px)'}}>
-      <div style={{background:'#020d1a',border:'1px solid #0a3a5a',borderRadius:20,padding:24,maxWidth:500,width:'95%',boxShadow:'0 0 60px rgba(0,229,160,0.1)'}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+    <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:8,padding:'10px 12px'}}>
+      <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#00e5a0',marginBottom:8,letterSpacing:'0.1em'}}>◉ HOW TO PLAY — RANSOME RULES</div>
+      {[
+        ['1','MINT','Buy NFT hacking devices (1 token each). Each device is a unique 3×9 housie ticket.'],
+        ['2','ACTIVATE','Connect your devices to the live bank. Only active devices participate.'],
+        ['3','HACK','Numbers are broadcast every 60-90s. Click matching numbers on your ticket during the open window.'],
+        ['4','WIN','Hit 5 numbers for Early Five, complete a row for Line wins, all 15 for Full House.'],
+        ['5','RANSOM','Press RANSOM when your win is ready. Multiple claimers in the same round split the prize equally.'],
+        ['6','FLICKER','After a win is claimed, all other devices see rapid LED flicker for 60s, then a broken LED — win is gone.'],
+        ['7','BANK HACK','When all 90 numbers are drawn, unclaimed winnings go to the treasury wallet. Game resets.'],
+      ].map(([n,title,desc])=>(
+        <div key={n} style={{display:'flex',gap:8,marginBottom:7,alignItems:'flex-start'}}>
+          <div style={{width:16,height:16,borderRadius:'50%',background:'#0a1628',border:'1px solid #00e5a040',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1}}>
+            <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#00e5a0',fontWeight:700}}>{n}</span>
+          </div>
           <div>
-            <div style={{fontFamily:'"Syne",sans-serif',fontSize:16,fontWeight:800,color:'#00e5a0'}}>DEMO HACK — HOW TO PLAY</div>
-            <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',marginTop:2}}>Watch live gameplay walkthrough</div>
-          </div>
-          <button onClick={onClose} style={{background:'#0a1628',border:'1px solid #1e3a5f',color:'#4a7fa5',borderRadius:8,width:28,height:28,cursor:'pointer',fontSize:14}}>×</button>
-        </div>
-        <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:14}}>
-          <div>
-            <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a',marginBottom:2}}>BANK BROADCASTS</div>
-            <div style={{fontFamily:'"Syne",sans-serif',fontSize:48,fontWeight:800,color:'#fff',lineHeight:1,
-              textShadow:'0 0 20px #fff,0 0 40px rgba(255,255,255,0.6)',animation:'numAppear 0.4s cubic-bezier(.34,1.56,.64,1)'}}>{demoNum??'—'}</div>
-          </div>
-          <div style={{flex:1}}>
-            <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a',marginBottom:4}}>NUMBERS CALLED ({step}/15)</div>
-            <div style={{display:'flex',flexWrap:'wrap',gap:3}}>
-              {called.map((n,i)=><div key={i} style={{width:20,height:20,borderRadius:3,display:'flex',alignItems:'center',justifyContent:'center',background:'#0a2535',border:'1px solid #1e3a5f',fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a'}}>{n}</div>)}
-            </div>
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#4a7fa5',fontWeight:700,marginBottom:1}}>{title}</div>
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#2a5a7a',lineHeight:1.5}}>{desc}</div>
           </div>
         </div>
-        <div style={{background:'#020a14',border:'1px solid #0d2035',borderRadius:8,overflow:'hidden',marginBottom:12}}>
-          <div style={{background:'#030a12',padding:'4px 8px',display:'flex',justifyContent:'space-between',borderBottom:'1px solid #0d2035'}}>
-            <div style={{display:'flex',alignItems:'center',gap:5}}>
-              <div style={{width:10,height:10,background:'linear-gradient(135deg,#00e5a0,#00b8ff)',clipPath:'polygon(50% 0%,100% 50%,50% 100%,0% 50%)'}}/>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#00e5a0'}}>RNSM-DEMO</div>
-            </div>
-            <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#2a5a7a'}}>{localDevice.grid.flat().filter(c=>c.clicked).length}/15</div>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',borderBottom:'1px solid #0d2035'}}>
-            {COL_HEADERS.map((h,i)=><div key={i} style={{padding:'2px 0',textAlign:'center',fontFamily:'"DM Mono",monospace',fontSize:5.5,color:'#1e3a5f',borderRight:i<8?'1px solid #0d2035':'none',background:'#030a12'}}>{h}</div>)}
-          </div>
-          {localDevice.grid.map((row,ri)=>(
-            <div key={ri} style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',borderBottom:ri<2?'1px solid #0d2035':'none'}}>
-              {row.map((cell,ci)=>(
-                <div key={ci} style={{height:24,display:'flex',alignItems:'center',justifyContent:'center',borderRight:ci<8?'1px solid #0d2035':'none',
-                  background:cell.clicked?'rgba(255,255,255,0.08)':'transparent',
-                  fontFamily:'"DM Mono",monospace',fontSize:10,fontWeight:700,
-                  color:!cell.num?'transparent':cell.clicked?'#ffffff':'#2a5a7a',
-                  textShadow:cell.clicked?'0 0 8px #fff,0 0 20px rgba(255,255,255,0.8),0 0 40px rgba(255,255,255,0.4)':'none',
-                  transition:'all 0.3s'}}>{cell.num??''}</div>
-              ))}
-            </div>
-          ))}
-        </div>
-        {winMsg&&<div style={{background:'rgba(0,229,160,0.08)',border:'1px solid rgba(0,229,160,0.3)',borderRadius:8,padding:'8px 12px',marginBottom:10,fontFamily:'"DM Mono",monospace',fontSize:10,color:'#00e5a0',animation:'slideDown 0.3s ease'}}>{winMsg}</div>}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
-          {[['⚡','Early Five','First 5 clicked'],['🔵','Top Line','All Row 1'],['🟢','Middle Line','All Row 2'],['🟡','Bottom Line','All Row 3'],['🔥','Full House','All 15 matched']].map(([icon,label,desc])=>(
-            <div key={label} style={{display:'flex',gap:6,alignItems:'flex-start',padding:'4px 0'}}>
-              <div style={{fontSize:10,flexShrink:0}}>{icon}</div>
-              <div><div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#4a7fa5',fontWeight:700}}>{label}</div>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a'}}>{desc}</div></div>
-            </div>
-          ))}
-        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Mint Panel (inside device skeleton) ─────────────────────────────────────
+function MintPanel({wallet,devices,mintCount,mintToken,setMintCount,setMintToken,onMint,onEnterGame,onConnectWallet}:{
+  wallet:string|null;devices:Device[];mintCount:number;mintToken:string;
+  setMintCount:(n:number)=>void;setMintToken:(t:string)=>void;
+  onMint:()=>void;onEnterGame:()=>void;onConnectWallet:()=>void
+}){
+  const[tab,setTab]=useState<'mint'|'demo'|'rules'>('mint')
+  const btnBase:React.CSSProperties={fontFamily:'"DM Mono",monospace',fontSize:11,cursor:'pointer',borderRadius:8,padding:'8px 14px',fontWeight:600,border:'none'}
+  return(
+    <div>
+      {/* Tab bar */}
+      <div style={{display:'flex',gap:4,marginBottom:10}}>
+        {([['mint','◈ MINT'],['demo','▶ DEMO'],['rules','ⓘ RULES']] as const).map(([k,label])=>(
+          <button key={k} onClick={()=>setTab(k)} style={{...btnBase,flex:1,padding:'9px 6px',fontSize:9,
+            background:tab===k?'#0a2a4a':'transparent',
+            color:tab===k?'#00e5a0':'#2a5a7a',
+            border:`1px solid ${tab===k?'#00e5a040':'#0a2535'}`}}>
+            {label}
+          </button>
+        ))}
       </div>
+
+      {tab==='demo'&&<DemoPanel/>}
+      {tab==='rules'&&<RulesPanel/>}
+
+      {tab==='mint'&&(
+        <div>
+          {!wallet?(
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:14,padding:'20px 0'}}>
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',textAlign:'center',lineHeight:1.7}}>Connect your wallet to mint<br/>NFT hacking devices</div>
+              <button onClick={onConnectWallet} style={{...btnBase,background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',padding:'14px 28px',fontSize:12,fontWeight:700,borderRadius:10,boxShadow:'0 4px 20px rgba(0,229,160,0.3)'}}>CONNECT WALLET →</button>
+            </div>
+          ):(
+            <>
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',marginBottom:6}}>SELECT TOKEN</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6,marginBottom:12}}>
+                {['USDT','USDC','SOL','RNSM'].map(t=>(
+                  <button key={t} onClick={()=>setMintToken(t)} style={{...btnBase,padding:'10px 6px',fontSize:10,
+                    background:mintToken===t?'#0a3a5a':'transparent',
+                    color:mintToken===t?'#00e5a0':'#2a5a7a',
+                    border:`1px solid ${mintToken===t?'#00e5a040':'#0a2535'}`}}>{t}</button>
+                ))}
+              </div>
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',marginBottom:6}}>QUANTITY</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6,marginBottom:8}}>
+                {[1,3,5,10].map(n=>(
+                  <button key={n} onClick={()=>setMintCount(n)} style={{...btnBase,padding:'10px 6px',fontSize:12,
+                    background:mintCount===n?'#0a3a5a':'transparent',
+                    color:mintCount===n?'#00e5a0':'#2a5a7a',
+                    border:`1px solid ${mintCount===n?'#00e5a040':'#0a2535'}`}}>{n}</button>
+                ))}
+              </div>
+              <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12}}>
+                <input type="number" value={mintCount} onChange={e=>setMintCount(Math.max(1,parseInt(e.target.value)||1))}
+                  style={{flex:1,background:'#0a1628',border:'1px solid #0a2535',borderRadius:8,padding:'10px 12px',fontFamily:'"DM Mono",monospace',fontSize:12,color:'#00e5a0',outline:'none'}}/>
+                <button onClick={onMint} style={{...btnBase,background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',padding:'12px 20px',fontSize:12,fontWeight:700,borderRadius:10,boxShadow:'0 0 16px rgba(0,229,160,0.3)',whiteSpace:'nowrap'}}>MINT →</button>
+              </div>
+              {devices.length>0&&(
+                <div style={{background:'rgba(0,229,160,0.04)',border:'1px solid rgba(0,229,160,0.12)',borderRadius:8,padding:'8px 10px',marginBottom:12}}>
+                  <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#00e5a0',marginBottom:4}}>YOUR DEVICES ({devices.length})</div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                    {devices.slice(0,6).map(d=>(
+                      <div key={d.id} style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:d.active?'#22c55e':'#1e4a6a',background:'#0a1628',border:`1px solid ${d.active?'#22c55e30':'#0a2535'}`,borderRadius:4,padding:'2px 6px'}}>{d.nftId}</div>
+                    ))}
+                    {devices.length>6&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a'}}>+{devices.length-6}</div>}
+                  </div>
+                </div>
+              )}
+              {/* Initiate hack button inside mint panel */}
+              {devices.length>0&&(
+                <button onClick={onEnterGame} style={{...btnBase,width:'100%',background:'linear-gradient(135deg,#ef4444,#dc2626)',color:'#fff',padding:'14px',fontSize:13,fontWeight:800,borderRadius:10,boxShadow:'0 4px 24px rgba(239,68,68,0.4)',letterSpacing:'0.05em'}}>
+                  🔴 INITIATE HACK — {devices.length} DEVICE{devices.length>1?'S':''} READY
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── LED with progress bar ────────────────────────────────────────────────────
-function LedWithProgress({type,winState,device,devices,winStates}:{
-  type:WinType; winState:WinState; device?:Device; devices?:Device[]; winStates?:Record<WinType,WinState>
-}){
+function LedProgress({type,ws,devices}:{type:WinType;ws:WinState;devices:Device[]}){
   const color=LED_COLORS[type]
-  const won=device?device.claimed.has(type):false
-  const lit=winState.claimable&&!winState.claimed
-  const dead=winState.claimed&&!won
-  const flicker=winState.flickering
-  const broken=winState.broken
-
-  // Calculate progress: best progress across all active devices toward this win type
-  let progress=0
-  if(devices&&winStates){
-    devices.filter(d=>d.active).forEach(d=>{
-      const flat=d.grid.flat()
-      const clicked=flat.filter(c=>c.clicked).length
-      let p=0
-      if(type==='EARLY_FIVE') p=Math.min(clicked/5,1)
-      else if(type==='TOP_LINE') p=d.grid[0].filter(c=>c.num&&c.clicked).length/Math.max(d.grid[0].filter(c=>c.num).length,1)
-      else if(type==='MIDDLE_LINE') p=d.grid[1].filter(c=>c.num&&c.clicked).length/Math.max(d.grid[1].filter(c=>c.num).length,1)
-      else if(type==='BOTTOM_LINE') p=d.grid[2].filter(c=>c.num&&c.clicked).length/Math.max(d.grid[2].filter(c=>c.num).length,1)
-      else p=Math.min(clicked/15,1)
-      if(p>progress) progress=p
-    })
-  }
-
+  let prog=0
+  devices.filter(d=>d.active).forEach(d=>{
+    const flat=d.grid.flat(),nc=flat.filter(c=>c.clicked).length
+    let p=0
+    if(type==='EARLY_FIVE')p=Math.min(nc/5,1)
+    else if(type==='TOP_LINE')p=d.grid[0].filter(c=>c.num&&c.clicked).length/Math.max(d.grid[0].filter(c=>c.num).length,1)
+    else if(type==='MIDDLE_LINE')p=d.grid[1].filter(c=>c.num&&c.clicked).length/Math.max(d.grid[1].filter(c=>c.num).length,1)
+    else if(type==='BOTTOM_LINE')p=d.grid[2].filter(c=>c.num&&c.clicked).length/Math.max(d.grid[2].filter(c=>c.num).length,1)
+    else p=Math.min(nc/15,1)
+    if(p>prog)prog=p
+  })
   return(
     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:5}}>
-      {/* LED dot */}
       <div style={{
-        width:10,height:10,borderRadius:2,flexShrink:0,
-        background: broken ? 'transparent'
-          : (won||lit) ? color : dead ? '#050d17' : '#0a1628',
-        border: broken ? `1px solid ${color}40`
-          : `1px solid ${(won||lit)?color:'#162438'}`,
-        boxShadow: broken ? `inset 0 0 3px ${color}60`
-          : (won||lit) ? `0 0 5px ${color},0 0 10px ${color}60` : 'none',
-        opacity: dead&&!flicker&&!broken ? 0.25 : 1,
-        animation: broken ? 'none'
-          : flicker ? 'rapidFlicker 0.08s infinite'
-          : lit&&!won ? `ledBlink 0.5s infinite` : 'none',
-        position:'relative',overflow:'hidden',
+        width:10,height:8,borderRadius:2,flexShrink:0,position:'relative',overflow:'hidden',
+        background:ws.broken?'transparent':ws.claimed||ws.claimable?color:'#0a1628',
+        border:`1px solid ${ws.broken?color+'30':ws.claimed||ws.claimable?color:'#162438'}`,
+        boxShadow:ws.broken?'none':ws.claimable||ws.claimed?`0 0 5px ${color},0 0 10px ${color}60`:'none',
+        animation:ws.broken?'none':ws.flickering?'rapidFlicker 0.08s infinite':ws.claimable&&!ws.claimed?'ledBlink 0.5s infinite':'none',
       }}>
-        {/* Broken filament glow inside */}
-        {broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${color}60 0%,transparent 70%)`,animation:'filamentGlow 2s infinite'}}/>}
+        {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${color}50 20%,transparent 70%)`,animation:'filamentGlow 2s infinite'}}/>}
       </div>
       <div style={{flex:1}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:2}}>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:won?'#22c55e':lit?color:broken?`${color}60`:'#2a5a7a',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:90}}>{WIN_LABELS[type]}</div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a'}}>{Math.round(progress*100)}%</div>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:2}}>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:ws.claimed?'#22c55e':ws.claimable?color:ws.broken?color+'60':'#2a5a7a',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}}>{WIN_LABELS[type]}</span>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a'}}>{Math.round(prog*100)}%</span>
         </div>
-        {/* Progress bar */}
-        <div style={{height:3,background:'#0a1628',borderRadius:2,overflow:'hidden',border:'1px solid #0d2035'}}>
-          <div style={{height:'100%',width:`${progress*100}%`,borderRadius:2,
-            background: progress>=1 ? color : `linear-gradient(90deg,${color}60,${color})`,
-            boxShadow: progress>=1 ? `0 0 6px ${color}` : 'none',
-            transition:'width 0.5s ease',
-          }}/>
+        <div style={{height:3,background:'#0a1628',borderRadius:2,overflow:'hidden'}}>
+          <div style={{height:'100%',width:`${prog*100}%`,background:prog>=1?color:`linear-gradient(90deg,${color}60,${color})`,borderRadius:2,boxShadow:prog>=1?`0 0 5px ${color}`:'none',transition:'width 0.4s ease'}}/>
         </div>
       </div>
     </div>
@@ -383,177 +552,167 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
   timer:number;totalTimer:number;liveBank:number
 }){
   const flat=device.grid.flat()
-  const clickedN=flat.filter(c=>c.clicked).length
-  const row0Done=device.grid[0].filter(c=>c.num).every(c=>c.clicked)
-  const row1Done=device.grid[1].filter(c=>c.num).every(c=>c.clicked)
-  const row2Done=device.grid[2].filter(c=>c.num).every(c=>c.clicked)
-  const allDone=flat.filter(c=>c.num).every(c=>c.clicked)
-  const fhKey=`FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType
-
+  const nc=flat.filter(c=>c.clicked).length
+  const r0=device.grid[0].filter(c=>c.num).every(c=>c.clicked)
+  const r1=device.grid[1].filter(c=>c.num).every(c=>c.clicked)
+  const r2=device.grid[2].filter(c=>c.num).every(c=>c.clicked)
+  const all=flat.filter(c=>c.num).every(c=>c.clicked)
+  const fhk=`FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType
   const canClaim=(
-    (clickedN>=5&&!device.claimed.has('EARLY_FIVE')&&winStates.EARLY_FIVE.claimable&&!winStates.EARLY_FIVE.claimed)||
-    (row0Done&&!device.claimed.has('TOP_LINE')&&winStates.TOP_LINE.claimable&&!winStates.TOP_LINE.claimed)||
-    (row1Done&&!device.claimed.has('MIDDLE_LINE')&&winStates.MIDDLE_LINE.claimable&&!winStates.MIDDLE_LINE.claimed)||
-    (row2Done&&!device.claimed.has('BOTTOM_LINE')&&winStates.BOTTOM_LINE.claimable&&!winStates.BOTTOM_LINE.claimed)||
-    (allDone&&winStates[fhKey]?.claimable&&!winStates[fhKey]?.claimed&&!device.claimed.has(fhKey))
+    (nc>=5&&!device.claimed.has('EARLY_FIVE')&&winStates.EARLY_FIVE.claimable&&!winStates.EARLY_FIVE.claimed)||
+    (r0&&!device.claimed.has('TOP_LINE')&&winStates.TOP_LINE.claimable&&!winStates.TOP_LINE.claimed)||
+    (r1&&!device.claimed.has('MIDDLE_LINE')&&winStates.MIDDLE_LINE.claimable&&!winStates.MIDDLE_LINE.claimed)||
+    (r2&&!device.claimed.has('BOTTOM_LINE')&&winStates.BOTTOM_LINE.claimable&&!winStates.BOTTOM_LINE.claimed)||
+    (all&&winStates[fhk]?.claimable&&!winStates[fhk]?.claimed&&!device.claimed.has(fhk))
   )
   const doClaim=()=>{
-    if(clickedN>=5&&!device.claimed.has('EARLY_FIVE')&&winStates.EARLY_FIVE.claimable&&!winStates.EARLY_FIVE.claimed){onClaim(device.id,'EARLY_FIVE');return}
-    if(row0Done&&!device.claimed.has('TOP_LINE')&&winStates.TOP_LINE.claimable&&!winStates.TOP_LINE.claimed){onClaim(device.id,'TOP_LINE');return}
-    if(row1Done&&!device.claimed.has('MIDDLE_LINE')&&winStates.MIDDLE_LINE.claimable&&!winStates.MIDDLE_LINE.claimed){onClaim(device.id,'MIDDLE_LINE');return}
-    if(row2Done&&!device.claimed.has('BOTTOM_LINE')&&winStates.BOTTOM_LINE.claimable&&!winStates.BOTTOM_LINE.claimed){onClaim(device.id,'BOTTOM_LINE');return}
-    if(allDone&&winStates[fhKey]?.claimable) onClaim(device.id,fhKey)
+    if(nc>=5&&!device.claimed.has('EARLY_FIVE')&&winStates.EARLY_FIVE.claimable&&!winStates.EARLY_FIVE.claimed){onClaim(device.id,'EARLY_FIVE');return}
+    if(r0&&!device.claimed.has('TOP_LINE')&&winStates.TOP_LINE.claimable&&!winStates.TOP_LINE.claimed){onClaim(device.id,'TOP_LINE');return}
+    if(r1&&!device.claimed.has('MIDDLE_LINE')&&winStates.MIDDLE_LINE.claimable&&!winStates.MIDDLE_LINE.claimed){onClaim(device.id,'MIDDLE_LINE');return}
+    if(r2&&!device.claimed.has('BOTTOM_LINE')&&winStates.BOTTOM_LINE.claimable&&!winStates.BOTTOM_LINE.claimed){onClaim(device.id,'BOTTOM_LINE');return}
+    if(all&&winStates[fhk]?.claimable)onClaim(device.id,fhk)
   }
   const LED_TYPES:WinType[]=['EARLY_FIVE','TOP_LINE','MIDDLE_LINE','BOTTOM_LINE','FULL_HOUSE_1','FULL_HOUSE_2','FULL_HOUSE_3']
-
   return(
     <div style={{background:'linear-gradient(180deg,#0d1a2e,#060e1a)',border:`2px solid ${canClaim?'#ec4899':device.active?'#00e5a030':'#162438'}`,borderRadius:14,padding:0,
-      boxShadow:canClaim?'0 0 0 2px rgba(236,72,153,0.3),0 6px 24px rgba(236,72,153,0.15)':device.active?'0 0 10px rgba(0,229,160,0.06)':'0 4px 16px rgba(0,0,0,0.6)',
+      boxShadow:canClaim?'0 0 0 2px rgba(236,72,153,0.3),0 6px 24px rgba(236,72,153,0.15)':device.active?'0 0 10px rgba(0,229,160,0.06)':'none',
       display:'flex',flexDirection:'column',overflow:'hidden',userSelect:'none'}}>
-
-      {/* NFT Header + Ad space */}
-      <div style={{background:'linear-gradient(90deg,#0a1628,#0d1f3a)',padding:'4px 7px',borderBottom:'1px solid #0d1f3a',display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
+      {/* Header */}
+      <div style={{background:'linear-gradient(90deg,#0a1628,#0d1f3a)',padding:'4px 7px',borderBottom:'1px solid #0d1f3a',display:'flex',justifyContent:'space-between',alignItems:'center',gap:4}}>
         <div style={{display:'flex',alignItems:'center',gap:4}}>
-          <div style={{width:12,height:12,background:'linear-gradient(135deg,#00e5a0,#00b8ff)',clipPath:'polygon(50% 0%,100% 50%,50% 100%,0% 50%)',flexShrink:0}}/>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,fontWeight:700,color:'#00e5a0'}}>{device.nftId}</div>
+          <div style={{width:11,height:11,background:'linear-gradient(135deg,#00e5a0,#00b8ff)',clipPath:'polygon(50% 0%,100% 50%,50% 100%,0% 50%)',flexShrink:0}}/>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,fontWeight:700,color:'#00e5a0'}}>{device.nftId}</span>
         </div>
-        {/* Ad space behind NFT ID */}
-        <div style={{flex:1,height:16,background:'rgba(0,229,160,0.03)',border:'1px dashed #0a2535',borderRadius:3,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',margin:'0 4px'}}>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:5.5,color:'#0a2535',letterSpacing:'0.1em'}}>AD SPACE · RANSOME.IO</div>
+        <div style={{flex:1,height:14,background:'rgba(0,229,160,0.03)',border:'1px dashed #0a2535',borderRadius:3,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 3px'}}>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:5,color:'#0a2535'}}>AD</span>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:3}}>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a'}}>{clickedN}/15</div>
-          <div style={{width:5,height:5,borderRadius:'50%',background:device.active?'#22c55e':'#1e3a5f',boxShadow:device.active?'0 0 5px #22c55e':'none',animation:device.active?'dot 1.5s infinite':'none'}}/>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a'}}>{nc}/15</span>
+          <div style={{width:5,height:5,borderRadius:'50%',background:device.active?'#22c55e':'#1e3a5f',animation:device.active?'dot 1.5s infinite':'none'}}/>
         </div>
       </div>
-
-      {/* Mini Bank Display */}
-      {device.active&&(
-        <div style={{background:'#030a12',margin:'4px 5px 0',borderRadius:5,border:'1px solid #0d2035',padding:'3px 5px',display:'flex',alignItems:'center',gap:5,position:'relative',overflow:'hidden'}}>
-          <div style={{position:'absolute',inset:0,backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.1) 2px,rgba(0,0,0,0.1) 4px)',pointerEvents:'none'}}/>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:5.5,color:'#1e4a6a',flexShrink:0,position:'relative',zIndex:1}}>BANK</div>
-          <div style={{fontFamily:'"Syne",sans-serif',fontSize:18,fontWeight:800,lineHeight:1,position:'relative',zIndex:1,
-            color:currentNum?'#fff':'#1e3a5f',textShadow:currentNum?'0 0 8px #fff,0 0 16px rgba(255,255,255,0.6)':'none'}}>
-            {currentNum??'—'}
-          </div>
-          <div style={{display:'flex',flexDirection:'column',gap:1,position:'relative',zIndex:1}}>
+      {/* Mini bank / activate */}
+      {device.active?(
+        <div style={{background:'#030a12',margin:'3px 5px 0',borderRadius:5,border:'1px solid #0d2035',padding:'2px 5px',display:'flex',alignItems:'center',gap:4,position:'relative',overflow:'hidden'}}>
+          <div style={{position:'absolute',inset:0,backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px)',pointerEvents:'none'}}/>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:5,color:'#1e4a6a',zIndex:1}}>BANK</span>
+          <span style={{fontFamily:'"Syne",sans-serif',fontSize:16,fontWeight:800,color:'#fff',lineHeight:1,zIndex:1,textShadow:currentNum?'0 0 8px #fff':'none'}}>{currentNum??'—'}</span>
+          <div style={{display:'flex',flexDirection:'column',gap:1,zIndex:1}}>
             <div style={{display:'flex',alignItems:'center',gap:2}}>
               <div style={{width:3,height:3,borderRadius:'50%',background:clickWindowOpen?'#22c55e':'#ef4444',animation:clickWindowOpen?'dot 1s infinite':'none'}}/>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:5.5,color:clickWindowOpen?'#22c55e':'#ef4444'}}>{clickWindowOpen?'OPEN':'CLOSED'}</div>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:5,color:clickWindowOpen?'#22c55e':'#ef4444'}}>{clickWindowOpen?'OPEN':'CLOSED'}</span>
             </div>
-            <div style={{fontFamily:'"DM Mono",monospace',fontSize:5.5,color:'#1e4a6a'}}>{BANKS[liveBank]?.name?.split(' ')[0]??''}</div>
+            <span style={{fontFamily:'"DM Mono",monospace',fontSize:5,color:'#1e4a6a'}}>{BANKS[liveBank]?.name?.split(' ')[0]??''}</span>
           </div>
-          <div style={{marginLeft:'auto',display:'flex',gap:2,position:'relative',zIndex:1}}>
+          <div style={{marginLeft:'auto',display:'flex',gap:2,zIndex:1}}>
             {Array.from(calledNums).slice(-3).reverse().map((n,i)=>(
-              <div key={i} style={{width:13,height:13,borderRadius:2,display:'flex',alignItems:'center',justifyContent:'center',background:'#0a1628',border:'1px solid #1e3a5f',fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#2a5a7a',opacity:1-i*0.25}}>{n}</div>
+              <div key={i} style={{width:12,height:12,borderRadius:2,display:'flex',alignItems:'center',justifyContent:'center',background:'#0a1628',border:'1px solid #1e3a5f',fontFamily:'"DM Mono",monospace',fontSize:6,color:'#2a5a7a',opacity:1-i*0.25}}>{n}</div>
             ))}
           </div>
         </div>
-      )}
-
-      {/* Activate button */}
-      {!device.active&&(
-        <div style={{margin:'4px 5px 0',background:'#030a12',border:'1px solid #0d2035',borderRadius:5,padding:'5px 7px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:5}}>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a',lineHeight:1.4}}>NFT DEVICE<br/><span style={{color:'#2a5a7a'}}>Disconnected</span></div>
-          <button onClick={()=>onActivate(device.id)} style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:5,padding:'4px 8px',fontFamily:'"DM Mono",monospace',fontSize:7.5,fontWeight:700,cursor:'pointer'}}>ACTIVATE ⚡</button>
+      ):(
+        <div style={{margin:'3px 5px 0',background:'#030a12',border:'1px solid #0d2035',borderRadius:5,padding:'4px 7px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:4}}>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a'}}>Disconnected</span>
+          <button onClick={()=>onActivate(device.id)} style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:4,padding:'3px 7px',fontFamily:'"DM Mono",monospace',fontSize:7,fontWeight:700,cursor:'pointer'}}>ACTIVATE ⚡</button>
         </div>
       )}
-
-      {/* Ticket Grid — white neon numbers */}
-      <div style={{margin:'4px 5px 0',background:'#020a14',border:'1px solid #0d2035',borderRadius:5,overflow:'hidden'}}>
+      {/* Grid */}
+      <div style={{margin:'3px 5px 0',background:'#020a14',border:'1px solid #0d2035',borderRadius:4,overflow:'hidden'}}>
         <div style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',borderBottom:'1px solid #0d2035'}}>
-          {COL_HEADERS.map((h,i)=><div key={i} style={{padding:'2px 0',textAlign:'center',fontFamily:'"DM Mono",monospace',fontSize:5,color:'#1e3a5f',borderRight:i<8?'1px solid #0d2035':'none',background:'#030a12'}}>{h}</div>)}
+          {COL_HEADERS.map((h,i)=><div key={i} style={{padding:'1px 0',textAlign:'center',fontFamily:'"DM Mono",monospace',fontSize:4.5,color:'#1e3a5f',borderRight:i<8?'1px solid #0d2035':'none',background:'#030a12'}}>{h}</div>)}
         </div>
         {device.grid.map((row,ri)=>(
           <div key={ri} style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',borderBottom:ri<2?'1px solid #0d2035':'none'}}>
             {row.map((cell,ci)=>{
-              const isCurrentNum=cell.num!==null&&cell.num===currentNum
-              const isClickable=isCurrentNum&&clickWindowOpen&&!cell.clicked&&device.active
-              const isClicked=cell.clicked
+              const isCur=cell.num!==null&&cell.num===currentNum
+              const isClick=isCur&&clickWindowOpen&&!cell.clicked&&device.active
               const isEmpty=cell.num===null
-              const glitchAnim=`gx${(ri*9+ci)%3} ${2+((ri*9+ci)%2)}s ${(ri*9+ci)*0.08}s infinite`
+              const glitch=`gx${(ri*9+ci)%3} ${2+((ri*9+ci)%2)}s ${(ri*9+ci)*0.08}s infinite`
               return(
-                <button key={ci} onClick={()=>isClickable&&onCellClick(device.id,ri,ci)} style={{
-                  height:22,padding:0,cursor:isClickable?'pointer':'default',border:'none',
+                <button key={ci} onClick={()=>isClick&&onCellClick(device.id,ri,ci)} style={{
+                  height:20,padding:0,cursor:isClick?'pointer':'default',border:'none',
                   borderRight:ci<8?'1px solid #0d2035':'none',
-                  background:isEmpty?'#020a14':isClicked?'rgba(255,255,255,0.08)':isClickable?'rgba(255,255,255,0.05)':'transparent',
-                  boxShadow:isClickable?'inset 0 0 0 2px rgba(255,255,255,0.8),0 0 6px rgba(255,255,255,0.4)':'none',
-                  color:isEmpty?'transparent':'#ffffff',
-                  fontFamily:'"DM Mono",monospace',fontSize:9,fontWeight:700,
-                  textShadow:isEmpty?'none':isClicked?'0 0 6px #fff,0 0 12px rgba(255,255,255,0.9),0 0 24px rgba(255,255,255,0.5)':isClickable?'0 0 10px #fff,0 0 20px #fff':'0 0 3px rgba(255,255,255,0.4)',
-                  opacity:isEmpty?0:isClicked?1:isClickable?1:0.5,
-                  animation:(!isEmpty&&!isClickable&&!isClicked)?glitchAnim:'none',
-                  transition:'opacity 0.2s,text-shadow 0.2s',
+                  background:isEmpty?'#020a14':cell.clicked?'rgba(255,255,255,0.08)':isClick?'rgba(255,255,255,0.05)':'transparent',
+                  boxShadow:isClick?'inset 0 0 0 1.5px rgba(255,255,255,0.9)':'none',
+                  color:'#ffffff',fontFamily:'"DM Mono",monospace',fontSize:9,fontWeight:700,
+                  textShadow:isEmpty?'none':cell.clicked?'0 0 6px #fff,0 0 12px rgba(255,255,255,0.8)':isClick?'0 0 10px #fff':'0 0 2px rgba(255,255,255,0.35)',
+                  opacity:isEmpty?0:cell.clicked?1:isClick?1:0.45,
+                  animation:(!isEmpty&&!isClick&&!cell.clicked)?glitch:'none',
+                  transition:'opacity 0.2s',
                 }}>{cell.num??''}</button>
               )
             })}
           </div>
         ))}
       </div>
-
-      {/* LED strip — with flicker/broken states */}
-      <div style={{display:'flex',justifyContent:'center',gap:3,padding:'4px 5px 2px',alignItems:'center'}}>
-        <div style={{display:'flex',gap:2}}>{[0,1].map(i=><div key={i} style={{width:7,height:5,borderRadius:1,background:'#0a1628',border:'1px solid #162438'}}/>)}</div>
+      {/* LED strip */}
+      <div style={{display:'flex',justifyContent:'center',gap:3,padding:'3px 5px 1px',alignItems:'center'}}>
+        <div style={{display:'flex',gap:2}}>{[0,1].map(i=><div key={i} style={{width:6,height:5,borderRadius:1,background:'#0a1628',border:'1px solid #162438'}}/>)}</div>
         {LED_TYPES.map((type,i)=>{
-          const st=winStates[type],won=device.claimed.has(type),lit=st.claimable&&!st.claimed,dead=st.claimed&&!won,flicker=st.flickering,broken=st.broken
+          const ws=winStates[type],won=device.claimed.has(type),lit=ws.claimable&&!ws.claimed,dead=ws.claimed&&!won
           return(
             <div key={type} title={WIN_LABELS[type]} style={{
-              width:10,height:8,borderRadius:2,position:'relative',overflow:'hidden',
-              background:broken?'transparent':(won||lit)?LED_COLORS[type]:dead?'#050d17':'#0a1628',
-              border:`1px solid ${broken?`${LED_COLORS[type]}40`:(won||lit)?LED_COLORS[type]:'#162438'}`,
-              boxShadow:(won||lit)&&!broken?`0 0 4px ${LED_COLORS[type]},0 0 8px ${LED_COLORS[type]}60`:'none',
-              opacity:dead&&!flicker&&!broken?0.2:1,
-              animation:broken?'none':flicker?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.5s ${i*0.07}s infinite`:'none',
+              width:9,height:7,borderRadius:2,position:'relative',overflow:'hidden',
+              background:ws.broken?'transparent':(won||lit)?LED_COLORS[type]:dead?'#050d17':'#0a1628',
+              border:`1px solid ${ws.broken?LED_COLORS[type]+'30':(won||lit)?LED_COLORS[type]:'#162438'}`,
+              boxShadow:(won||lit)&&!ws.broken?`0 0 4px ${LED_COLORS[type]},0 0 8px ${LED_COLORS[type]}60`:'none',
+              opacity:dead&&!ws.flickering&&!ws.broken?0.2:1,
+              animation:ws.broken?'none':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.5s ${i*0.07}s infinite`:'none',
             }}>
-              {broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}50 20%,transparent 70%)`,animation:'filamentGlow 2s ease-in-out infinite'}}/>}
+              {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}50 20%,transparent 70%)`,animation:'filamentGlow 2s ease-in-out infinite'}}/>}
             </div>
           )
         })}
-        <div style={{display:'flex',gap:2}}>{[0,1,2,3].map(i=><div key={i} style={{width:7,height:5,borderRadius:1,background:'#0a1628',border:'1px solid #162438'}}/>)}</div>
+        <div style={{display:'flex',gap:2}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:5,borderRadius:1,background:'#0a1628',border:'1px solid #162438'}}/>)}</div>
       </div>
-
-      {/* Bottom bar — compact */}
-      <div style={{display:'flex',gap:4,alignItems:'center',padding:'2px 6px 6px'}}>
+      {/* Bottom bar */}
+      <div style={{display:'flex',gap:3,alignItems:'center',padding:'2px 5px 5px'}}>
         <div style={{display:'flex',flexDirection:'column',gap:2}}>
-          <div style={{width:8,height:8,borderRadius:2,background:'#ef4444',boxShadow:'0 0 4px #ef4444'}}/>
-          <div style={{width:8,height:8,borderRadius:2,background:'#f97316',boxShadow:'0 0 4px #f97316'}}/>
-          <div style={{width:8,height:8,borderRadius:2,background:device.active?'#22c55e':'#0a1628',border:device.active?'none':'1px solid #162438'}}/>
+          <div style={{width:7,height:7,borderRadius:2,background:'#ef4444',boxShadow:'0 0 4px #ef4444'}}/>
+          <div style={{width:7,height:7,borderRadius:2,background:'#f97316',boxShadow:'0 0 4px #f97316'}}/>
+          <div style={{width:7,height:7,borderRadius:2,background:device.active?'#22c55e':'#0a1628',border:device.active?'none':'1px solid #162438'}}/>
         </div>
         <MiniStopwatch seconds={timer} total={totalTimer}/>
-        <button onClick={doClaim} disabled={!canClaim} style={{flex:1,background:canClaim?'linear-gradient(180deg,#1a0000,#0d0000)':'linear-gradient(180deg,#080f18,#040a10)',border:`2px solid ${canClaim?'#ff2020':'#162438'}`,borderRadius:7,padding:'6px 2px',cursor:canClaim?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',animation:canClaim?'ransomPulse 1s infinite':'none',boxShadow:canClaim?'inset 0 0 10px rgba(255,32,32,0.3),0 0 10px rgba(255,32,32,0.4)':'none'}}>
-          <span style={{fontFamily:'"Syne",sans-serif',fontSize:12,fontWeight:800,letterSpacing:'0.1em',color:canClaim?'#ff4040':'#1e3a5f',textShadow:canClaim?'0 0 8px #ff2020,0 0 20px #ff202080':'none'}}>RANSOM</span>
+        <button onClick={doClaim} disabled={!canClaim} style={{
+          flex:1,background:canClaim?'linear-gradient(180deg,#1a0000,#0d0000)':'linear-gradient(180deg,#080f18,#040a10)',
+          border:`2px solid ${canClaim?'#ff2020':'#162438'}`,borderRadius:7,
+          padding:'8px 4px',cursor:canClaim?'pointer':'default',
+          display:'flex',alignItems:'center',justifyContent:'center',
+          animation:canClaim?'ransomPulse 1s infinite':'none',
+          boxShadow:canClaim?'inset 0 0 10px rgba(255,32,32,0.3),0 0 10px rgba(255,32,32,0.4)':'none',
+          margin:'0 2px',
+        }}>
+          <span style={{fontFamily:'"Syne",sans-serif',fontSize:11,fontWeight:800,letterSpacing:'0.1em',color:canClaim?'#ff4040':'#1e3a5f',textShadow:canClaim?'0 0 8px #ff2020,0 0 20px #ff202080':'none'}}>RANSOM</span>
         </button>
         <div style={{display:'flex',flexDirection:'column',gap:3}}>
-          {[0,1].map(i=><div key={i} style={{width:13,height:13,borderRadius:'50%',background:'radial-gradient(circle at 35% 30%,#2a4a6a,#050d17)',border:'1.5px solid #1e3a5f'}}/>)}
+          {[0,1].map(i=><div key={i} style={{width:12,height:12,borderRadius:'50%',background:'radial-gradient(circle at 35% 30%,#2a4a6a,#050d17)',border:'1.5px solid #1e3a5f'}}/>)}
         </div>
       </div>
-      {/* NO claimed wins strip — removed to keep height compact */}
     </div>
   )
 }
 
-// ─── Matrix Hack Display ──────────────────────────────────────────────────────
-function MatrixHackDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs}:{
-  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number
+// ─── Hack Matrix Display ──────────────────────────────────────────────────────
+function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords}:{
+  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[]
 }){
-  const [glitching,setGlitching]=useState(false)
-  const [bgCmds,setBgCmds]=useState<{cmd:string;x:number;y:number;op:number;st:string;col:string}[]>([])
+  const[glitching,setGlitching]=useState(false)
+  const[bgCmds,setBgCmds]=useState<{cmd:string;x:number;y:number;op:number;st:string;col:string}[]>([])
   const lastNum=calledOrder[calledOrder.length-1]??null
-  const prev6=calledOrder.slice(-7,-1).reverse()
-  const prevNumRef=useRef(lastNum)
-  const inPreGame=preGameSecs>0
+  const prev5=calledOrder.slice(-6,-1).reverse()
+  const prevRef=useRef(lastNum)
   const neonCols=['#00e5a0','#00b8ff','#ef4444','#f59e0b','#a855f7']
+  const pct=Math.round((calledNums.size/90)*100)
 
   useEffect(()=>{
-    if(lastNum!==prevNumRef.current){prevNumRef.current=lastNum;setGlitching(true);setTimeout(()=>setGlitching(false),600)}
+    if(lastNum!==prevRef.current){prevRef.current=lastNum;setGlitching(true);setTimeout(()=>setGlitching(false),600)}
   },[lastNum])
-
   useEffect(()=>{
     const t=setInterval(()=>{
       setBgCmds(p=>[...p.slice(-20),{
         cmd:HACK_CMDS[Math.floor(Math.random()*HACK_CMDS.length)],
-        x:3+Math.random()*94,y:3+Math.random()*94,
-        op:0.06+Math.random()*0.12,
+        x:3+Math.random()*92,y:5+Math.random()*88,
+        op:0.05+Math.random()*0.1,
         st:HACK_STATUSES[Math.floor(Math.random()*HACK_STATUSES.length)],
         col:neonCols[Math.floor(Math.random()*neonCols.length)],
       }])
@@ -563,67 +722,97 @@ function MatrixHackDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs}:
 
   return(
     <div style={{display:'flex',flexDirection:'column',gap:8}}>
-      <div style={{background:'#020d1a',border:'2px solid #0a3a5a',borderRadius:14,padding:'14px 12px',position:'relative',overflow:'hidden',boxShadow:'inset 0 0 60px rgba(0,229,160,0.04)',minHeight:340}}>
-        {/* Scanlines */}
+      {/* Main screen */}
+      <div style={{background:'#020d1a',border:'2px solid #0a3a5a',borderRadius:14,padding:'12px',position:'relative',overflow:'hidden',minHeight:310}}>
         <div style={{position:'absolute',inset:0,backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.15) 2px,rgba(0,0,0,0.15) 4px)',pointerEvents:'none',zIndex:1}}/>
-        {/* Background hacking commands — multi-color */}
         <div style={{position:'absolute',inset:0,overflow:'hidden',zIndex:2,pointerEvents:'none'}}>
           {bgCmds.map((c,i)=>(
-            <div key={i} style={{position:'absolute',left:`${c.x}%`,top:`${c.y}%`,fontFamily:'"DM Mono",monospace',fontSize:7,color:c.col,opacity:c.op,whiteSpace:'nowrap',transform:'translateX(-50%)',animation:`gx${i%3} ${3+i%2}s ${i*0.1}s infinite`}}>
+            <div key={i} style={{position:'absolute',left:`${c.x}%`,top:`${c.y}%`,fontFamily:'"DM Mono",monospace',fontSize:6.5,color:c.col,opacity:c.op,whiteSpace:'nowrap',transform:'translateX(-50%)',animation:`gx${i%3} ${3+i%2}s ${i*0.1}s infinite`}}>
               {c.cmd}... {c.st}
             </div>
           ))}
         </div>
         <div style={{position:'relative',zIndex:3}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-            <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.2em'}}>◉ MATRIX HACK</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+            <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.2em'}}>◉ HACK MATRIX</span>
             <div style={{display:'flex',alignItems:'center',gap:5}}>
               <div style={{width:5,height:5,borderRadius:'50%',background:'#22c55e',animation:'dot 1.5s infinite'}}/>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#22c55e'}}>LIVE</div>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#22c55e'}}>LIVE</span>
             </div>
           </div>
-          {inPreGame?(
-            <div style={{textAlign:'center',padding:'30px 0'}}>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:'#2a5a7a',letterSpacing:'0.2em',marginBottom:16}}>HACK INITIATES IN</div>
-              <div style={{fontFamily:'"Syne",sans-serif',fontSize:72,fontWeight:800,color:'#fff',lineHeight:1,
-                textShadow:'0 0 30px #fff,0 0 60px rgba(255,255,255,0.5)',animation:'numAppear 0.5s ease'}}>
-                {fmtTime(preGameSecs)}
-              </div>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',marginTop:12}}>PREPARE YOUR NFT DEVICES · ACTIVATE TO CONNECT</div>
+          {preGameSecs>0?(
+            <div style={{textAlign:'center',padding:'20px 0'}}>
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.2em',marginBottom:12}}>HACK INITIATES IN</div>
+              <div style={{fontFamily:'"Syne",sans-serif',fontSize:64,fontWeight:800,color:'#fff',lineHeight:1,
+                textShadow:'0 0 30px #fff,0 0 60px rgba(255,255,255,0.5)'}}>{fmtTime(preGameSecs)}</div>
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a',marginTop:10}}>ACTIVATE YOUR DEVICES NOW</div>
             </div>
           ):(
-            <div style={{textAlign:'center'}}>
-              {/* Big white neon number */}
-              <div style={{position:'relative',display:'inline-block'}}>
-                <div key={String(lastNum)} style={{fontFamily:'"Syne",sans-serif',fontSize:80,fontWeight:800,lineHeight:1,
-                  color:'#ffffff',display:'block',
-                  textShadow:'0 0 20px #fff,0 0 40px rgba(255,255,255,0.8),0 0 80px rgba(255,255,255,0.4),0 0 120px rgba(255,255,255,0.2)',
-                  animation:glitching?'matrixGlitch 0.6s ease':'numAppear 0.4s cubic-bezier(.34,1.56,.64,1)'}}>
-                  {lastNum??'??'}
+            <>
+              <div style={{textAlign:'center',marginBottom:10}}>
+                <div style={{position:'relative',display:'inline-block'}}>
+                  <div key={String(lastNum)} style={{fontFamily:'"Syne",sans-serif',fontSize:72,fontWeight:800,lineHeight:1,color:'#fff',
+                    textShadow:'0 0 20px #fff,0 0 40px rgba(255,255,255,0.7),0 0 80px rgba(255,255,255,0.3)',
+                    animation:glitching?'matrixGlitch 0.6s ease':'numAppear 0.4s cubic-bezier(.34,1.56,.64,1)'}}>
+                    {lastNum??'??'}
+                  </div>
+                  {glitching&&(<>
+                    <div style={{position:'absolute',inset:0,fontFamily:'"Syne",sans-serif',fontSize:72,fontWeight:800,color:'#ff0040',opacity:0.5,animation:'glitchR 0.6s ease',pointerEvents:'none'}}>{lastNum}</div>
+                    <div style={{position:'absolute',inset:0,fontFamily:'"Syne",sans-serif',fontSize:72,fontWeight:800,color:'#00b8ff',opacity:0.5,animation:'glitchB 0.6s ease',pointerEvents:'none'}}>{lastNum}</div>
+                  </>)}
                 </div>
-                {glitching&&(<>
-                  <div style={{position:'absolute',inset:0,fontFamily:'"Syne",sans-serif',fontSize:80,fontWeight:800,color:'#ff0040',opacity:0.5,animation:'glitchR 0.6s ease',pointerEvents:'none'}}>{lastNum}</div>
-                  <div style={{position:'absolute',inset:0,fontFamily:'"Syne",sans-serif',fontSize:80,fontWeight:800,color:'#00b8ff',opacity:0.5,animation:'glitchB 0.6s ease',pointerEvents:'none'}}>{lastNum}</div>
-                </>)}
+                <div style={{display:'inline-flex',alignItems:'center',gap:5,padding:'3px 10px',background:clickWindowOpen?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.08)',border:`1px solid ${clickWindowOpen?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.25)'}`,borderRadius:20}}>
+                  <div style={{width:4,height:4,borderRadius:'50%',background:clickWindowOpen?'#22c55e':'#ef4444',animation:clickWindowOpen?'dot 1s infinite':'none'}}/>
+                  <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:clickWindowOpen?'#22c55e':'#ef4444'}}>{clickWindowOpen?'CLICK WINDOW OPEN':'WINDOW CLOSED'}</span>
+                </div>
+                {/* Previous 5 numbers */}
+                <div style={{display:'flex',gap:4,justifyContent:'center',marginTop:8}}>
+                  {prev5.map((n,i)=>(
+                    <div key={i} style={{width:24,height:24,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',background:'#0a1628',border:'1px solid #1e3a5f',fontFamily:'"DM Mono",monospace',fontSize:9,color:'#fff',opacity:(0.7-i*0.12),textShadow:'0 0 4px rgba(255,255,255,0.5)'}}>{n}</div>
+                  ))}
+                </div>
               </div>
-              {/* Click window */}
-              <div style={{display:'inline-flex',alignItems:'center',gap:6,marginTop:6,padding:'3px 10px',background:clickWindowOpen?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.08)',border:`1px solid ${clickWindowOpen?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.25)'}`,borderRadius:20}}>
-                <div style={{width:5,height:5,borderRadius:'50%',background:clickWindowOpen?'#22c55e':'#ef4444',animation:clickWindowOpen?'dot 1s infinite':'none'}}/>
-                <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:clickWindowOpen?'#22c55e':'#ef4444'}}>{clickWindowOpen?'CLICK WINDOW OPEN':'WINDOW CLOSED'}</div>
+              {/* Loading bar — remaining numbers */}
+              <div style={{marginBottom:8}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                  <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a'}}>NUMBERS DRAWN</span>
+                  <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#2a5a7a'}}>{calledNums.size}/90 · {100-pct}% remaining</span>
+                </div>
+                <div style={{height:6,background:'#0a1628',borderRadius:3,overflow:'hidden',border:'1px solid #0d2035',position:'relative'}}>
+                  <div style={{height:'100%',width:`${pct}%`,background:`linear-gradient(90deg,#00e5a0,#00b8ff ${Math.min(pct*2,100)}%,#f59e0b)`,borderRadius:3,transition:'width 0.5s ease',boxShadow:'0 0 8px rgba(0,229,160,0.5)',position:'relative'}}>
+                    <div style={{position:'absolute',right:0,top:0,bottom:0,width:3,background:'rgba(255,255,255,0.8)',borderRadius:2,boxShadow:'0 0 4px #fff'}}/>
+                  </div>
+                  {/* Tick marks every 9 (10%) */}
+                  {Array.from({length:9},(_,i)=>(
+                    <div key={i} style={{position:'absolute',left:`${(i+1)*100/9}%`,top:0,bottom:0,width:1,background:'#1e3a5f20'}}/>
+                  ))}
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',marginTop:2}}>
+                  {['0','10','20','30','40','50','60','70','80','90'].map(n=>(
+                    <span key={n} style={{fontFamily:'"DM Mono",monospace',fontSize:5,color:'#0a2535'}}>{n}</span>
+                  ))}
+                </div>
               </div>
-              {/* Previous numbers — white neon */}
-              <div style={{display:'flex',gap:5,justifyContent:'center',marginTop:10}}>
-                {prev6.map((n,i)=>(
-                  <div key={i} style={{width:28,height:28,borderRadius:5,display:'flex',alignItems:'center',justifyContent:'center',background:'#0a1628',border:'1px solid #1e3a5f',fontFamily:'"DM Mono",monospace',fontSize:10,
-                    color:'#ffffff',opacity:(1-i*0.14)*0.7,
-                    textShadow:'0 0 6px rgba(255,255,255,0.6)'}}>{n}</div>
-                ))}
-              </div>
-              {/* Numbers drawn count only — no grid */}
-              <div style={{marginTop:10,fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a'}}>{calledNums.size}/90 drawn</div>
-            </div>
+            </>
           )}
         </div>
+      </div>
+
+      {/* Winners stats below Hack Matrix */}
+      <div style={{background:'#020d1a',border:'1px solid #0a2535',borderRadius:10,padding:'8px 10px'}}>
+        <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:6}}>🏆 WINNER STATS</div>
+        {winRecords.length===0?(
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#0a2535',textAlign:'center',padding:'8px 0'}}>No wins claimed yet this round</div>
+        ):(
+          winRecords.map((r,i)=>(
+            <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'3px 0',borderBottom:'1px solid #0a1628',gap:6}}>
+              <div style={{width:8,height:6,borderRadius:1,background:LED_COLORS[r.wt],boxShadow:`0 0 4px ${LED_COLORS[r.wt]}`,flexShrink:0}}/>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#2a5a7a',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{WIN_LABELS[r.wt]}</span>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#00e5a0',flexShrink:0}}>{r.claimers.join(', ')}</span>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#f59e0b',flexShrink:0}}>${(r.split/1000).toFixed(0)}K ea</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )
@@ -631,65 +820,58 @@ function MatrixHackDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs}:
 
 // ─── Chat Terminal ────────────────────────────────────────────────────────────
 function ChatTerminal({nickname}:{nickname:string}){
-  const [lines,setLines]=useState<ChatLine[]>([
+  const[lines,setLines]=useState<ChatLine[]>([
     {t:'sys',m:'HACKING MATRIX v3.7.1 INITIALIZED'},
-    {t:'sys',m:'SECURE CHANNEL ACTIVE'},
     {t:'sys',m:`AGENT ${nickname.toUpperCase()} CONNECTED`},
   ])
-  const [input,setInput]=useState('')
-  const scrollBoxRef=useRef<HTMLDivElement>(null)
+  const[input,setInput]=useState('')
+  const scrollRef=useRef<HTMLDivElement>(null)
   const fileRef=useRef<HTMLInputElement>(null)
-  useEffect(()=>{const box=scrollBoxRef.current;if(box)box.scrollTop=box.scrollHeight},[lines])
+  useEffect(()=>{const b=scrollRef.current;if(b)b.scrollTop=b.scrollHeight},[lines])
   useEffect(()=>{
     const t=setInterval(()=>{
       const cmd=HACK_CMDS[Math.floor(Math.random()*HACK_CMDS.length)]
-      const hex=Math.random().toString(16).slice(2,8).toUpperCase()
-      setLines(p=>[...p.slice(-80),{t:'cmd',m:`> ${cmd}... [0x${hex}]`}])
-    },3200+Math.random()*2000)
+      setLines(p=>[...p.slice(-60),{t:'cmd',m:`> ${cmd}... [${Math.random().toString(16).slice(2,6).toUpperCase()}]`}])
+    },3500+Math.random()*2000)
     return()=>clearInterval(t)
   },[])
-  const send=()=>{
-    if(!input.trim())return
-    setLines(p=>[...p,{t:'user',m:`${nickname}: ${input}`}]);setInput('')
-    setTimeout(()=>setLines(p=>[...p,{t:'cmd',m:`> ${HACK_CMDS[Math.floor(Math.random()*HACK_CMDS.length)]}... [ACK]`}]),600)
-  }
+  const send=()=>{if(!input.trim())return;setLines(p=>[...p,{t:'user',m:`${nickname}: ${input}`}]);setInput('')}
   const handleFile=(e:React.ChangeEvent<HTMLInputElement>)=>{
-    const file=e.target.files?.[0];if(!file)return
-    const reader=new FileReader()
-    reader.onload=ev=>{
+    const f=e.target.files?.[0];if(!f)return
+    const r=new FileReader()
+    r.onload=ev=>{
       const src=ev.target?.result as string
-      if(file.type.startsWith('image/')) setLines(p=>[...p,{t:'img',m:`${nickname} shared: ${file.name}`,src}])
-      else setLines(p=>[...p,{t:'sys',m:`📎 ${nickname} shared: ${file.name}`}])
+      if(f.type.startsWith('image/'))setLines(p=>[...p,{t:'img',m:`${nickname}: ${f.name}`,src}])
+      else setLines(p=>[...p,{t:'sys',m:`📎 ${nickname}: ${f.name}`}])
     }
-    reader.readAsDataURL(file);e.target.value=''
+    r.readAsDataURL(f);e.target.value=''
   }
   return(
     <div style={{display:'flex',flexDirection:'column',background:'#020d1a',border:'1px solid #0a2535',borderRadius:12,overflow:'hidden'}}>
-      <div style={{padding:'5px 10px',borderBottom:'1px solid #0a2535',fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#00e5a0',letterSpacing:'0.12em',display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
+      <div style={{padding:'5px 10px',borderBottom:'1px solid #0a2535',fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#00e5a0',display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
         <div style={{width:5,height:5,borderRadius:'50%',background:'#22c55e',animation:'dot 1.5s infinite'}}/>
-        HACKING MATRIX — SECURE CHAT
+        SECURE CHAT
       </div>
-      <div ref={scrollBoxRef} style={{height:260,overflowY:'auto',padding:'7px 8px',display:'flex',flexDirection:'column',gap:3}}>
+      <div ref={scrollRef} style={{height:240,overflowY:'auto',padding:'6px 8px',display:'flex',flexDirection:'column',gap:2}}>
         {lines.map((l,i)=>(
           <div key={i}>
-            <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:l.t==='sys'?'#00e5a0':l.t==='user'?'#00b8ff':l.t==='img'?'#f59e0b':'#2a5a7a',fontWeight:l.t==='user'?600:400}}>{l.m}</div>
-            {l.t==='img'&&l.src&&<img src={l.src} alt="shared" style={{maxWidth:'100%',maxHeight:120,borderRadius:6,marginTop:4,border:'1px solid #1e3a5f',display:'block'}}/>}
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:l.t==='sys'?'#00e5a0':l.t==='user'?'#00b8ff':l.t==='img'?'#f59e0b':'#2a5a7a',fontWeight:l.t==='user'?600:400}}>{l.m}</div>
+            {l.t==='img'&&l.src&&<img src={l.src} alt="" style={{maxWidth:'100%',maxHeight:100,borderRadius:5,marginTop:3,border:'1px solid #1e3a5f',display:'block'}}/>}
           </div>
         ))}
       </div>
-      <div style={{display:'flex',borderTop:'1px solid #0a2535',flexShrink:0}}>
-        <input ref={fileRef} type="file" accept="image/*,video/*,audio/*,.pdf,.txt" onChange={handleFile} style={{display:'none'}}/>
-        <button onClick={()=>fileRef.current?.click()} style={{background:'#0a1628',border:'none',borderRight:'1px solid #0a2535',padding:'6px 10px',color:'#2a5a7a',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center'}}>📎</button>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()}
-          placeholder="TYPE COMMAND..."
-          style={{flex:1,background:'transparent',border:'none',padding:'6px 8px',fontFamily:'"DM Mono",monospace',fontSize:8,color:'#00b8ff',outline:'none'}}/>
-        <button onClick={send} style={{background:'#0a1628',border:'none',borderLeft:'1px solid #0a2535',padding:'6px 10px',color:'#2a5a7a',cursor:'pointer',fontFamily:'"DM Mono",monospace',fontSize:8}}>SEND</button>
+      <div style={{display:'flex',borderTop:'1px solid #0a2535'}}>
+        <input ref={fileRef} type="file" accept="image/*,video/*,.pdf,.txt" onChange={handleFile} style={{display:'none'}}/>
+        <button onClick={()=>fileRef.current?.click()} style={{background:'#0a1628',border:'none',borderRight:'1px solid #0a2535',padding:'6px 9px',color:'#2a5a7a',cursor:'pointer',fontSize:12}}>📎</button>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="TYPE..."
+          style={{flex:1,background:'transparent',border:'none',padding:'6px 7px',fontFamily:'"DM Mono",monospace',fontSize:8,color:'#00b8ff',outline:'none'}}/>
+        <button onClick={send} style={{background:'#0a1628',border:'none',borderLeft:'1px solid #0a2535',padding:'6px 9px',color:'#2a5a7a',cursor:'pointer',fontFamily:'"DM Mono",monospace',fontSize:8}}>TX</button>
       </div>
     </div>
   )
 }
 
-// ─── Game Stats with LED progress bars ───────────────────────────────────────
+// ─── Game Stats ───────────────────────────────────────────────────────────────
 function GameStats({devices,calledNums,bankruptCount,liveBank,nickname,winStates}:{
   devices:Device[];calledNums:Set<number>;bankruptCount:number;liveBank:number;nickname:string;winStates:Record<WinType,WinState>
 }){
@@ -697,20 +879,17 @@ function GameStats({devices,calledNums,bankruptCount,liveBank,nickname,winStates
   return(
     <div style={{display:'flex',flexDirection:'column',gap:8}}>
       <div style={{background:'#020d1a',border:'1px solid #0a2535',borderRadius:12,padding:10}}>
-        <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.12em',marginBottom:7}}>GAME STATS</div>
-        {[['AGENT',nickname],['TARGET',BANKS[liveBank].name],['DRAWN',`${calledNums.size}/90`],['NFT',String(devices.length)],['ACTIVE',String(devices.filter(d=>d.active).length)],['BANKRUPT',`${bankruptCount}/3`]].map(([k,v])=>(
+        <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#2a5a7a',marginBottom:7}}>GAME STATS</div>
+        {[['AGENT',nickname],['TARGET',BANKS[liveBank].name],['DRAWN',`${calledNums.size}/90`],['DEVICES',String(devices.length)],['ACTIVE',String(devices.filter(d=>d.active).length)],['BANKRUPT',`${bankruptCount}/3`]].map(([k,v])=>(
           <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'2px 0',borderBottom:'1px solid #0a1628'}}>
             <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a'}}>{k}</span>
             <span style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#4a7fa5',fontWeight:600}}>{v}</span>
           </div>
         ))}
       </div>
-      {/* LED Key with progress bars */}
       <div style={{background:'#020d1a',border:'1px solid #0a2535',borderRadius:10,padding:10}}>
         <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a',marginBottom:7}}>WIN STATUS</div>
-        {LED_TYPES.map(type=>(
-          <LedWithProgress key={type} type={type} winState={winStates[type]} devices={devices} winStates={winStates}/>
-        ))}
+        {LED_TYPES.map(type=><LedProgress key={type} type={type} ws={winStates[type]} devices={devices}/>)}
       </div>
     </div>
   )
@@ -718,65 +897,119 @@ function GameStats({devices,calledNums,bankruptCount,liveBank,nickname,winStates
 
 // ─── Nickname Modal ───────────────────────────────────────────────────────────
 function NicknameModal({onConfirm}:{onConfirm:(name:string)=>void}){
-  const [name,setName]=useState(''),  [err,setErr]=useState('')
-  const submit=()=>{if(name.trim().length<3){setErr('Min 3 chars');return}if(name.trim().length>16){setErr('Max 16 chars');return}onConfirm(name.trim())}
+  const[name,setName]=useState(''),[err,setErr]=useState('')
+  const go=()=>{if(name.trim().length<3){setErr('Min 3 chars');return}if(name.trim().length>16){setErr('Max 16 chars');return}onConfirm(name.trim())}
   return(
-    <div style={{position:'fixed',inset:0,background:'linear-gradient(135deg,#010810,#020d1a)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
-      <div style={{background:'#020d1a',border:'1px solid #0a3a5a',borderRadius:20,padding:36,maxWidth:360,width:'90%',boxShadow:'0 0 60px rgba(0,229,160,0.08)'}}>
+    <div style={{position:'fixed',inset:0,background:'linear-gradient(135deg,#010810,#020d1a)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16}}>
+      <div style={{background:'#020d1a',border:'1px solid #0a3a5a',borderRadius:20,padding:32,maxWidth:340,width:'100%',boxShadow:'0 0 60px rgba(0,229,160,0.08)'}}>
         <div style={{fontFamily:'"Syne",sans-serif',fontSize:28,fontWeight:800,color:'#00e5a0',textShadow:'0 0 20px #00e5a060',marginBottom:4}}>RANSOME</div>
-        <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:'#2a5a7a',letterSpacing:'0.18em',marginBottom:28}}>HACK THE BANKS — CLAIM THE VAULT</div>
+        <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:'#2a5a7a',letterSpacing:'0.15em',marginBottom:24}}>HACK THE BANKS — CLAIM THE VAULT</div>
         <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:'#4a7fa5',marginBottom:8}}>CHOOSE YOUR AGENT NAME</div>
-        <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="e.g. GHOST_ZERO" maxLength={16}
-          style={{width:'100%',background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:10,padding:'10px 14px',fontFamily:'"DM Mono",monospace',fontSize:13,color:'#00e5a0',outline:'none',boxSizing:'border-box',marginBottom:6,caretColor:'#00e5a0'}}/>
+        <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&go()} placeholder="e.g. GHOST_ZERO" maxLength={16}
+          style={{width:'100%',background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:10,padding:'12px 14px',fontFamily:'"DM Mono",monospace',fontSize:14,color:'#00e5a0',outline:'none',boxSizing:'border-box',marginBottom:6,caretColor:'#00e5a0'}}/>
         {err&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#ef4444',marginBottom:8}}>{err}</div>}
-        <button onClick={submit} style={{width:'100%',background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:10,padding:'12px',fontFamily:'"Syne",sans-serif',fontSize:14,fontWeight:700,cursor:'pointer',marginTop:6}}>ENTER THE MATRIX →</button>
+        <button onClick={go} style={{width:'100%',background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:10,padding:'14px',fontFamily:'"Syne",sans-serif',fontSize:15,fontWeight:700,cursor:'pointer',marginTop:6}}>ENTER THE MATRIX →</button>
       </div>
+    </div>
+  )
+}
+
+// ─── Maximized Device Grid (fullscreen overlay) ───────────────────────────────
+function MaximizedDevices({devices,currentNum,clickWindowOpen,calledNums,onCellClick,onClaim,onActivate,winStates,bankruptCount,timer,totalTimer,liveBank,onClose}:{
+  devices:Device[];currentNum:number|null;clickWindowOpen:boolean;calledNums:Set<number>;
+  onCellClick:(id:number,r:number,c:number)=>void;onClaim:(id:number,w:WinType)=>void;
+  onActivate:(id:number)=>void;winStates:Record<WinType,WinState>;bankruptCount:number;
+  timer:number;totalTimer:number;liveBank:number;onClose:()=>void
+}){
+  const[page,setPage]=useState(0)
+  const total=Math.max(1,Math.ceil(devices.length/10))
+  const pageDevs=devices.slice(page*10,page*10+10)
+  // Swipe support
+  const touchRef=useRef<number|null>(null)
+  const onTouchStart=(e:React.TouchEvent)=>{touchRef.current=e.touches[0].clientX}
+  const onTouchEnd=(e:React.TouchEvent)=>{
+    if(touchRef.current===null)return
+    const dx=e.changedTouches[0].clientX-touchRef.current
+    if(dx<-50&&page<total-1)setPage(p=>p+1)
+    if(dx>50&&page>0)setPage(p=>p-1)
+    touchRef.current=null
+  }
+  return(
+    <div style={{position:'fixed',inset:0,background:'#010810',zIndex:100,display:'flex',flexDirection:'column',overflow:'hidden'}}
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 14px',borderBottom:'1px solid #0a1f3a',background:'rgba(2,13,26,0.98)',flexShrink:0}}>
+        <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:'#1e4a6a'}}>
+          ◈ DEVICES · {devices.filter(d=>d.active).length}/{devices.length} active · pg {page+1}/{total}
+        </div>
+        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          {Array.from({length:total},(_,i)=>(
+            <button key={i} onClick={()=>setPage(i)} style={{width:7,height:7,borderRadius:'50%',border:'none',cursor:'pointer',padding:0,background:i===page?'#00e5a0':'#1e3a5f',boxShadow:i===page?'0 0 5px #00e5a0':'none'}}/>
+          ))}
+          <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
+            style={{width:26,height:26,borderRadius:6,background:'#0a1628',border:'1px solid #1e3a5f',color:page===0?'#1e3a5f':'#4a7fa5',cursor:'pointer',fontFamily:'"DM Mono",monospace',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
+          <button onClick={()=>setPage(p=>Math.min(total-1,p+1))} disabled={page>=total-1}
+            style={{width:26,height:26,borderRadius:6,background:'#0a1628',border:'1px solid #1e3a5f',color:page>=total-1?'#1e3a5f':'#4a7fa5',cursor:'pointer',fontFamily:'"DM Mono",monospace',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
+          <button onClick={onClose} style={{background:'#0a1628',border:'1px solid #1e3a5f',color:'#4a7fa5',borderRadius:8,padding:'5px 12px',fontFamily:'"DM Mono",monospace',fontSize:9,cursor:'pointer'}}>⊟ EXIT</button>
+        </div>
+      </div>
+      {/* 5-col grid filling screen */}
+      <div style={{flex:1,overflowY:'auto',padding:'10px 12px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8}}>
+          {pageDevs.map(d=>(
+            <HackingDevice key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
+              calledNums={calledNums} onCellClick={onCellClick} onClaim={onClaim} onActivate={onActivate}
+              winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank}/>
+          ))}
+        </div>
+      </div>
+      {/* Swipe hint */}
+      {total>1&&<div style={{textAlign:'center',padding:'6px',fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e3a5f',flexShrink:0}}>← SWIPE TO NAVIGATE PAGES →</div>}
     </div>
   )
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Ransome(){
-  const [phase,setPhase]=useState<string>('setup')
-  const [nickname,setNickname]=useState('')
-  const [wallet,setWallet]=useState<string|null>(null)
-  const [devices,setDevices]=useState<Device[]>([])
-  const [calledNums,setCalledNums]=useState<Set<number>>(new Set())
-  const [calledOrder,setCalledOrder]=useState<number[]>([])
-  const [timer,setTimer]=useState(60)
-  const [totalTimer,setTotalTimer]=useState(60)
-  const [clickWindowOpen,setClickWindowOpen]=useState(false)
-  const [announcement,setAnnouncement]=useState<string|null>(null)
-  const [bankruptCount,setBankruptCount]=useState(0)
-  const [mintCount,setMintCount]=useState(1)
-  const [mintToken,setMintToken]=useState('USDT')
-  const [selectedBank,setSelectedBank]=useState<number|null>(null)
-  const [hoveredBank,setHoveredBank]=useState<number|null>(null)
-  const [devicesExpanded,setDevicesExpanded]=useState(false)
-  const [devicePage,setDevicePage]=useState(0)
-  const [showDemo,setShowDemo]=useState(false)
-  const [preGameSecs,setPreGameSecs]=useState(0)
-  const [bankHacked,setBankHacked]=useState(false)
-  const [winStates,setWinStates]=useState<Record<WinType,WinState>>(defaultWinStates())
+  const[phase,setPhase]=useState<string>('setup')
+  const[nickname,setNickname]=useState('')
+  const[wallet,setWallet]=useState<string|null>(null)
+  const[devices,setDevices]=useState<Device[]>([])
+  const[calledNums,setCalledNums]=useState<Set<number>>(new Set())
+  const[calledOrder,setCalledOrder]=useState<number[]>([])
+  const[timer,setTimer]=useState(60)
+  const[totalTimer,setTotalTimer]=useState(60)
+  const[clickWindowOpen,setClickWindowOpen]=useState(false)
+  const[announcement,setAnnouncement]=useState<string|null>(null)
+  const[bankruptCount,setBankruptCount]=useState(0)
+  const[mintCount,setMintCount]=useState(1)
+  const[mintToken,setMintToken]=useState('USDT')
+  const[selectedBank,setSelectedBank]=useState<number|null>(null)
+  const[devicesExpanded,setDevicesExpanded]=useState(false)
+  const[preGameSecs,setPreGameSecs]=useState(0)
+  const[bankHacked,setBankHacked]=useState(false)
+  const[winRecords,setWinRecords]=useState<WinRecord[]>([])
+  const[roundNum,setRoundNum]=useState(0)
+  // claimers accumulating per round per winType
+  const pendingClaimers=useRef<Record<WinType,string[]>>({EARLY_FIVE:[],TOP_LINE:[],MIDDLE_LINE:[],BOTTOM_LINE:[],FULL_HOUSE_1:[],FULL_HOUSE_2:[],FULL_HOUSE_3:[]})
+  const roundTimers=useRef<Record<string,ReturnType<typeof setTimeout>>>({})
+  const[winStates,setWinStates]=useState<Record<WinType,WinState>>(defaultWinStates())
   const timerRef=useRef<ReturnType<typeof setInterval>|null>(null)
   const preTimerRef=useRef<ReturnType<typeof setInterval>|null>(null)
   const flickerTimers=useRef<Record<string,ReturnType<typeof setTimeout>>>({})
   const currentHour=new Date().getUTCHours()
   const liveBank=getLiveBank(currentHour)
   const currentNum=calledOrder[calledOrder.length-1]??null
-  const totalPages=Math.max(1,Math.ceil(devices.length/10))
-  const hourCountdown=useHourCountdown()
+  const hourCd=useHourCountdown()
 
   const announce=(msg:string)=>{setAnnouncement(msg);setTimeout(()=>setAnnouncement(null),6000)}
 
   const drawNumber=useCallback(()=>{
+    // Finalize any pending multi-claimers from previous round
+    setRoundNum(r=>r+1)
     setClickWindowOpen(false)
     setCalledNums(prev=>{
-      if(prev.size>=90){
-        // All 90 numbers drawn — bank hacked, distribute unclaimed wins
-        setBankHacked(true)
-        return prev
-      }
+      if(prev.size>=90){setBankHacked(true);return prev}
       const remaining=Array.from({length:90},(_,i)=>i+1).filter(n=>!prev.has(n))
       if(!remaining.length){setBankHacked(true);return prev}
       const num=remaining[Math.floor(Math.random()*remaining.length)]
@@ -790,19 +1023,14 @@ export default function Ransome(){
     })
   },[])
 
-  // When bank is hacked — announce + distribute unclaimed to wallet + exit
   useEffect(()=>{
     if(!bankHacked)return
     if(timerRef.current)clearInterval(timerRef.current)
     setClickWindowOpen(false)
-    announce(`🏦 BANK HACKED! ALL 90 NUMBERS DRAWN!\n💸 Unclaimed winnings → ${CLAIM_WALLET.slice(0,8)}...${CLAIM_WALLET.slice(-6)}\n⏸ Returning to lobby in 8 seconds...`)
+    announce(`🏦 BANK HACKED! ALL 90 DRAWN!\n💸 Unclaimed → ${CLAIM_WALLET.slice(0,8)}...${CLAIM_WALLET.slice(-6)}\nReturning to lobby...`)
     setTimeout(()=>{
-      setPhase('lobby')
-      setBankHacked(false)
-      setCalledNums(new Set())
-      setCalledOrder([])
-      setWinStates(defaultWinStates())
-      setDevicePage(0)
+      setPhase('lobby');setBankHacked(false);setCalledNums(new Set());setCalledOrder([])
+      setWinStates(defaultWinStates());setWinRecords([]);setRoundNum(0)
     },8000)
   },[bankHacked])
 
@@ -815,12 +1043,11 @@ export default function Ransome(){
           const t=60+Math.floor(Math.random()*31);setTimer(t);setTotalTimer(t)
           timerRef.current=setInterval(()=>{
             setTimer(prev=>{
-              if(prev<=1){setClickWindowOpen(false);const next=60+Math.floor(Math.random()*31);setTotalTimer(next);drawNumber();return next}
+              if(prev<=1){setClickWindowOpen(false);const nxt=60+Math.floor(Math.random()*31);setTotalTimer(nxt);drawNumber();return nxt}
               return prev-1
             })
           },1000)
-          drawNumber()
-          return 0
+          drawNumber();return 0
         }
         return p-1
       })
@@ -831,15 +1058,15 @@ export default function Ransome(){
   useEffect(()=>{
     if(phase!=='game')return
     setWinStates(prev=>{
-      const next={...prev};let announced=false
+      const next={...prev};let ann=false
       devices.forEach(d=>{
         if(!d.active||d.corrupted)return
-        const all=d.grid.flat(),clickedC=all.filter(c=>c.clicked)
-        if(clickedC.length>=5&&!next.EARLY_FIVE.claimable){next.EARLY_FIVE={...next.EARLY_FIVE,claimable:true};if(!announced){announce(`⚡ ${d.nftId} — EARLY FIVE READY!`);announced=true}}
-        if(d.grid[0].filter(c=>c.num).every(c=>c.clicked)&&!next.TOP_LINE.claimable){next.TOP_LINE={...next.TOP_LINE,claimable:true};if(!announced){announce(`⚡ ${d.nftId} — TOP LINE READY!`);announced=true}}
-        if(d.grid[1].filter(c=>c.num).every(c=>c.clicked)&&!next.MIDDLE_LINE.claimable){next.MIDDLE_LINE={...next.MIDDLE_LINE,claimable:true};if(!announced){announce(`⚡ ${d.nftId} — MIDDLE LINE READY!`);announced=true}}
-        if(d.grid[2].filter(c=>c.num).every(c=>c.clicked)&&!next.BOTTOM_LINE.claimable){next.BOTTOM_LINE={...next.BOTTOM_LINE,claimable:true};if(!announced){announce(`⚡ ${d.nftId} — BOTTOM LINE READY!`);announced=true}}
-        if(all.filter(c=>c.num).every(c=>c.clicked)){const fk=`FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType;if(!next[fk].claimable){next[fk]={...next[fk],claimable:true};if(!announced){announce(`🔥 ${d.nftId} — FULL HOUSE! ALL 15 MATCHED!`);announced=true}}}
+        const all=d.grid.flat(),nc=all.filter(c=>c.clicked)
+        if(nc.length>=5&&!next.EARLY_FIVE.claimable){next.EARLY_FIVE={...next.EARLY_FIVE,claimable:true};if(!ann){announce(`⚡ ${d.nftId} — EARLY FIVE!`);ann=true}}
+        if(d.grid[0].filter(c=>c.num).every(c=>c.clicked)&&!next.TOP_LINE.claimable){next.TOP_LINE={...next.TOP_LINE,claimable:true};if(!ann){announce(`⚡ ${d.nftId} — TOP LINE!`);ann=true}}
+        if(d.grid[1].filter(c=>c.num).every(c=>c.clicked)&&!next.MIDDLE_LINE.claimable){next.MIDDLE_LINE={...next.MIDDLE_LINE,claimable:true};if(!ann){announce(`⚡ ${d.nftId} — MIDDLE LINE!`);ann=true}}
+        if(d.grid[2].filter(c=>c.num).every(c=>c.clicked)&&!next.BOTTOM_LINE.claimable){next.BOTTOM_LINE={...next.BOTTOM_LINE,claimable:true};if(!ann){announce(`⚡ ${d.nftId} — BOTTOM LINE!`);ann=true}}
+        if(all.filter(c=>c.num).every(c=>c.clicked)){const fk=`FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType;if(!next[fk].claimable){next[fk]={...next[fk],claimable:true};if(!ann){announce(`🔥 ${d.nftId} — FULL HOUSE!`);ann=true}}}
       })
       return next
     })
@@ -855,149 +1082,125 @@ export default function Ransome(){
     }))
   }
 
+  // Claim: accumulate claimers within same round, split prize, then flicker ALL devices
   const handleClaim=(devId:number,wt:WinType)=>{
     if(winStates[wt].claimed)return
     const dev=devices.find(d=>d.id===devId)
-    setDevices(ds=>ds.map(d=>d.id!==devId?d:{...d,claimed:new Set(Array.from(d.claimed).concat([wt]))}))
-    const matchedNums=dev?dev.grid.flat().filter(c=>c.clicked).map(c=>c.num).join(', '):''
-    announce(`✅ ${dev?.nftId??`DEV-${devId}`} — ${WIN_LABELS[wt]} CLAIMED!\nMatched: ${matchedNums}`)
+    if(!dev)return
+    // Add to pending claimers for this win type
+    const claimers=pendingClaimers.current[wt]
+    if(!claimers.includes(dev.nftId)){
+      claimers.push(dev.nftId)
+      setDevices(ds=>ds.map(d=>d.id!==devId?d:{...d,claimed:new Set(Array.from(d.claimed).concat([wt]))}))
+    }
     if(wt.startsWith('FULL_HOUSE'))setBankruptCount(b=>Math.min(b+1,3))
-    // Start 60s flicker then broken LED for all OTHER devices
-    setWinStates(prev=>({...prev,[wt]:{...prev[wt],claimed:true,flickering:true,broken:false}}))
-    const key=`flicker_${wt}`
-    flickerTimers.current[key]=setTimeout(()=>{
-      setWinStates(p=>({...p,[wt]:{...p[wt],flickering:false,broken:true}}))
-    },60000)
+
+    // Debounce: wait 500ms for other same-round claimers
+    const key=`claim_${wt}`
+    if(roundTimers.current[key])clearTimeout(roundTimers.current[key])
+    roundTimers.current[key]=setTimeout(()=>{
+      const final=[...pendingClaimers.current[wt]]
+      pendingClaimers.current[wt]=[]
+      const vault=WIN_VAULT[wt]
+      const split=Math.floor(vault/final.length)
+      setWinRecords(r=>[...r,{wt,claimers:final,round:roundNum,split}])
+      announce(`✅ ${WIN_LABELS[wt]} CLAIMED!\n${final.join(' + ')} → $${(split/1000).toFixed(0)}K each`)
+      // Mark claimed + flicker all devices' LEDs for this win
+      setWinStates(prev=>({...prev,[wt]:{...prev[wt],claimed:true,claimers:final,flickering:true,broken:false}}))
+      const fKey=`flicker_${wt}`
+      if(flickerTimers.current[fKey])clearTimeout(flickerTimers.current[fKey])
+      flickerTimers.current[fKey]=setTimeout(()=>{
+        setWinStates(p=>({...p,[wt]:{...p[wt],flickering:false,broken:true}}))
+      },60000)
+    },500)
   }
 
   const handleActivate=(devId:number)=>{
     setDevices(ds=>ds.map(d=>d.id!==devId?d:{...d,active:true}))
     const dev=devices.find(d=>d.id===devId)
-    announce(`⚡ ${dev?.nftId??`DEV-${devId}`} CONNECTED TO ${BANKS[liveBank].name}`)
+    announce(`⚡ ${dev?.nftId} CONNECTED`)
+  }
+
+  const handleActivateAll=()=>{
+    setDevices(ds=>ds.map(d=>({...d,active:true})))
+    announce(`⚡ ALL ${devices.length} DEVICES CONNECTED`)
   }
 
   const mintDevices=()=>{
     const nd=Array.from({length:mintCount},(_,i)=>generateDevice(devices.length+i))
     setDevices(p=>[...p,...nd])
-    announce(`⚡ ${mintCount} NFT DEVICE${mintCount>1?'S':''} MINTED`)
+    announce(`⚡ ${mintCount} DEVICE${mintCount>1?'S':''} MINTED`)
   }
 
-  const enterGame=()=>{
-    setPhase('game');startPreGame(300)
-    announce('🔴 BREACH INITIATED — HACK STARTS IN 5 MINUTES')
-  }
+  const enterGame=()=>{setPhase('game');startPreGame(300);announce('🔴 HACK IN 5 MINUTES')}
 
-  if(phase==='setup') return(
+  if(phase==='setup')return(
     <div style={{minHeight:'100vh',background:'#010810'}}>
       <NicknameModal onConfirm={name=>{setNickname(name);setPhase('lobby')}}/>
     </div>
   )
 
-  // ── LOBBY ──────────────────────────────────────────────────────────────────
-  if(phase==='lobby') return(
-    <div style={{minHeight:'100vh',background:'linear-gradient(180deg,#010810,#020d1a)',color:'#c8d8e8',padding:'20px 16px'}}>
-      {showDemo&&<DemoHackModal onClose={()=>setShowDemo(false)}/>}
-
-      {/* Header — RANSOME | Ad space | Agent/Wallet */}
-      <div style={{display:'flex',alignItems:'center',marginBottom:20,gap:0}}>
+  // ── LOBBY ─────────────────────────────────────────────────────────────────
+  if(phase==='lobby')return(
+    <div style={{minHeight:'100vh',background:'linear-gradient(180deg,#010810,#020d1a)',color:'#c8d8e8',padding:'16px 14px',boxSizing:'border-box'}}>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',marginBottom:16,gap:10}}>
         <div style={{flexShrink:0}}>
-          <div style={{fontFamily:'"Syne",sans-serif',fontSize:26,fontWeight:800,color:'#00e5a0',textShadow:'0 0 20px #00e5a060'}}>RANSOME</div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.18em'}}>HACK THE BANKS — CLAIM THE VAULT</div>
+          <div style={{fontFamily:'"Syne",sans-serif',fontSize:clamp(22,4,'vw'),fontWeight:800,color:'#00e5a0',textShadow:'0 0 20px #00e5a060'}}>RANSOME</div>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:'clamp(7px,1.8vw,9px)',color:'#2a5a7a',letterSpacing:'0.15em'}}>HACK THE BANKS</div>
         </div>
-        {/* Ad banner space — between title and right controls */}
-        <div style={{flex:1,margin:'0 16px',height:44,background:'rgba(0,229,160,0.03)',border:'1px dashed #0a2535',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#0a2535',letterSpacing:'0.2em'}}>ADVERTISEMENT SPACE</div>
+        <div style={{flex:1,height:40,background:'rgba(0,229,160,0.02)',border:'1px dashed #0a2535',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 8px'}}>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#0a2535'}}>AD SPACE</span>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center',flexShrink:0}}>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#4a7fa5',background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:8,padding:'5px 10px'}}>👤 {nickname}</div>
-          <button onClick={()=>setWallet('HaCk...3r0x')} style={{background:wallet?'#0a1628':'linear-gradient(135deg,#00e5a0,#00b8ff)',color:wallet?'#00e5a0':'#000',border:wallet?'1px solid #00e5a040':'none',borderRadius:8,padding:'6px 14px',fontFamily:'"DM Mono",monospace',fontSize:9,cursor:'pointer',fontWeight:600}}>
-            {wallet?`✓ ${wallet}`:'CONNECT WALLET'}
+        <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0}}>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:'clamp(7px,1.8vw,9px)',color:'#4a7fa5',background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:8,padding:'5px 8px'}}>👤 {nickname}</div>
+          <button onClick={()=>setWallet('HaCk...3r0x')} style={{background:wallet?'#0a1628':'linear-gradient(135deg,#00e5a0,#00b8ff)',color:wallet?'#00e5a0':'#000',border:wallet?'1px solid #00e5a040':'none',borderRadius:8,padding:'6px 10px',fontFamily:'"DM Mono",monospace',fontSize:'clamp(8px,1.8vw,10px)',cursor:'pointer',fontWeight:600,whiteSpace:'nowrap'}}>
+            {wallet?`✓ ${wallet}`:'CONNECT'}
           </button>
         </div>
       </div>
 
-      {/* Live bank banner */}
-      <div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:14,padding:'12px 16px',marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      {/* Live bank pill */}
+      <div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:12,padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
         <div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#ef4444',letterSpacing:'0.15em',marginBottom:2}}>🔴 LIVE NOW — 1 HOUR WINDOW</div>
-          <div style={{fontFamily:'"Syne",sans-serif',fontSize:20,fontWeight:800,color:'#fff'}}>{BANKS[liveBank].name}</div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a'}}>{BANKS[liveBank].city} · UTC{BANKS[liveBank].tz>=0?'+':''}{BANKS[liveBank].tz}</div>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#ef4444',letterSpacing:'0.12em',marginBottom:2}}>🔴 LIVE NOW</div>
+          <div style={{fontFamily:'"Syne",sans-serif',fontSize:'clamp(14px,4vw,20px)',fontWeight:800,color:'#fff'}}>{BANKS[liveBank].name}</div>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a'}}>{BANKS[liveBank].city} · {BANKS[liveBank].vault}</div>
         </div>
         <div style={{textAlign:'right'}}>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a'}}>VAULT</div>
-          <div style={{fontFamily:'"Syne",sans-serif',fontSize:22,fontWeight:800,color:'#00e5a0'}}>$1,000,000</div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:hourCountdown===0?'#22c55e':'#ef4444',marginTop:2,fontWeight:700}}>
-            {hourCountdown===0?'🟢 HACK WINDOW OPEN':`⏱ HACK IN ${fmtTime(hourCountdown)}`}
+          <div style={{fontFamily:'"Syne",sans-serif',fontSize:'clamp(16px,4vw,22px)',fontWeight:800,color:'#00e5a0'}}>$1,000,000</div>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:hourCd===0?'#22c55e':'#ef4444',fontWeight:700}}>
+            {hourCd===0?'🟢 OPEN':`⏱ ${fmtTime(hourCd)}`}
           </div>
         </div>
       </div>
 
-      {/* Bisected: Map (left) + Mint (right) */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
-        {/* Left: Full world map with bank table */}
+      {/* Main layout: Map full width, then Device skeleton below on mobile / side by side on wide */}
+      <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,340px)',gap:14,marginBottom:14,alignItems:'start'}}>
+        {/* Left: World map sketch */}
         <div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',letterSpacing:'0.12em',marginBottom:6,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <span>⬡ GLOBAL BANK NETWORK</span>
-            {hoveredBank!==null&&<span style={{color:'#00e5a0',fontSize:7}}>{BANKS[hoveredBank].name}</span>}
-          </div>
-          <LobbyWorldMap selectedBank={selectedBank} onSelect={setSelectedBank} currentHour={currentHour} hoveredBank={hoveredBank} onHover={setHoveredBank}/>
-          <button onClick={()=>setShowDemo(true)} style={{width:'100%',marginTop:8,background:'linear-gradient(135deg,#0a1628,#0d1f3a)',border:'1px solid #00e5a040',borderRadius:10,padding:'10px',fontFamily:'"DM Mono",monospace',fontSize:9,color:'#00e5a0',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-            ▶ DEMO HACK — See how to play
-          </button>
-        </div>
-
-        {/* Right: Mint */}
-        <div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',letterSpacing:'0.12em',marginBottom:6}}>◈ MINT NFT HACKING DEVICES</div>
-          <div style={{background:'#020d1a',border:'1px solid #0a2a4a',borderRadius:14,padding:14,height:'calc(100% - 22px)'}}>
-            {!wallet?(
-              <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:12}}>
-                <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',textAlign:'center'}}>Connect wallet to mint NFT devices</div>
-                <button onClick={()=>setWallet('HaCk...3r0x')} style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:9,padding:'10px 20px',fontFamily:'"DM Mono",monospace',fontSize:10,cursor:'pointer',fontWeight:700}}>CONNECT WALLET →</button>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:6}}>⬡ GLOBAL BANK NETWORK — 23 BANKS · 55 MIN ROUNDS</div>
+          <WorldMapSketch currentHour={currentHour} onSelectBank={setSelectedBank}/>
+          {selectedBank!==null&&(
+            <div style={{marginTop:8,background:'#020d1a',border:'1px solid #0a2535',borderRadius:8,padding:'8px 12px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:'#00e5a0',fontWeight:700}}>{BANKS[selectedBank].name}</div>
+                <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#2a5a7a'}}>{BANKS[selectedBank].city} · {BANKS[selectedBank].region} · {BANKS[selectedBank].vault}</div>
               </div>
-            ):(
-              <>
-                <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
-                  {['USDT','USDC','SOL','RNSM'].map(t=>(
-                    <button key={t} onClick={()=>setMintToken(t)} style={{background:mintToken===t?'#0a3a5a':'transparent',color:mintToken===t?'#00e5a0':'#2a5a7a',border:`1px solid ${mintToken===t?'#00e5a040':'#0a2535'}`,borderRadius:7,padding:'5px 12px',fontFamily:'"DM Mono",monospace',fontSize:9,cursor:'pointer'}}>{t}</button>
-                  ))}
-                </div>
-                <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:10,flexWrap:'wrap'}}>
-                  {[1,3,5,10].map(n=>(
-                    <button key={n} onClick={()=>setMintCount(n)} style={{background:mintCount===n?'#0a3a5a':'transparent',color:mintCount===n?'#00e5a0':'#2a5a7a',border:`1px solid ${mintCount===n?'#00e5a040':'#0a2535'}`,borderRadius:7,padding:'4px 10px',fontFamily:'"DM Mono",monospace',fontSize:9,cursor:'pointer'}}>{n}</button>
-                  ))}
-                  <input type="number" value={mintCount} onChange={e=>setMintCount(Math.max(1,parseInt(e.target.value)||1))} style={{width:52,background:'#0a1628',border:'1px solid #0a2535',borderRadius:7,padding:'4px 8px',fontFamily:'"DM Mono",monospace',fontSize:9,color:'#00e5a0',outline:'none'}}/>
-                </div>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-                  <div style={{fontFamily:'"DM Mono",monospace',fontSize:11,color:'#fff',fontWeight:600}}>{mintCount} {mintToken}</div>
-                  <button onClick={mintDevices} style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:9,padding:'9px 18px',fontFamily:'"DM Mono",monospace',fontSize:10,cursor:'pointer',fontWeight:700}}>MINT →</button>
-                </div>
-                {devices.length>0&&(
-                  <div style={{background:'rgba(0,229,160,0.05)',border:'1px solid rgba(0,229,160,0.15)',borderRadius:8,padding:'8px 10px'}}>
-                    <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#00e5a0',marginBottom:4}}>YOUR NFT DEVICES ({devices.length})</div>
-                    {devices.slice(0,5).map(d=>(
-                      <div key={d.id} style={{display:'flex',justifyContent:'space-between',padding:'2px 0',fontFamily:'"DM Mono",monospace',fontSize:7}}>
-                        <span style={{color:'#2a5a7a'}}>{d.nftId}</span>
-                        <span style={{color:d.active?'#22c55e':'#1e4a6a'}}>{d.active?'● ACTIVE':'○ INACTIVE'}</span>
-                      </div>
-                    ))}
-                    {devices.length>5&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a',marginTop:2}}>+{devices.length-5} more...</div>}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:selectedBank===liveBank?'#22c55e':'#1e4a6a'}}>{selectedBank===liveBank?`⏱ ${fmtTime(hourCd)}`:`UTC${BANKS[selectedBank].tz>=0?'+':''}${BANKS[selectedBank].tz}`}</div>
+            </div>
+          )}
         </div>
+        {/* Right: Device skeleton with Mint/Demo/Rules */}
+        <DeviceSkeleton title="RNSM-MINT-01">
+          <MintPanel wallet={wallet} devices={devices} mintCount={mintCount} mintToken={mintToken}
+            setMintCount={setMintCount} setMintToken={setMintToken}
+            onMint={mintDevices} onEnterGame={enterGame} onConnectWallet={()=>setWallet('HaCk...3r0x')}/>
+        </DeviceSkeleton>
       </div>
-
-      {devices.length>0&&(
-        <button onClick={enterGame} style={{width:'100%',background:'linear-gradient(135deg,#ef4444,#dc2626)',color:'#fff',border:'none',borderRadius:12,padding:'14px',fontFamily:'"Syne",sans-serif',fontSize:16,fontWeight:800,cursor:'pointer',boxShadow:'0 4px 20px rgba(239,68,68,0.3)'}}>
-          🔴 INITIATE HACK — {devices.length} NFT DEVICE{devices.length>1?'S':''} READY
-        </button>
-      )}
 
       {announcement&&(
-        <div style={{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#020d1a',border:'1px solid #00e5a040',borderRadius:10,padding:'10px 20px',fontFamily:'"DM Mono",monospace',fontSize:10,color:'#00e5a0',zIndex:999,whiteSpace:'pre',boxShadow:'0 8px 24px rgba(0,0,0,0.5)'}}>
+        <div style={{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',background:'#020d1a',border:'1px solid #00e5a040',borderRadius:10,padding:'10px 18px',fontFamily:'"DM Mono",monospace',fontSize:10,color:'#00e5a0',zIndex:999,whiteSpace:'pre',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',maxWidth:'90vw'}}>
           {announcement}
         </div>
       )}
@@ -1005,93 +1208,92 @@ export default function Ransome(){
   )
 
   // ── GAME SCREEN ──────────────────────────────────────────────────────────
-  const pageDevices=devices.slice(devicePage*10,devicePage*10+10)
+  if(devicesExpanded)return(
+    <MaximizedDevices devices={devices} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
+      calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim} onActivate={handleActivate}
+      winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer}
+      liveBank={liveBank} onClose={()=>setDevicesExpanded(false)}/>
+  )
 
   return(
     <div style={{background:'linear-gradient(180deg,#010810,#020d1a)',color:'#c8d8e8',minHeight:'100vh'}}>
-      {/* Header — RANSOME | Ad space | Status pills */}
-      <div style={{padding:'7px 14px',borderBottom:'1px solid #0a1f3a',display:'flex',alignItems:'center',background:'rgba(2,13,26,0.95)',backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',position:'sticky',top:0,zIndex:50,gap:0}}>
-        <div style={{fontFamily:'"Syne",sans-serif',fontSize:18,fontWeight:800,color:'#00e5a0',textShadow:'0 0 10px #00e5a040',flexShrink:0}}>RANSOME</div>
-        {/* Ad space between label and status pills */}
-        <div style={{flex:1,margin:'0 12px',height:28,background:'rgba(0,229,160,0.02)',border:'1px dashed #0a2535',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#0a2535',letterSpacing:'0.15em'}}>ADVERTISEMENT</div>
+      {/* Header */}
+      <div style={{padding:'7px 12px',borderBottom:'1px solid #0a1f3a',display:'flex',alignItems:'center',background:'rgba(2,13,26,0.96)',backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',position:'sticky',top:0,zIndex:50}}>
+        <div style={{fontFamily:'"Syne",sans-serif',fontSize:17,fontWeight:800,color:'#00e5a0',flexShrink:0}}>RANSOME</div>
+        <div style={{flex:1,margin:'0 10px',height:26,background:'rgba(0,229,160,0.02)',border:'1px dashed #0a2535',borderRadius:5,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#0a2535'}}>AD</span>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center',flexShrink:0}}>
-          {preGameSecs>0&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#f59e0b',background:'rgba(245,158,11,0.08)',border:'1px solid rgba(245,158,11,0.25)',borderRadius:6,padding:'3px 8px'}}>⏱ HACK IN {fmtTime(preGameSecs)}</div>}
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#ef4444',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:6,padding:'3px 8px'}}>🔴 {BANKS[liveBank].name}</div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#4a7fa5',background:'#0a1628',borderRadius:6,padding:'3px 8px'}}>👤 {nickname}</div>
+        <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0,flexWrap:'wrap'}}>
+          {preGameSecs>0&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#f59e0b',background:'rgba(245,158,11,0.08)',border:'1px solid rgba(245,158,11,0.25)',borderRadius:6,padding:'3px 7px'}}>⏱ {fmtTime(preGameSecs)}</div>}
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#ef4444',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:6,padding:'3px 7px'}}>🔴 {BANKS[liveBank].name}</div>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#4a7fa5',background:'#0a1628',borderRadius:6,padding:'3px 7px'}}>👤 {nickname}</div>
         </div>
       </div>
 
-      {/* Top 3-col */}
-      <div style={{padding:'10px 14px 0',display:'grid',gridTemplateColumns:'200px 1fr 230px',gap:10,alignItems:'start'}}>
+      {/* 3-col top panel */}
+      <div style={{padding:'10px 12px 0',display:'grid',gridTemplateColumns:'190px 1fr 220px',gap:10,alignItems:'start'}}>
         <GameStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} liveBank={liveBank} nickname={nickname} winStates={winStates}/>
-        <MatrixHackDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs}/>
+        <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords}/>
         <ChatTerminal nickname={nickname}/>
       </div>
 
       {/* Win strip */}
-      <div style={{margin:'8px 14px 0',padding:'5px 8px',display:'flex',gap:5,overflowX:'auto',borderRadius:10,background:'rgba(2,13,26,0.7)',border:'1px solid #0a1f3a'}}>
+      <div style={{margin:'8px 12px 0',padding:'4px 8px',display:'flex',gap:4,overflowX:'auto',borderRadius:10,background:'rgba(2,13,26,0.7)',border:'1px solid #0a1f3a'}}>
         {(Object.entries(WIN_LABELS) as [WinType,string][]).map(([type,label])=>{
           const st=winStates[type]
           return(
-            <div key={type} style={{display:'flex',gap:3,alignItems:'center',padding:'3px 7px',borderRadius:6,flexShrink:0,
+            <div key={type} style={{display:'flex',gap:3,alignItems:'center',padding:'3px 6px',borderRadius:6,flexShrink:0,
               background:st.claimed?'rgba(34,197,94,0.08)':st.claimable?'rgba(236,72,153,0.08)':'transparent',
               border:st.claimed?'1px solid rgba(34,197,94,0.25)':st.claimable?'1px solid rgba(236,72,153,0.35)':'1px solid transparent'}}>
               <div style={{width:7,height:5,borderRadius:1,background:LED_COLORS[type],opacity:st.claimed?0.3:1,
-                boxShadow:st.claimable&&!st.claimed?`0 0 4px ${LED_COLORS[type]}`:'none',
-                animation:st.flickering?'rapidFlicker 0.08s infinite':st.broken?'none':st.claimable&&!st.claimed?'ledBlink 0.5s infinite':'none'}}/>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:st.claimed?'#22c55e':st.claimable?'#ec4899':'#1e4a6a',whiteSpace:'nowrap'}}>
+                animation:st.flickering?'rapidFlicker 0.08s infinite':st.broken?'none':st.claimable&&!st.claimed?'ledBlink 0.5s infinite':'none',
+                boxShadow:st.claimable&&!st.claimed?`0 0 4px ${LED_COLORS[type]}`:'none'}}/>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:st.claimed?'#22c55e':st.claimable?'#ec4899':'#1e4a6a',whiteSpace:'nowrap'}}>
                 {st.claimed?'✓ ':st.claimable?'⚡ ':'○ '}{label}
-              </div>
+              </span>
             </div>
           )
         })}
       </div>
 
-      {/* NFT Hacking Devices */}
-      <div style={{padding:'10px 14px 20px'}}>
+      {/* Devices section: 2 cols normal, maximize opens full screen */}
+      <div style={{padding:'10px 12px 20px'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',letterSpacing:'0.1em'}}>
-            ◈ NFT HACKING DEVICES &nbsp;
-            <span style={{color:'#2a5a7a'}}>{devices.length} minted · {devices.filter(d=>d.active).length} connected</span>
-            {totalPages>1&&<span style={{color:'#1e4a6a'}}> · pg {devicePage+1}/{totalPages}</span>}
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a'}}>
+            ◈ NFT DEVICES &nbsp;<span style={{color:'#2a5a7a'}}>{devices.length} total · {devices.filter(d=>d.active).length} active</span>
           </div>
           <div style={{display:'flex',gap:5,alignItems:'center'}}>
-            <button onClick={()=>setDevicePage(p=>Math.max(0,p-1))} disabled={devicePage===0}
-              style={{width:24,height:24,borderRadius:6,background:'#0a1628',border:'1px solid #1e3a5f',color:devicePage===0?'#1e3a5f':'#4a7fa5',cursor:devicePage===0?'default':'pointer',fontFamily:'"DM Mono",monospace',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
-            <button onClick={()=>setDevicePage(p=>Math.min(totalPages-1,p+1))} disabled={devicePage>=totalPages-1}
-              style={{width:24,height:24,borderRadius:6,background:'#0a1628',border:'1px solid #1e3a5f',color:devicePage>=totalPages-1?'#1e3a5f':'#4a7fa5',cursor:devicePage>=totalPages-1?'default':'pointer',fontFamily:'"DM Mono",monospace',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
-            <button onClick={()=>setDevicesExpanded(e=>!e)}
-              style={{background:'#0a1628',border:'1px solid #1e3a5f',color:'#2a5a7a',borderRadius:7,padding:'4px 10px',fontFamily:'"DM Mono",monospace',fontSize:7.5,cursor:'pointer'}}>
-              {devicesExpanded?'⊟ NORMAL':'⊞ MAXIMIZE'}
+            <button onClick={handleActivateAll} style={{background:'#0a1628',border:'1px solid #00e5a030',color:'#00e5a0',borderRadius:7,padding:'4px 9px',fontFamily:'"DM Mono",monospace',fontSize:7.5,cursor:'pointer'}}>
+              ⚡ ALL ON
+            </button>
+            <button onClick={()=>setDevicesExpanded(true)} style={{background:'#0a1628',border:'1px solid #1e3a5f',color:'#2a5a7a',borderRadius:7,padding:'4px 10px',fontFamily:'"DM Mono",monospace',fontSize:7.5,cursor:'pointer'}}>
+              ⊞ MAXIMIZE
             </button>
           </div>
         </div>
-
-        {/* 5 cols when maximized (10 fit per page) */}
-        <div style={{display:'grid',gridTemplateColumns:devicesExpanded?'repeat(5,1fr)':'repeat(2,1fr)',gap:8}}>
-          {pageDevices.map(d=>(
+        {/* Always 2 columns in normal view */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10}}>
+          {devices.slice(0,2).map(d=>(
             <HackingDevice key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
               calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim} onActivate={handleActivate}
               winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank}/>
           ))}
         </div>
-
-        {totalPages>1&&(
-          <div style={{display:'flex',justifyContent:'center',gap:6,marginTop:12}}>
-            {Array.from({length:totalPages},(_,i)=>(
-              <button key={i} onClick={()=>setDevicePage(i)} style={{width:8,height:8,borderRadius:'50%',border:'none',cursor:'pointer',padding:0,background:i===devicePage?'#00e5a0':'#1e3a5f',boxShadow:i===devicePage?'0 0 6px #00e5a0':'none'}}/>
-            ))}
+        {devices.length>2&&(
+          <div style={{marginTop:8,textAlign:'center',fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a'}}>
+            +{devices.length-2} more devices · <button onClick={()=>setDevicesExpanded(true)} style={{background:'none',border:'none',color:'#00e5a0',cursor:'pointer',fontFamily:'"DM Mono",monospace',fontSize:7.5,textDecoration:'underline'}}>MAXIMIZE to see all</button>
           </div>
         )}
       </div>
 
       {announcement&&(
-        <div style={{position:'fixed',top:52,left:'50%',transform:'translateX(-50%)',background:'#020d1a',border:'1px solid #00e5a040',borderRadius:10,padding:'9px 18px',fontFamily:'"DM Mono",monospace',fontSize:10,color:'#00e5a0',zIndex:999,whiteSpace:'pre',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',animation:'slideDown 0.3s ease'}}>
+        <div style={{position:'fixed',top:52,left:'50%',transform:'translateX(-50%)',background:'#020d1a',border:'1px solid #00e5a040',borderRadius:10,padding:'9px 16px',fontFamily:'"DM Mono",monospace',fontSize:10,color:'#00e5a0',zIndex:999,whiteSpace:'pre',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',animation:'slideDown 0.3s ease',maxWidth:'90vw'}}>
           {announcement}
         </div>
       )}
     </div>
   )
 }
+
+// tiny clamp helper (returns px string)
+function clamp(min:number,val:number,unit:string){return`clamp(${min}px,${val}${unit},${min+8}px)`}
