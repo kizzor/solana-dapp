@@ -1329,6 +1329,8 @@ export default function Ransome(){
   const[mintToken,setMintToken]=useState('USDT')
   const[selectedBank,setSelectedBank]=useState<number|null>(null)
   const[devicesExpanded,setDevicesExpanded]=useState(false)
+  const[showTerminate,setShowTerminate]=useState(false)
+  const[needResume,setNeedResume]=useState(false)
   const[preGameSecs,setPreGameSecs]=useState(0)
   const[bankHacked,setBankHacked]=useState(false)
   const[winRecords,setWinRecords]=useState<WinRecord[]>([])
@@ -1357,7 +1359,13 @@ export default function Ransome(){
     }
     if(s.mintToken){setMintToken(s.mintToken)}
     if(s.contractAddr){setContractAddr(s.contractAddr)}
-    if(s.phase&&s.phase!=='setup'){setPhase(s.phase)}
+    if(s.phase==='game'){
+      setPhase('game')
+      // Resume mid-game: start drawing immediately (no pre-game countdown)
+      setNeedResume(true)
+    } else if(s.phase&&s.phase!=='setup'){
+      setPhase(s.phase)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[])
 
@@ -1423,6 +1431,29 @@ export default function Ransome(){
       })
     },1000)
   },[drawNumber])
+
+  // Resume game after page reload (skip pre-game countdown, start drawing immediately)
+  useEffect(()=>{
+    if(!needResume)return
+    setNeedResume(false)
+    // Give React one tick to settle restored state before starting the loop
+    const t=setTimeout(()=>{
+      const drawSecs=60+Math.floor(Math.random()*31)
+      setTimer(drawSecs);setTotalTimer(drawSecs)
+      drawNumber()
+      timerRef.current=setInterval(()=>{
+        setTimer(prev=>{
+          if(prev<=1){
+            setClickWindowOpen(false)
+            const nxt=60+Math.floor(Math.random()*31)
+            setTotalTimer(nxt);drawNumber();return nxt
+          }
+          return prev-1
+        })
+      },1000)
+    },400)
+    return()=>clearTimeout(t)
+  },[needResume,drawNumber])
 
   // Win detection
   useEffect(()=>{
@@ -1503,6 +1534,19 @@ export default function Ransome(){
   }
 
   const enterGame=()=>{setPhase('game');startPreGame(300);announce('🔴 HACK IN 5 MINUTES')}
+  const terminateGame=()=>{
+    try{localStorage.removeItem('ransome_state_v1')}catch{}
+    setDevices([]);setCalledNums(new Set());setCalledOrder([]);setWinStates({
+      EARLY_FIVE:{claimable:false,claimed:false,flickering:false,broken:false},
+      TOP_LINE:{claimable:false,claimed:false,flickering:false,broken:false},
+      MIDDLE_LINE:{claimable:false,claimed:false,flickering:false,broken:false},
+      BOTTOM_LINE:{claimable:false,claimed:false,flickering:false,broken:false},
+      FULL_HOUSE_1:{claimable:false,claimed:false,flickering:false,broken:false},
+      FULL_HOUSE_2:{claimable:false,claimed:false,flickering:false,broken:false},
+      FULL_HOUSE_3:{claimable:false,claimed:false,flickering:false,broken:false},
+    });setWinRecords([]);setBankHacked(false);setPreGameSecs(0)
+    setShowTerminate(false);setPhase('lobby')
+  }
 
   if(phase==='setup')return(
     <div style={{minHeight:'100vh',background:'#010810'}}>
@@ -1639,6 +1683,9 @@ export default function Ransome(){
             <button onClick={()=>setDevicesExpanded(true)} style={{background:'#0a1628',border:'1px solid #1e3a5f',color:'#2a5a7a',borderRadius:7,padding:'4px 10px',fontFamily:'"DM Mono",monospace',fontSize:7.5,cursor:'pointer'}}>
               ⊞ MAXIMIZE
             </button>
+            <button onClick={()=>setShowTerminate(true)} style={{background:'rgba(127,0,0,0.25)',border:'1px solid #7f0000',color:'#ef4444',borderRadius:7,padding:'4px 9px',fontFamily:'"DM Mono",monospace',fontSize:7.5,cursor:'pointer',letterSpacing:'0.05em'}}>
+              ⏻ TERMINATE
+            </button>
           </div>
         </div>
         {/* 2 columns, ALL devices scroll down */}
@@ -1654,6 +1701,58 @@ export default function Ransome(){
       {announcement&&(
         <div style={{position:'fixed',top:52,left:'50%',transform:'translateX(-50%)',background:'#020d1a',border:'1px solid #00e5a040',borderRadius:10,padding:'9px 16px',fontFamily:'"DM Mono",monospace',fontSize:10,color:'#00e5a0',zIndex:999,whiteSpace:'pre',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',animation:'slideDown 0.3s ease',maxWidth:'90vw'}}>
           {announcement}
+        </div>
+      )}
+
+      {/* ── TERMINATE WARNING MODAL ── */}
+      {showTerminate&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}
+          onClick={e=>{if(e.target===e.currentTarget)setShowTerminate(false)}}>
+          <div style={{background:'#0a0505',border:'2px solid #7f0000',borderRadius:16,padding:28,maxWidth:360,width:'100%',
+            boxShadow:'0 0 60px rgba(239,68,68,0.2),inset 0 0 40px rgba(127,0,0,0.08)'}}>
+            {/* Header */}
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+              <div style={{width:36,height:36,borderRadius:'50%',background:'rgba(239,68,68,0.12)',border:'2px solid #ef4444',
+                display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>⚠</div>
+              <div>
+                <div style={{fontFamily:'"Syne",sans-serif',fontSize:16,fontWeight:800,color:'#ef4444',letterSpacing:'0.05em'}}>TERMINATE SESSION</div>
+                <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#7f2020',marginTop:2}}>WALLET · {wallet||nickname}</div>
+              </div>
+            </div>
+            {/* Warning body */}
+            <div style={{background:'rgba(127,0,0,0.12)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:8,padding:'12px 14px',marginBottom:18}}>
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#ef4444',marginBottom:8,letterSpacing:'0.1em'}}>⚠ WARNING — IRREVERSIBLE ACTION</div>
+              {[
+                'All minted NFT devices will be deactivated',
+                'Current game session & progress will be wiped',
+                'Unclaimed prizes for this wallet are forfeited',
+                'Saved state will be cleared from this browser',
+                'You will return to the lobby screen',
+              ].map((line,i)=>(
+                <div key={i} style={{display:'flex',gap:7,alignItems:'flex-start',marginBottom:4}}>
+                  <span style={{color:'#7f2020',flexShrink:0,marginTop:1}}>›</span>
+                  <span style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#a05050',lineHeight:1.5}}>{line}</span>
+                </div>
+              ))}
+            </div>
+            {/* Buttons */}
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={()=>setShowTerminate(false)}
+                style={{flex:1,background:'#0a1628',border:'1px solid #1e3a5f',color:'#4a7fa5',borderRadius:8,
+                  padding:'10px',fontFamily:'"DM Mono",monospace',fontSize:8,cursor:'pointer',letterSpacing:'0.05em'}}>
+                ABORT
+              </button>
+              <button onClick={terminateGame}
+                style={{flex:1,background:'linear-gradient(135deg,#3f0000,#200000)',border:'2px solid #ef4444',color:'#ef4444',
+                  borderRadius:8,padding:'10px',fontFamily:'"Syne",sans-serif',fontSize:11,fontWeight:800,cursor:'pointer',
+                  letterSpacing:'0.1em',boxShadow:'0 0 16px rgba(239,68,68,0.25)',animation:'ransomPulse 2s infinite'}}>
+                ⏻ CONFIRM TERMINATE
+              </button>
+            </div>
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#3f1010',textAlign:'center',marginTop:10}}>
+              click outside to dismiss · this action cannot be undone
+            </div>
+          </div>
         </div>
       )}
     </div>
