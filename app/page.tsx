@@ -1348,6 +1348,7 @@ export default function Ransome(){
 
   // ── Persist & restore state ──────────────────────────────────────────────
   const resumeRef=useRef(false)
+  const restoredNumsRef=useRef<number[]>([])  // holds saved calledNums for resume sync
 
   useEffect(()=>{
     const s=loadState()
@@ -1356,27 +1357,59 @@ export default function Ransome(){
     if(s.wallet)setWallet(s.wallet)
     if(s.mintToken)setMintToken(s.mintToken)
     if(s.contractAddr)setContractAddr(s.contractAddr)
+    // Restore devices with claimed Sets
     if(s.devices&&s.devices.length>0){
-      const rehydrated=s.devices.map((d:any)=>({...d,claimed:new Set(d.claimed??[])}))
+      const rehydrated=s.devices.map((d:any)=>({...d,claimed:new Set(d.claimed??[]),missed:d.missed??false}))
       setDevices(rehydrated)
     }
+    // Restore game progress
+    if(s.calledNums&&s.calledNums.length>0){
+      setCalledNums(new Set(s.calledNums as number[]))
+      setCalledOrder(s.calledOrder??[])
+      restoredNumsRef.current=s.calledNums as number[]  // for resume drawnRef sync
+    }
+    if(s.winStates){
+      // Rehydrate winStates — ensure all fields exist with defaults
+      const ws=s.winStates as Record<WinType,any>
+      const fixed:Record<string,WinState>={}
+      ;(Object.keys(defaultWinStates()) as WinType[]).forEach(k=>{
+        fixed[k]={
+          claimed:ws[k]?.claimed??false,
+          claimable:ws[k]?.claimable??false,
+          flickering:false,  // never restore flickering — start clean
+          broken:ws[k]?.broken??false,
+          expired:ws[k]?.expired??false,
+          claimers:ws[k]?.claimers??[],
+        }
+      })
+      setWinStates(fixed as Record<WinType,WinState>)
+    }
+    if(s.winRecords)setWinRecords(s.winRecords)
+    if(typeof s.bankruptCount==='number')setBankruptCount(s.bankruptCount)
+    if(typeof s.roundNum==='number')setRoundNum(s.roundNum)
     if(s.phase==='game'){
       setPhase('game')
-      resumeRef.current=true   // signal to start loop after devices commit
+      resumeRef.current=true
     } else if(s.phase&&s.phase!=='setup'){
       setPhase(s.phase)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[])
 
-  // Save on every meaningful state change
+  // Save ALL game state on every meaningful change
   useEffect(()=>{
     if(phase==='setup')return
     saveState({
       nickname,wallet,phase,mintToken,contractAddr,
       devices:devices.map(d=>({...d,claimed:Array.from(d.claimed)})),
+      calledNums:Array.from(calledNums),
+      calledOrder,
+      winStates,
+      winRecords,
+      bankruptCount,
+      roundNum,
     })
-  },[nickname,wallet,phase,mintToken,contractAddr,devices])
+  },[nickname,wallet,phase,mintToken,contractAddr,devices,calledNums,calledOrder,winStates,winRecords,bankruptCount,roundNum])
   const currentNum=calledOrder[calledOrder.length-1]??null
   const hourCd=useHourCountdown()
 
@@ -1462,8 +1495,8 @@ export default function Ransome(){
     if(preTimerRef.current)clearInterval(preTimerRef.current)
     // Short delay so React fully commits restored device state
     const t=setTimeout(()=>{
-      // Sync drawnRef with restored numbers — do NOT draw a new number on resume
-      drawnRef.current=new Set(Array.from(calledNums))
+      // Sync drawnRef with the saved numbers list (not React state which may be stale)
+      drawnRef.current=new Set(restoredNumsRef.current.length>0?restoredNumsRef.current:Array.from(calledNums))
       // Mark matched-but-unclicked cells as missed (rounds passed while away)
       setDevices(ds=>ds.map(d=>({...d,
         grid:d.grid.map(row=>row.map(cell=>
