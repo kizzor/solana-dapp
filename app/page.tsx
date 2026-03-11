@@ -3,12 +3,12 @@ import './globals.css'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Cell = { num:number|null; matched:boolean; clicked:boolean }
+type Cell = { num:number|null; matched:boolean; clicked:boolean; missed:boolean }
 type Device = { id:number; nftId:string; grid:Cell[][]; claimed:Set<string>; active:boolean; corrupted:boolean }
 type WinType = 'EARLY_FIVE'|'TOP_LINE'|'MIDDLE_LINE'|'BOTTOM_LINE'|'FULL_HOUSE_1'|'FULL_HOUSE_2'|'FULL_HOUSE_3'
-type WinState = { claimed:boolean; claimable:boolean; flickering:boolean; broken:boolean; claimers:string[] }
+type WinState = { claimed:boolean; claimable:boolean; flickering:boolean; broken:boolean; claimers:string[]; expired:boolean }
 type ChatLine = { t:'sys'|'user'|'cmd'|'img'; m:string; src?:string; vSrc?:string }
-type WinRecord = { wt:WinType; claimers:string[]; round:number; split:number }
+type WinRecord = { wt:WinType; claimers:string[]; round:number; split:number; rnsmEach:number }
 type MediaItem = { src:string; type:'image'|'video'; name:string }
 
 const STORAGE_KEY='ransome_state_v1'
@@ -63,13 +63,13 @@ const BANKS = [
 const REGION_COLORS:{[k:string]:string}={APAC:'#0ea5e9',EUR:'#22c55e',AMER:'#f59e0b',MENA:'#f97316',AFR:'#a855f7',ASIA:'#ec4899'}
 
 const defaultWinStates=():Record<WinType,WinState>=>({
-  EARLY_FIVE:  {claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
-  TOP_LINE:    {claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
-  MIDDLE_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
-  BOTTOM_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
-  FULL_HOUSE_1:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
-  FULL_HOUSE_2:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
-  FULL_HOUSE_3:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[]},
+  EARLY_FIVE:  {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
+  TOP_LINE:    {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
+  MIDDLE_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
+  BOTTOM_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
+  FULL_HOUSE_1:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
+  FULL_HOUSE_2:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
+  FULL_HOUSE_3:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
 })
 
 function getLiveBank(h:number){return h%23}
@@ -89,12 +89,12 @@ function generateDevice(id:number):Device{
     rowCounts.fill(0);colRows.forEach(rows=>rows.forEach(r=>rowCounts[r]++))
   }
   const used=new Set<number>()
-  const grid:Cell[][]=Array.from({length:3},()=>Array(9).fill(null).map(()=>({num:null,matched:false,clicked:false})))
+  const grid:Cell[][]=Array.from({length:3},()=>Array(9).fill(null).map(()=>({num:null,matched:false,clicked:false,missed:false})))
   for(let ci=0;ci<9;ci++){
     const[lo,hi]=COL_RANGES[ci];const rows=colRows[ci].sort((a,b)=>a-b)
     const avail:number[]=[];for(let n=lo;n<=hi;n++)if(!used.has(n))avail.push(n)
     const picked=avail.sort(()=>Math.random()-0.5).slice(0,rows.length).sort((a,b)=>a-b)
-    picked.forEach(n=>used.add(n));rows.forEach((r,i)=>{grid[r][ci]={num:picked[i],matched:false,clicked:false}})
+    picked.forEach(n=>used.add(n));rows.forEach((r,i)=>{grid[r][ci]={num:picked[i],matched:false,clicked:false,missed:false}})
   }
   return{id,nftId,grid,claimed:new Set(),active:false,corrupted:false}
 }
@@ -640,6 +640,7 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
         {device.grid.map((row,ri)=>(
           <div key={ri} style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',borderBottom:ri<2?'1px solid #0d2035':'none'}}>
             {row.map((cell,ci)=>{
+              const isMissed=cell.matched&&!cell.clicked&&cell.missed
               const isCur=cell.num!==null&&cell.num===currentNum
               const isClick=isCur&&clickWindowOpen&&!cell.clicked&&device.active
               const isEmpty=cell.num===null
@@ -682,7 +683,7 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
               border:`1px solid ${ws.broken?LED_COLORS[type]+'30':(won||lit)?LED_COLORS[type]:ledPct>0.3?LED_COLORS[type]+'60':'#162438'}`,
               boxShadow:(won||lit)&&!ws.broken?`0 0 4px ${LED_COLORS[type]},0 0 8px ${LED_COLORS[type]}60`:proximityGlow,
               opacity:dead&&!ws.flickering&&!ws.broken?0.15:dimOpacity,
-              animation:ws.broken?'none':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.5s ${i*0.07}s infinite`:'none',
+              animation:ws.broken||ws.expired?'none':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.5s ${i*0.07}s infinite`:'none',
             }}>
               {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}50 20%,transparent 70%)`,animation:'filamentGlow 2s ease-in-out infinite'}}/>}
             </div>
@@ -864,7 +865,7 @@ function WinnersTerminal({winRecords}:{winRecords:WinRecord[]}){
     prevLen.current=winRecords.length
     const cols=['#00e5a0','#f59e0b','#00b8ff','#a855f7','#ec4899']
     const col=cols[(winRecords.length-1)%cols.length]
-    const full=`> ${WIN_LABELS[rec.wt]} — ${rec.claimers.join(' + ')} — $${(rec.split/1000).toFixed(0)}K each`
+    const full=`> ${WIN_LABELS[rec.wt]} · ${rec.claimers.join('+')} · $${(rec.split/1000).toFixed(0)}K + ${rec.rnsmEach??0} RNSM each`
     let i=0
     setLines(p=>[...p,{text:'',col}])
     const iv=setInterval(()=>{
@@ -1381,23 +1382,26 @@ export default function Ransome(){
 
   const announce=(msg:string)=>{setAnnouncement(msg);setTimeout(()=>setAnnouncement(null),6000)}
 
-  const drawNumber=useCallback(()=>{
-    // Finalize any pending multi-claimers from previous round
+  const drawnRef=useRef<Set<number>>(new Set())  // source-of-truth to prevent duplicates
+  const drawLockRef=useRef(false)               // prevent concurrent draws
+
+  const drawNumber=useCallback(()=>{    if(drawLockRef.current)return
+    drawLockRef.current=true
     setRoundNum(r=>r+1)
     setClickWindowOpen(false)
-    setCalledNums(prev=>{
-      if(prev.size>=90){setBankHacked(true);return prev}
-      const remaining=Array.from({length:90},(_,i)=>i+1).filter(n=>!prev.has(n))
-      if(!remaining.length){setBankHacked(true);return prev}
-      const num=remaining[Math.floor(Math.random()*remaining.length)]
-      setCalledOrder(o=>[...o,num])
-      setDevices(ds=>ds.map(d=>{
-        if(!d.active||d.corrupted)return d
-        return{...d,grid:d.grid.map(row=>row.map(cell=>cell.num===num?{...cell,matched:true}:cell))}
-      }))
-      setTimeout(()=>setClickWindowOpen(true),150)
-      return new Set(Array.from(prev).concat([num]))
-    })
+    const already=drawnRef.current
+    if(already.size>=90){setBankHacked(true);drawLockRef.current=false;return}
+    const remaining=Array.from({length:90},(_,i)=>i+1).filter(n=>!already.has(n))
+    if(!remaining.length){setBankHacked(true);drawLockRef.current=false;return}
+    const num=remaining[Math.floor(Math.random()*remaining.length)]
+    drawnRef.current=new Set(Array.from(already).concat([num]))
+    setCalledOrder(o=>[...o,num])
+    setCalledNums(new Set(Array.from(drawnRef.current)))
+    setDevices(ds=>ds.map(d=>{
+      if(!d.active||d.corrupted)return d
+      return{...d,grid:d.grid.map(row=>row.map(cell=>cell.num===num?{...cell,matched:true}:cell))}
+    }))
+    setTimeout(()=>{setClickWindowOpen(true);drawLockRef.current=false},150)
   },[])
 
   useEffect(()=>{
@@ -1417,10 +1421,10 @@ export default function Ransome(){
       setPreGameSecs(p=>{
         if(p<=1){
           clearInterval(preTimerRef.current!)
-          const t=60+Math.floor(Math.random()*31);setTimer(t);setTotalTimer(t)
+          const t=60;setTimer(t);setTotalTimer(t)
           timerRef.current=setInterval(()=>{
             setTimer(prev=>{
-              if(prev<=1){setClickWindowOpen(false);const nxt=60+Math.floor(Math.random()*31);setTotalTimer(nxt);drawNumber();return nxt}
+              if(prev<=1){setClickWindowOpen(false);const nxt=60;setTotalTimer(nxt);drawNumber();return nxt}
               return prev-1
             })
           },1000)
@@ -1441,14 +1445,21 @@ export default function Ransome(){
     if(preTimerRef.current)clearInterval(preTimerRef.current)
     // Short delay so React fully commits restored device state
     const t=setTimeout(()=>{
-      const secs=60+Math.floor(Math.random()*31)
-      setTimer(secs);setTotalTimer(secs);setPreGameSecs(0)
+      // Sync drawnRef with restored game state to prevent re-drawing old numbers
+      drawnRef.current=new Set(Array.from(calledNums))
+      // Mark cells that were matched but not clicked as missed (cannot be acted on after reload)
+      setDevices(ds=>ds.map(d=>({...d,
+        grid:d.grid.map(row=>row.map(cell=>
+          cell.matched&&!cell.clicked?{...cell,missed:true}:cell
+        ))
+      })))
+      const secs=60;setTimer(secs);setTotalTimer(secs);setPreGameSecs(0)
       drawNumber()
       timerRef.current=setInterval(()=>{
         setTimer(prev=>{
           if(prev<=1){
             setClickWindowOpen(false)
-            const nxt=60+Math.floor(Math.random()*31)
+            const nxt=60
             setTotalTimer(nxt);drawNumber();return nxt
           }
           return prev-1
@@ -1467,11 +1478,23 @@ export default function Ransome(){
       devices.forEach(d=>{
         if(!d.active||d.corrupted)return
         const all=d.grid.flat(),nc=all.filter(c=>c.clicked)
-        if(nc.length>=5&&!next.EARLY_FIVE.claimable){next.EARLY_FIVE={...next.EARLY_FIVE,claimable:true};if(!ann){announce(`⚡ ${d.nftId} — EARLY FIVE!`);ann=true}}
-        if(d.grid[0].filter(c=>c.num).every(c=>c.clicked)&&!next.TOP_LINE.claimable){next.TOP_LINE={...next.TOP_LINE,claimable:true};if(!ann){announce(`⚡ ${d.nftId} — TOP LINE!`);ann=true}}
-        if(d.grid[1].filter(c=>c.num).every(c=>c.clicked)&&!next.MIDDLE_LINE.claimable){next.MIDDLE_LINE={...next.MIDDLE_LINE,claimable:true};if(!ann){announce(`⚡ ${d.nftId} — MIDDLE LINE!`);ann=true}}
-        if(d.grid[2].filter(c=>c.num).every(c=>c.clicked)&&!next.BOTTOM_LINE.claimable){next.BOTTOM_LINE={...next.BOTTOM_LINE,claimable:true};if(!ann){announce(`⚡ ${d.nftId} — BOTTOM LINE!`);ann=true}}
-        if(all.filter(c=>c.num).every(c=>c.clicked)){const fk=`FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType;if(!next[fk].claimable){next[fk]={...next[fk],claimable:true};if(!ann){announce(`🔥 ${d.nftId} — FULL HOUSE!`);ann=true}}}
+        const triggerWin=(wt:WinType,msg:string)=>{
+          if(next[wt].claimable)return
+          next[wt]={...next[wt],claimable:true,flickering:true}
+          if(!ann){announce(msg);ann=true}
+          // After 60s (end of round), expire this win — rapid flicker signals unclaimed
+          setTimeout(()=>{
+            setWinStates(p=>{
+              if(p[wt].claimed)return p   // already claimed, don't expire
+              return{...p,[wt]:{...p[wt],flickering:false,expired:true,claimable:false}}
+            })
+          },60000)
+        }
+        if(nc.length>=5)triggerWin('EARLY_FIVE',`⚡ ${d.nftId} — EARLY FIVE! CLAIM NOW`)
+        if(d.grid[0].filter(cl=>cl.num).every(cl=>cl.clicked))triggerWin('TOP_LINE',`⚡ ${d.nftId} — TOP LINE! CLAIM NOW`)
+        if(d.grid[1].filter(cl=>cl.num).every(cl=>cl.clicked))triggerWin('MIDDLE_LINE',`⚡ ${d.nftId} — MIDDLE LINE! CLAIM NOW`)
+        if(d.grid[2].filter(cl=>cl.num).every(cl=>cl.clicked))triggerWin('BOTTOM_LINE',`⚡ ${d.nftId} — BOTTOM LINE! CLAIM NOW`)
+        if(all.filter(cl=>cl.num).every(cl=>cl.clicked)){const fk=`FULL_HOUSE_${Math.min(bankruptCount+1,3)}` as WinType;triggerWin(fk,`🔥 ${d.nftId} — FULL HOUSE! CLAIM NOW`)}
       })
       return next
     })
@@ -1482,7 +1505,7 @@ export default function Ransome(){
     setDevices(ds=>ds.map(d=>{
       if(d.id!==devId||!d.active)return d
       const cell=d.grid[r][c]
-      if(!cell.num||cell.num!==currentNum||cell.clicked)return d
+      if(!cell.num||cell.num!==currentNum||cell.clicked||cell.missed)return d
       return{...d,grid:d.grid.map((row,ri)=>row.map((cl,ci)=>ri===r&&ci===c?{...cl,clicked:true}:cl))}
     }))
   }
@@ -1508,8 +1531,9 @@ export default function Ransome(){
       pendingClaimers.current[wt]=[]
       const vault=WIN_VAULT[wt]
       const split=Math.floor(vault/final.length)
-      setWinRecords(r=>[...r,{wt,claimers:final,round:roundNum,split}])
-      announce(`✅ ${WIN_LABELS[wt]} CLAIMED!\n${final.join(' + ')} → $${(split/1000).toFixed(0)}K each`)
+      const rnsmEach=Math.floor(RNSM_ALLOC[wt]/Math.max(final.length,1))
+      setWinRecords(r=>[...r,{wt,claimers:final,round:roundNum,split,rnsmEach}])
+      announce(`✅ ${WIN_LABELS[wt]} CLAIMED!\n${final.join(' + ')} → $${(split/1000).toFixed(0)}K + ${rnsmEach} RNSM each`)
       // Mark claimed + flicker all devices' LEDs for this win
       setWinStates(prev=>({...prev,[wt]:{...prev[wt],claimed:true,claimers:final,flickering:true,broken:false}}))
       const fKey=`flicker_${wt}`
@@ -1537,7 +1561,7 @@ export default function Ransome(){
     announce(`⚡ ${mintCount} DEVICE${mintCount>1?'S':''} MINTED`)
   }
 
-  const enterGame=()=>{setPhase('game');startPreGame(300);announce('🔴 HACK IN 5 MINUTES')}
+  const enterGame=()=>{setPhase('game');startPreGame(60);announce('🔴 HACK IN 60 SECONDS')}
   const terminateGame=()=>{
     try{localStorage.removeItem('ransome_state_v1')}catch{}
     setDevices([]);setCalledNums(new Set());setCalledOrder([]);setWinStates({
@@ -1617,6 +1641,14 @@ export default function Ransome(){
         </DeviceSkeleton>
       </div>
 
+      {/* Lobby chat — shared with all users */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:6}}>
+          💬 LOBBY CHAT — visible to all agents
+        </div>
+        <ChatTerminal nickname={nickname}/>
+      </div>
+
       {announcement&&(
         <div style={{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',background:'#020d1a',border:'1px solid #00e5a040',borderRadius:10,padding:'10px 18px',fontFamily:'"DM Mono",monospace',fontSize:10,color:'#00e5a0',zIndex:999,whiteSpace:'pre',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',maxWidth:'90vw'}}>
           {announcement}
@@ -1662,10 +1694,10 @@ export default function Ransome(){
           return(
             <div key={type} style={{display:'flex',gap:3,alignItems:'center',padding:'3px 6px',borderRadius:6,flexShrink:0,
               background:st.claimed?'rgba(34,197,94,0.08)':st.claimable?'rgba(236,72,153,0.08)':'transparent',
-              border:st.claimed?'1px solid rgba(34,197,94,0.25)':st.claimable?'1px solid rgba(236,72,153,0.35)':'1px solid transparent'}}>
-              <div style={{width:7,height:5,borderRadius:1,background:LED_COLORS[type],opacity:st.claimed?0.3:1,
-                animation:st.flickering?'rapidFlicker 0.08s infinite':st.broken?'none':st.claimable&&!st.claimed?'ledBlink 0.5s infinite':'none',
-                boxShadow:st.claimable&&!st.claimed?`0 0 4px ${LED_COLORS[type]}`:'none'}}/>
+              border:st.claimed?'1px solid rgba(34,197,94,0.25)':st.expired?'1px solid rgba(127,0,0,0.3)':st.claimable?'1px solid rgba(236,72,153,0.35)':'1px solid transparent'}}>
+              <div style={{width:7,height:5,borderRadius:1,background:st.expired?'#3f1010':LED_COLORS[type],opacity:st.claimed?0.3:st.expired?0.4:1,
+                animation:st.flickering?'rapidFlicker 0.08s infinite':st.broken?'none':st.claimable&&!st.claimed&&!st.expired?'ledBlink 0.5s infinite':'none',
+                boxShadow:st.claimable&&!st.claimed&&!st.expired?`0 0 4px ${LED_COLORS[type]}`:'none'}}/>
               <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:st.claimed?'#22c55e':st.claimable?'#ec4899':'#1e4a6a',whiteSpace:'nowrap'}}>
                 {st.claimed?'✓ ':st.claimable?'⚡ ':'○ '}{label}
               </span>
@@ -1765,3 +1797,5 @@ export default function Ransome(){
 
 // tiny clamp helper (returns px string)
 function clamp(min:number,val:number,unit:string){return`clamp(${min}px,${val}${unit},${min+8}px)`}
+// RNSM tokens allocated per win type (split equally among winning devices for that round)
+const RNSM_ALLOC:Record<WinType,number>={EARLY_FIVE:500,TOP_LINE:1000,MIDDLE_LINE:1000,BOTTOM_LINE:1000,FULL_HOUSE_1:2500,FULL_HOUSE_2:2500,FULL_HOUSE_3:1500}
