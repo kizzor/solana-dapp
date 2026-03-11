@@ -1330,7 +1330,6 @@ export default function Ransome(){
   const[selectedBank,setSelectedBank]=useState<number|null>(null)
   const[devicesExpanded,setDevicesExpanded]=useState(false)
   const[showTerminate,setShowTerminate]=useState(false)
-  const[needResume,setNeedResume]=useState(false)
   const[preGameSecs,setPreGameSecs]=useState(0)
   const[bankHacked,setBankHacked]=useState(false)
   const[winRecords,setWinRecords]=useState<WinRecord[]>([])
@@ -1347,22 +1346,22 @@ export default function Ransome(){
   const liveBank=getLiveBank(currentHour)
 
   // ── Persist & restore state ──────────────────────────────────────────────
+  const resumeRef=useRef(false)
+
   useEffect(()=>{
     const s=loadState()
     if(!s)return
-    if(s.nickname){setNickname(s.nickname)}
-    if(s.wallet){setWallet(s.wallet)}
+    if(s.nickname)setNickname(s.nickname)
+    if(s.wallet)setWallet(s.wallet)
+    if(s.mintToken)setMintToken(s.mintToken)
+    if(s.contractAddr)setContractAddr(s.contractAddr)
     if(s.devices&&s.devices.length>0){
-      // Rehydrate devices (Sets get serialised as arrays)
       const rehydrated=s.devices.map((d:any)=>({...d,claimed:new Set(d.claimed??[])}))
       setDevices(rehydrated)
     }
-    if(s.mintToken){setMintToken(s.mintToken)}
-    if(s.contractAddr){setContractAddr(s.contractAddr)}
     if(s.phase==='game'){
       setPhase('game')
-      // Resume mid-game: start drawing immediately (no pre-game countdown)
-      setNeedResume(true)
+      resumeRef.current=true   // signal to start loop after devices commit
     } else if(s.phase&&s.phase!=='setup'){
       setPhase(s.phase)
     }
@@ -1432,14 +1431,18 @@ export default function Ransome(){
     },1000)
   },[drawNumber])
 
-  // Resume game after page reload (skip pre-game countdown, start drawing immediately)
+  // Resume game after page reload — fires whenever devices state settles with resumeRef flagged
   useEffect(()=>{
-    if(!needResume)return
-    setNeedResume(false)
-    // Give React one tick to settle restored state before starting the loop
+    if(!resumeRef.current)return
+    if(phase!=='game')return
+    resumeRef.current=false
+    // Clear any stale timers
+    if(timerRef.current)clearInterval(timerRef.current)
+    if(preTimerRef.current)clearInterval(preTimerRef.current)
+    // Short delay so React fully commits restored device state
     const t=setTimeout(()=>{
-      const drawSecs=60+Math.floor(Math.random()*31)
-      setTimer(drawSecs);setTotalTimer(drawSecs)
+      const secs=60+Math.floor(Math.random()*31)
+      setTimer(secs);setTotalTimer(secs);setPreGameSecs(0)
       drawNumber()
       timerRef.current=setInterval(()=>{
         setTimer(prev=>{
@@ -1451,9 +1454,10 @@ export default function Ransome(){
           return prev-1
         })
       },1000)
-    },400)
+    },300)
     return()=>clearTimeout(t)
-  },[needResume,drawNumber])
+  // devices in deps so this fires after rehydrated devices are committed
+  },[phase,devices,drawNumber])
 
   // Win detection
   useEffect(()=>{
