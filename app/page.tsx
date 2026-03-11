@@ -720,210 +720,292 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
   )
 }
 
-// ─── RNSM Price Chart (sparkline) ─────────────────────────────────────────────
-function RnsmPriceChart({contractAddr}:{contractAddr:string}){
-  const[prices,setPrices]=useState<number[]>([0.12,0.14,0.11,0.16,0.18,0.15,0.20,0.22,0.19,0.24,0.21,0.26])
-  const[live,setLive]=useState(0.26)
-  useEffect(()=>{
-    if(!contractAddr)return
-    const t=setInterval(()=>{
-      const delta=(Math.random()-0.48)*0.015
-      setLive(p=>{const n=Math.max(0.001,+(p+delta).toFixed(4));setPrices(pp=>[...pp.slice(-20),n]);return n})
-    },2000)
-    return()=>clearInterval(t)
-  },[contractAddr])
-  if(!contractAddr)return(
-    <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:6,padding:'6px 10px',display:'flex',alignItems:'center',gap:6}}>
-      <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a'}}>RNSM PRICE CHART — enter contract address to activate</span>
-    </div>
+// ─── Vault SVG Sketch ────────────────────────────────────────────────────────
+function VaultSketch({pct}:{pct:number}){
+  const fillH=Math.round(pct*62) // max fill height inside vault body
+  const dollarCount=Math.min(Math.floor(pct*8),8)
+  return(
+    <svg viewBox="0 0 80 80" width="100%" height="100%" style={{overflow:'visible'}}>
+      {/* Vault body */}
+      <rect x="10" y="15" width="60" height="52" rx="4" fill="#030a12" stroke="#1e4a6a" strokeWidth="1.5"/>
+      {/* Fill — liquid rising from bottom */}
+      <clipPath id="vc"><rect x="11" y="16" width="58" height="50" rx="3"/></clipPath>
+      <rect x="11" y={66-fillH} width="58" height={fillH} fill="rgba(0,229,160,0.18)" clipPath="url(#vc)" style={{transition:'all 1.2s ease'}}/>
+      {/* Shimmer wave top */}
+      {pct>0&&<ellipse cx="40" cy={66-fillH} rx="29" ry="3" fill="rgba(0,229,160,0.35)" style={{transition:'cy 1.2s ease'}}/>}
+      {/* Dollar bills floating up */}
+      {Array.from({length:dollarCount},(_,i)=>(
+        <g key={i} transform={`translate(${16+i*6},${56-i*7})`} opacity={0.6+i*0.04}>
+          <rect x="0" y="0" width="9" height="5" rx="1" fill="#22c55e" opacity="0.7"/>
+          <text x="4.5" y="4" textAnchor="middle" fontSize="3.5" fill="#010810" fontWeight="bold">$</text>
+        </g>
+      ))}
+      {/* Vault door circle */}
+      <circle cx="40" cy="41" r="18" fill="none" stroke="#1e4a6a" strokeWidth="1.2"/>
+      <circle cx="40" cy="41" r="12" fill="none" stroke="#0a2535" strokeWidth="1"/>
+      {/* Vault spokes */}
+      {[0,60,120,180,240,300].map(a=>{
+        const r1=12,r2=18,rad=a*Math.PI/180
+        return<line key={a} x1={40+r1*Math.cos(rad)} y1={41+r1*Math.sin(rad)} x2={40+r2*Math.cos(rad)} y2={41+r2*Math.sin(rad)} stroke="#1e4a6a" strokeWidth="1"/>
+      })}
+      {/* Handle */}
+      <circle cx="40" cy="41" r="3" fill="#1e4a6a"/>
+      <line x1="40" y1="38" x2="40" y2="30" stroke="#2a5a7a" strokeWidth="1.5" strokeLinecap="round"/>
+      {/* Hinges */}
+      <rect x="9" y="22" width="4" height="6" rx="1" fill="#0a2535" stroke="#1e4a6a" strokeWidth="0.7"/>
+      <rect x="9" y="50" width="4" height="6" rx="1" fill="#0a2535" stroke="#1e4a6a" strokeWidth="0.7"/>
+      {/* Lock bolts */}
+      <rect x="67" y="28" width="4" height="4" rx="1" fill="#0a2535" stroke="#1e4a6a" strokeWidth="0.7"/>
+      <rect x="67" y="46" width="4" height="4" rx="1" fill="#0a2535" stroke="#1e4a6a" strokeWidth="0.7"/>
+      {/* Top label */}
+      <text x="40" y="13" textAnchor="middle" fontSize="5" fill="#1e4a6a" fontFamily='"DM Mono",monospace' letterSpacing="1">VAULT</text>
+      {/* % label */}
+      <text x="40" y="41" textAnchor="middle" dominantBaseline="central" fontSize="7" fill={pct>0?'#00e5a0':'#0a2535'} fontWeight="700" fontFamily='"DM Mono",monospace'>{Math.round(pct*100)}%</text>
+    </svg>
   )
+}
+
+// ─── RNSM Chart SVG Sketch ───────────────────────────────────────────────────
+function RnsmChartSketch({prices,trend,live,contractAddr}:{prices:number[];trend:boolean;live:number;contractAddr:string}){
+  const w=80,h=50
   const min=Math.min(...prices),max=Math.max(...prices),range=Math.max(max-min,0.001)
-  const w=200,h=36
-  const pts=prices.map((p,i)=>`${(i/(prices.length-1))*w},${h-(((p-min)/range)*(h-6)+3)}`).join(' ')
-  const trend=prices[prices.length-1]>prices[0]
+  const pts=prices.map((p,i)=>`${(i/(Math.max(prices.length-1,1)))*w},${h-(((p-min)/range)*(h-10)+5)}`).join(' ')
   return(
-    <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:6,padding:'6px 10px'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-        <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a',letterSpacing:'0.1em'}}>RNSM/USDT</span>
-        <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,fontWeight:700,color:trend?'#22c55e':'#ef4444'}}>${live.toFixed(4)} {trend?'▲':'▼'}</span>
-      </div>
-      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={trend?"#22c55e":"#ef4444"} stopOpacity="0.3"/>
-            <stop offset="100%" stopColor={trend?"#22c55e":"#ef4444"} stopOpacity="0"/>
-          </linearGradient>
-        </defs>
-        <polyline points={pts} fill="none" stroke={trend?"#22c55e":"#ef4444"} strokeWidth="1.5" strokeLinejoin="round"/>
-        <polygon points={`0,${h} ${pts} ${w},${h}`} fill="url(#pg)"/>
-      </svg>
+    <svg viewBox={`0 0 ${w} ${h+16}`} width="100%" height="100%">
+      {/* Grid */}
+      {[0,1,2,3].map(i=><line key={i} x1="0" y1={5+i*(h-10)/3} x2={w} y2={5+i*(h-10)/3} stroke="#0a1628" strokeWidth="0.5"/>)}
+      {/* Area fill */}
+      {prices.length>1&&<polygon points={`0,${h} ${pts} ${w},${h}`} fill={trend?'rgba(34,197,94,0.12)':'rgba(239,68,68,0.12)'}/>}
+      {/* Line */}
+      {prices.length>1&&<polyline points={pts} fill="none" stroke={trend?'#22c55e':'#ef4444'} strokeWidth="1.5" strokeLinejoin="round"/>}
+      {/* Current dot */}
+      {prices.length>0&&(()=>{
+        const lx=(prices.length-1)/(Math.max(prices.length-1,1))*w
+        const ly=h-(((prices[prices.length-1]-min)/range)*(h-10)+5)
+        return<circle cx={lx} cy={ly} r="2.5" fill={trend?'#22c55e':'#ef4444'} style={{filter:`drop-shadow(0 0 3px ${trend?'#22c55e':'#ef4444'})`}}/>
+      })()}
+      {/* Labels */}
+      <text x="1" y={h+10} fontSize="5" fill="#1e4a6a" fontFamily='"DM Mono",monospace'>RNSM/USDT</text>
+      <text x={w} y={h+10} textAnchor="end" fontSize="6" fill={trend?'#22c55e':'#ef4444'} fontWeight="700" fontFamily='"DM Mono",monospace'>${contractAddr?live.toFixed(4):'—'} {contractAddr?(trend?'▲':'▼'):''}</text>
+      {!contractAddr&&<text x={w/2} y={h/2} textAnchor="middle" dominantBaseline="central" fontSize="5" fill="#1e3a5f" fontFamily='"DM Mono",monospace'>enter contract addr</text>}
+    </svg>
+  )
+}
+
+// ─── Winners Terminal ─────────────────────────────────────────────────────────
+function WinnersTerminal({winRecords}:{winRecords:WinRecord[]}){
+  const[typed,setTyped]=useState<string[]>([])
+  const[cursor,setCursor]=useState(true)
+  const scrollRef=useRef<HTMLDivElement>(null)
+  const prevLen=useRef(0)
+
+  // Type new winners as they come in
+  useEffect(()=>{
+    if(winRecords.length<=prevLen.current)return
+    const rec=winRecords[winRecords.length-1]
+    prevLen.current=winRecords.length
+    const line=`> WIN: ${WIN_LABELS[rec.wt]} | ${rec.claimers.join('+')} | $${(rec.split/1000).toFixed(0)}K each`
+    let i=0
+    const iv=setInterval(()=>{
+      setTyped(p=>{
+        const last=p[p.length-1]??''
+        if(i<line.length){
+          i++
+          return[...p.slice(0,-1),line.slice(0,i)]
+        }
+        clearInterval(iv)
+        return[...p.slice(0,-1),line,'']
+      })
+      if(i===1)setTyped(p=>[...p,''])
+    },18)
+    return()=>clearInterval(iv)
+  },[winRecords])
+
+  // Blinking cursor
+  useEffect(()=>{const t=setInterval(()=>setCursor(b=>!b),530);return()=>clearInterval(t)},[])
+
+  // Auto-scroll
+  useEffect(()=>{const b=scrollRef.current;if(b)b.scrollTop=b.scrollHeight},[typed])
+
+  return(
+    <div ref={scrollRef} style={{flex:1,overflowY:'auto',fontFamily:'"DM Mono",monospace',fontSize:7,color:'#00e5a0',lineHeight:1.6,padding:'4px 0'}}>
+      {typed.length===0&&winRecords.length===0&&(
+        <span style={{color:'#0a2535'}}>awaiting first claim...<span style={{opacity:cursor?1:0}}>_</span></span>
+      )}
+      {typed.map((line,i)=>(
+        <div key={i} style={{color:i%3===0?'#00e5a0':i%3===1?'#f59e0b':'#00b8ff',whiteSpace:'pre-wrap',wordBreak:'break-all'}}>
+          {line}{i===typed.length-1&&<span style={{opacity:cursor?1:0}}>_</span>}
+        </div>
+      ))}
     </div>
   )
 }
 
-// ─── Vault Fill Animation ──────────────────────────────────────────────────────
-function VaultFill({winRecords,liveBank}:{winRecords:WinRecord[];liveBank:number}){
-  const total=1000000
-  const paid=winRecords.reduce((s,r)=>s+r.split*r.claimers.length,0)
-  const pct=Math.min(paid/total,1)
-  const remaining=total-paid
-  return(
-    <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:6,padding:'7px 10px'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
-        <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a',letterSpacing:'0.1em'}}>🏦 VAULT · {BANKS[liveBank].name.toUpperCase()}</span>
-        <span style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#00e5a0',fontWeight:700}}>${(remaining/1000).toFixed(0)}K remaining</span>
-      </div>
-      {/* Vault container */}
-      <div style={{position:'relative',height:28,background:'#020810',border:'2px solid #1e3a5f',borderRadius:4,overflow:'hidden'}}>
-        {/* Fill bar */}
-        <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${(1-pct)*100}%`,
-          background:'linear-gradient(90deg,#00e5a030,#00e5a0)',
-          transition:'width 1s ease',
-          boxShadow:'2px 0 12px rgba(0,229,160,0.6)'}}>
-          {/* Liquid shimmer */}
-          <div style={{position:'absolute',inset:0,background:'repeating-linear-gradient(90deg,transparent,transparent 8px,rgba(255,255,255,0.07) 8px,rgba(255,255,255,0.07) 10px)',animation:'vaultShimmer 2s linear infinite'}}/>
-        </div>
-        {/* Claimed overlay */}
-        <div style={{position:'absolute',right:0,top:0,bottom:0,width:`${pct*100}%`,
-          background:'linear-gradient(90deg,#ef444420,#ef4444)',opacity:0.4}}/>
-        {/* Center label */}
-        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#fff',fontWeight:700,textShadow:'0 0 6px rgba(0,0,0,0.8)'}}>${(paid/1000).toFixed(0)}K / $1,000K CLAIMED</span>
-        </div>
-        {/* Tick marks */}
-        {[25,50,75].map(p=><div key={p} style={{position:'absolute',left:`${p}%`,top:0,bottom:0,width:1,background:'rgba(30,58,95,0.5)'}}/>)}
-      </div>
-    </div>
-  )
-}
-
-// ─── Hack Matrix Display ──────────────────────────────────────────────────────
+// ─── Hack Matrix Display (bisected: left=matrix, right=vault+chart+winners) ───
 function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords,liveBank,contractAddr}:{
   calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[];liveBank:number;contractAddr:string
 }){
   const[glitching,setGlitching]=useState(false)
   const[bgCmds,setBgCmds]=useState<{cmd:string;x:number;y:number;op:number;st:string;col:string}[]>([])
+  const[prices,setPrices]=useState<number[]>([0.12,0.14,0.11,0.16,0.18,0.15,0.20,0.22,0.19,0.24,0.21,0.26])
+  const[live,setLive]=useState(0.26)
   const lastNum=calledOrder[calledOrder.length-1]??null
   const prev5=calledOrder.slice(-6,-1).reverse()
   const prevRef=useRef(lastNum)
   const neonCols=['#00e5a0','#00b8ff','#ef4444','#f59e0b','#a855f7']
   const pct=Math.round((calledNums.size/90)*100)
+  const paid=winRecords.reduce((s,r)=>s+r.split*r.claimers.length,0)
+  const vaultPct=Math.min(paid/1000000,1)
+  const trend=prices[prices.length-1]>prices[0]
 
   useEffect(()=>{
     if(lastNum!==prevRef.current){prevRef.current=lastNum;setGlitching(true);setTimeout(()=>setGlitching(false),600)}
   },[lastNum])
+
   useEffect(()=>{
     const t=setInterval(()=>{
-      setBgCmds(p=>[...p.slice(-20),{
+      setBgCmds(p=>[...p.slice(-18),{
         cmd:HACK_CMDS[Math.floor(Math.random()*HACK_CMDS.length)],
         x:3+Math.random()*92,y:5+Math.random()*88,
-        op:0.05+Math.random()*0.1,
+        op:0.04+Math.random()*0.08,
         st:HACK_STATUSES[Math.floor(Math.random()*HACK_STATUSES.length)],
         col:neonCols[Math.floor(Math.random()*neonCols.length)],
       }])
-    },220)
+    },240)
     return()=>clearInterval(t)
   },[])
 
+  // Live RNSM price simulation (real fetch possible once contractAddr is set)
+  useEffect(()=>{
+    if(!contractAddr)return
+    const t=setInterval(()=>{
+      const delta=(Math.random()-0.47)*0.012
+      setLive(p=>{const n=Math.max(0.001,+(p+delta).toFixed(4));setPrices(pp=>[...pp.slice(-24),n]);return n})
+    },1800)
+    return()=>clearInterval(t)
+  },[contractAddr])
+
   return(
     <div style={{display:'flex',flexDirection:'column',gap:8}}>
-      {/* Main screen */}
-      <div style={{background:'#020d1a',border:'2px solid #0a3a5a',borderRadius:14,padding:'12px',position:'relative',overflow:'hidden',minHeight:310}}>
-        <div style={{position:'absolute',inset:0,backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.15) 2px,rgba(0,0,0,0.15) 4px)',pointerEvents:'none',zIndex:1}}/>
-        <div style={{position:'absolute',inset:0,overflow:'hidden',zIndex:2,pointerEvents:'none'}}>
-          {bgCmds.map((c,i)=>(
-            <div key={i} style={{position:'absolute',left:`${c.x}%`,top:`${c.y}%`,fontFamily:'"DM Mono",monospace',fontSize:6.5,color:c.col,opacity:c.op,whiteSpace:'nowrap',transform:'translateX(-50%)',animation:`gx${i%3} ${3+i%2}s ${i*0.1}s infinite`}}>
-              {c.cmd}... {c.st}
-            </div>
-          ))}
-        </div>
-        <div style={{position:'relative',zIndex:3}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-            <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.2em'}}>◉ HACK MATRIX</span>
-            <div style={{display:'flex',alignItems:'center',gap:5}}>
-              <div style={{width:5,height:5,borderRadius:'50%',background:'#22c55e',animation:'dot 1.5s infinite'}}/>
-              <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#22c55e'}}>LIVE</span>
-            </div>
+      {/* ── Bisected main panel ── */}
+      <div style={{background:'#020d1a',border:'2px solid #0a3a5a',borderRadius:14,overflow:'hidden',display:'flex',minHeight:340,position:'relative'}}>
+        {/* Scanline overlay */}
+        <div style={{position:'absolute',inset:0,backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.12) 2px,rgba(0,0,0,0.12) 4px)',pointerEvents:'none',zIndex:1}}/>
+
+        {/* LEFT — Hack Matrix numbers */}
+        <div style={{flex:1,padding:'10px 12px',position:'relative',zIndex:2,display:'flex',flexDirection:'column',minWidth:0}}>
+          {/* Bg hack commands */}
+          <div style={{position:'absolute',inset:0,overflow:'hidden',zIndex:0,pointerEvents:'none'}}>
+            {bgCmds.map((cmd,i)=>(
+              <div key={i} style={{position:'absolute',left:`${cmd.x}%`,top:`${cmd.y}%`,fontFamily:'"DM Mono",monospace',fontSize:6,color:cmd.col,opacity:cmd.op,whiteSpace:'nowrap',transform:'translateX(-50%)',animation:`gx${i%3} ${3+i%2}s ${i*0.1}s infinite`}}>
+                {cmd.cmd}... {cmd.st}
+              </div>
+            ))}
           </div>
-          {preGameSecs>0?(
-            <div style={{textAlign:'center',padding:'20px 0'}}>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.2em',marginBottom:12}}>HACK INITIATES IN</div>
-              <div style={{fontFamily:'"Syne",sans-serif',fontSize:64,fontWeight:800,color:'#fff',lineHeight:1,
-                textShadow:'0 0 30px #fff,0 0 60px rgba(255,255,255,0.5)'}}>{fmtTime(preGameSecs)}</div>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a',marginTop:10}}>ACTIVATE YOUR DEVICES NOW</div>
+          <div style={{position:'relative',zIndex:1,flex:1,display:'flex',flexDirection:'column'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.15em'}}>◉ HACK MATRIX</span>
+              <div style={{display:'flex',alignItems:'center',gap:4}}>
+                <div style={{width:5,height:5,borderRadius:'50%',background:'#22c55e',animation:'dot 1.5s infinite'}}/>
+                <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#22c55e'}}>LIVE</span>
+              </div>
             </div>
-          ):(
-            <>
-              <div style={{textAlign:'center',marginBottom:10}}>
-                <div style={{position:'relative',display:'inline-block'}}>
-                  <div key={String(lastNum)} style={{fontFamily:'"Syne",sans-serif',fontSize:72,fontWeight:800,lineHeight:1,color:'#fff',
+            {preGameSecs>0?(
+              <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+                <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.2em',marginBottom:10}}>HACK INITIATES IN</div>
+                <div style={{fontFamily:'"Syne",sans-serif',fontSize:56,fontWeight:800,color:'#fff',lineHeight:1,textShadow:'0 0 30px #fff,0 0 60px rgba(255,255,255,0.5)'}}>{fmtTime(preGameSecs)}</div>
+                <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a',marginTop:8}}>ACTIVATE YOUR DEVICES NOW</div>
+              </div>
+            ):(
+              <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:6}}>
+                {/* Big number */}
+                <div style={{position:'relative',textAlign:'center'}}>
+                  <div key={String(lastNum)} style={{fontFamily:'"Syne",sans-serif',fontSize:68,fontWeight:800,lineHeight:1,color:'#fff',
                     textShadow:'0 0 20px #fff,0 0 40px rgba(255,255,255,0.7),0 0 80px rgba(255,255,255,0.3)',
-                    animation:glitching?'matrixGlitch 0.6s ease':'numAppear 0.4s cubic-bezier(.34,1.56,.64,1)'}}>
-                    {lastNum??'??'}
+                    animation:glitching?'matrixGlitch 0.6s ease':lastNum?'numAppear 0.4s cubic-bezier(.34,1.56,.64,1)':'none'}}>
+                    {lastNum??'—'}
                   </div>
                   {glitching&&(<>
-                    <div style={{position:'absolute',inset:0,fontFamily:'"Syne",sans-serif',fontSize:72,fontWeight:800,color:'#ff0040',opacity:0.5,animation:'glitchR 0.6s ease',pointerEvents:'none'}}>{lastNum}</div>
-                    <div style={{position:'absolute',inset:0,fontFamily:'"Syne",sans-serif',fontSize:72,fontWeight:800,color:'#00b8ff',opacity:0.5,animation:'glitchB 0.6s ease',pointerEvents:'none'}}>{lastNum}</div>
+                    <div style={{position:'absolute',inset:0,fontFamily:'"Syne",sans-serif',fontSize:68,fontWeight:800,color:'#ff0040',opacity:0.5,animation:'glitchR 0.6s ease',pointerEvents:'none'}}>{lastNum}</div>
+                    <div style={{position:'absolute',inset:0,fontFamily:'"Syne",sans-serif',fontSize:68,fontWeight:800,color:'#00b8ff',opacity:0.5,animation:'glitchB 0.6s ease',pointerEvents:'none'}}>{lastNum}</div>
                   </>)}
                 </div>
-                <div style={{display:'inline-flex',alignItems:'center',gap:5,padding:'3px 10px',background:clickWindowOpen?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.08)',border:`1px solid ${clickWindowOpen?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.25)'}`,borderRadius:20}}>
+                <div style={{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 10px',background:clickWindowOpen?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.08)',border:`1px solid ${clickWindowOpen?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.25)'}`,borderRadius:20}}>
                   <div style={{width:4,height:4,borderRadius:'50%',background:clickWindowOpen?'#22c55e':'#ef4444',animation:clickWindowOpen?'dot 1s infinite':'none'}}/>
                   <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:clickWindowOpen?'#22c55e':'#ef4444'}}>{clickWindowOpen?'CLICK WINDOW OPEN':'WINDOW CLOSED'}</span>
                 </div>
-                {/* Previous 5 numbers */}
-                <div style={{display:'flex',gap:4,justifyContent:'center',marginTop:8}}>
+                {/* Prev numbers */}
+                <div style={{display:'flex',gap:4,justifyContent:'center'}}>
                   {prev5.map((n,i)=>(
-                    <div key={i} style={{width:24,height:24,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',background:'#0a1628',border:'1px solid #1e3a5f',fontFamily:'"DM Mono",monospace',fontSize:9,color:'#fff',opacity:(0.7-i*0.12),textShadow:'0 0 4px rgba(255,255,255,0.5)'}}>{n}</div>
+                    <div key={i} style={{width:22,height:22,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',background:'#0a1628',border:'1px solid #1e3a5f',fontFamily:'"DM Mono",monospace',fontSize:9,color:'#fff',opacity:0.7-i*0.12,textShadow:'0 0 4px rgba(255,255,255,0.5)'}}>{n}</div>
                   ))}
                 </div>
-              </div>
-              {/* Loading bar — remaining numbers */}
-              <div style={{marginBottom:8}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
-                  <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a'}}>NUMBERS DRAWN</span>
-                  <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#2a5a7a'}}>{calledNums.size}/90 · {100-pct}% remaining</span>
-                </div>
-                <div style={{height:6,background:'#0a1628',borderRadius:3,overflow:'hidden',border:'1px solid #0d2035',position:'relative'}}>
-                  <div style={{height:'100%',width:`${pct}%`,background:`linear-gradient(90deg,#00e5a0,#00b8ff ${Math.min(pct*2,100)}%,#f59e0b)`,borderRadius:3,transition:'width 0.5s ease',boxShadow:'0 0 8px rgba(0,229,160,0.5)',position:'relative'}}>
-                    <div style={{position:'absolute',right:0,top:0,bottom:0,width:3,background:'rgba(255,255,255,0.8)',borderRadius:2,boxShadow:'0 0 4px #fff'}}/>
+                {/* Numbers drawn progress bar */}
+                <div style={{width:'100%'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                    <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a'}}>NUMBERS DRAWN</span>
+                    <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#2a5a7a'}}>{calledNums.size}/90</span>
                   </div>
-                  {/* Tick marks every 9 (10%) */}
-                  {Array.from({length:9},(_,i)=>(
-                    <div key={i} style={{position:'absolute',left:`${(i+1)*100/9}%`,top:0,bottom:0,width:1,background:'#1e3a5f20'}}/>
-                  ))}
-                </div>
-                <div style={{display:'flex',justifyContent:'space-between',marginTop:2}}>
-                  {['0','10','20','30','40','50','60','70','80','90'].map(n=>(
-                    <span key={n} style={{fontFamily:'"DM Mono",monospace',fontSize:5,color:'#0a2535'}}>{n}</span>
-                  ))}
+                  <div style={{height:5,background:'#0a1628',borderRadius:3,overflow:'hidden',border:'1px solid #0d2035',position:'relative'}}>
+                    <div style={{height:'100%',width:`${pct}%`,background:`linear-gradient(90deg,#00e5a0,#00b8ff ${Math.min(pct*2,100)}%,#f59e0b)`,borderRadius:3,transition:'width 0.5s ease',boxShadow:'0 0 8px rgba(0,229,160,0.5)'}}/>
+                    {Array.from({length:9},(_,i)=>(<div key={i} style={{position:'absolute',left:`${(i+1)*100/9}%`,top:0,bottom:0,width:1,background:'#1e3a5f20'}}/>))}
+                  </div>
+                  {/* Winners terminal */}
+                  <div style={{marginTop:6,background:'#010a10',border:'1px solid #0a2535',borderRadius:6,padding:'5px 8px',minHeight:60}}>
+                    <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a',marginBottom:3,letterSpacing:'0.1em'}}>🏆 WINNER FEED</div>
+                    <WinnersTerminal winRecords={winRecords}/>
+                  </div>
                 </div>
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Vault fill + RNSM price + winner stats */}
-      <VaultFill winRecords={winRecords} liveBank={liveBank}/>
-      <RnsmPriceChart contractAddr={contractAddr}/>
-      <div style={{background:'#020d1a',border:'1px solid #0a2535',borderRadius:10,padding:'8px 10px'}}>
-        <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:5}}>🏆 WINNER STATS</div>
-        {winRecords.length===0?(
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#0a2535',textAlign:'center',padding:'6px 0'}}>No wins claimed yet</div>
-        ):(
-          winRecords.map((r,i)=>(
-            <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'3px 0',borderBottom:'1px solid #0a1628',gap:4}}>
-              <div style={{width:7,height:5,borderRadius:1,background:LED_COLORS[r.wt],boxShadow:`0 0 4px ${LED_COLORS[r.wt]}`,flexShrink:0}}/>
-              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#2a5a7a',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{WIN_LABELS[r.wt]}</span>
-              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#00e5a0',flexShrink:0}}>{r.claimers.join('+')}</span>
-              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#f59e0b',flexShrink:0}}>${(r.split/1000).toFixed(0)}K</span>
+        {/* Vertical divider */}
+        <div style={{width:1,background:'linear-gradient(180deg,transparent,#0a3a5a,#0a3a5a,transparent)',flexShrink:0,zIndex:2}}/>
+
+        {/* RIGHT — Vault + Chart + Info */}
+        <div style={{width:160,flexShrink:0,padding:'10px 10px',zIndex:2,display:'flex',flexDirection:'column',gap:8}}>
+          {/* 1. Vault sketch */}
+          <div style={{flex:1,minHeight:0}}>
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:2}}>🏦 {BANKS[liveBank].name.toUpperCase()}</div>
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#00e5a0',marginBottom:3}}>${((1000000-paid)/1000).toFixed(0)}K REMAINING</div>
+            <div style={{height:90}}>
+              <VaultSketch pct={vaultPct}/>
             </div>
-          ))
-        )}
+            <div style={{height:5,background:'#0a1628',borderRadius:3,overflow:'hidden',border:'1px solid #0d2035',marginTop:2}}>
+              <div style={{height:'100%',width:`${vaultPct*100}%`,background:'linear-gradient(90deg,#00e5a0,#22c55e)',borderRadius:3,transition:'width 1s ease'}}/>
+            </div>
+          </div>
+
+          {/* 2. RNSM price sparkline */}
+          <div style={{borderTop:'1px solid #0a2535',paddingTop:8}}>
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:3}}>📈 RNSM PRICE</div>
+            <div style={{height:60}}>
+              <RnsmChartSketch prices={prices} trend={trend} live={live} contractAddr={contractAddr}/>
+            </div>
+          </div>
+
+          {/* 3. Quick stats */}
+          <div style={{borderTop:'1px solid #0a2535',paddingTop:6}}>
+            {[
+              ['CLAIMED',`$${(paid/1000).toFixed(0)}K`],
+              ['VAULT',`$${(1000000/1000).toFixed(0)}K`],
+              ['DRAWN',`${calledNums.size}/90`],
+              ['WINNERS',String(winRecords.length)],
+            ].map(([k,v])=>(
+              <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'2px 0',borderBottom:'1px solid #0a1628'}}>
+                <span style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a'}}>{k}</span>
+                <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#4a7fa5',fontWeight:700}}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
 }
+
 
 // ─── Chat Terminal (media queue, text + media only) ──────────────────────────
 function ChatTerminal({nickname}:{nickname:string}){
