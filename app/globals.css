@@ -125,3 +125,11 @@ body {
   0% { background-position: -200px 0; }
   100% { background-position: 200px 0; }
 }
+
+@keyframes ledExpire {
+  0%   { opacity: 1; box-shadow: 0 0 8px currentColor, 0 0 20px currentColor; }
+  15%  { opacity: 0.1; box-shadow: none; }
+  30%  { opacity: 0.9; box-shadow: 0 0 6px currentColor; }
+  50%  { opacity: 0.05; box-shadow: none; }
+  100% { opacity: 0.08; box-shadow: none; }
+}

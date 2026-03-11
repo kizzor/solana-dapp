@@ -683,7 +683,7 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
               border:`1px solid ${ws.broken?LED_COLORS[type]+'30':(won||lit)?LED_COLORS[type]:ledPct>0.3?LED_COLORS[type]+'60':'#162438'}`,
               boxShadow:(won||lit)&&!ws.broken?`0 0 4px ${LED_COLORS[type]},0 0 8px ${LED_COLORS[type]}60`:proximityGlow,
               opacity:dead&&!ws.flickering&&!ws.broken?0.15:dimOpacity,
-              animation:ws.broken||ws.expired?'none':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.5s ${i*0.07}s infinite`:'none',
+              animation:ws.broken?'none':ws.expired?'ledExpire 0.4s ease forwards':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.6s ${i*0.07}s infinite`:'none',
             }}>
               {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}50 20%,transparent 70%)`,animation:'filamentGlow 2s ease-in-out infinite'}}/>}
             </div>
@@ -1401,6 +1401,23 @@ export default function Ransome(){
       if(!d.active||d.corrupted)return d
       return{...d,grid:d.grid.map(row=>row.map(cell=>cell.num===num?{...cell,matched:true}:cell))}
     }))
+    // When a new number draws: expire any wins that were claimable but unclaimed
+    // Lightning blink for 400ms then go expired/dark
+    setWinStates(prev=>{
+      const next={...prev}
+      let anyExpired=false
+      ;(Object.keys(next) as WinType[]).forEach(wt=>{
+        if(next[wt].claimable&&!next[wt].claimed&&!next[wt].expired){
+          next[wt]={...next[wt],claimable:false,flickering:true,expired:false}
+          anyExpired=true
+          // After lightning blink duration → mark expired, stop flicker
+          setTimeout(()=>{
+            setWinStates(p=>({...p,[wt]:{...p[wt],flickering:false,expired:true}}))
+          },400)
+        }
+      })
+      return next
+    })
     setTimeout(()=>{setClickWindowOpen(true);drawLockRef.current=false},150)
   },[])
 
@@ -1445,30 +1462,29 @@ export default function Ransome(){
     if(preTimerRef.current)clearInterval(preTimerRef.current)
     // Short delay so React fully commits restored device state
     const t=setTimeout(()=>{
-      // Sync drawnRef with restored game state to prevent re-drawing old numbers
+      // Sync drawnRef with restored numbers — do NOT draw a new number on resume
       drawnRef.current=new Set(Array.from(calledNums))
-      // Mark cells that were matched but not clicked as missed (cannot be acted on after reload)
+      // Mark matched-but-unclicked cells as missed (rounds passed while away)
       setDevices(ds=>ds.map(d=>({...d,
         grid:d.grid.map(row=>row.map(cell=>
           cell.matched&&!cell.clicked?{...cell,missed:true}:cell
         ))
       })))
-      const secs=60;setTimer(secs);setTotalTimer(secs);setPreGameSecs(0)
-      drawNumber()
+      // Start the 60s interval — next number draws after a full round, not immediately
+      setPreGameSecs(0);setTimer(60);setTotalTimer(60);setClickWindowOpen(false)
       timerRef.current=setInterval(()=>{
         setTimer(prev=>{
           if(prev<=1){
             setClickWindowOpen(false)
-            const nxt=60
-            setTotalTimer(nxt);drawNumber();return nxt
+            setTotalTimer(60);drawNumber();return 60
           }
           return prev-1
         })
       },1000)
     },300)
     return()=>clearTimeout(t)
-  // devices in deps so this fires after rehydrated devices are committed
-  },[phase,devices,drawNumber])
+  // Only run once when resumeRef is set — don't re-run on every device change
+  },[phase,drawNumber])
 
   // Win detection
   useEffect(()=>{
@@ -1479,16 +1495,11 @@ export default function Ransome(){
         if(!d.active||d.corrupted)return
         const all=d.grid.flat(),nc=all.filter(c=>c.clicked)
         const triggerWin=(wt:WinType,msg:string)=>{
-          if(next[wt].claimable)return
+          if(next[wt].claimable||next[wt].claimed||next[wt].expired)return
+          // Win achieved: flicker ALL active device LEDs for this win type this round
+          // Expiry happens automatically when next number is drawn (in drawNumber)
           next[wt]={...next[wt],claimable:true,flickering:true}
           if(!ann){announce(msg);ann=true}
-          // After 60s (end of round), expire this win — rapid flicker signals unclaimed
-          setTimeout(()=>{
-            setWinStates(p=>{
-              if(p[wt].claimed)return p   // already claimed, don't expire
-              return{...p,[wt]:{...p[wt],flickering:false,expired:true,claimable:false}}
-            })
-          },60000)
         }
         if(nc.length>=5)triggerWin('EARLY_FIVE',`⚡ ${d.nftId} — EARLY FIVE! CLAIM NOW`)
         if(d.grid[0].filter(cl=>cl.num).every(cl=>cl.clicked))triggerWin('TOP_LINE',`⚡ ${d.nftId} — TOP LINE! CLAIM NOW`)
@@ -1696,7 +1707,7 @@ export default function Ransome(){
               background:st.claimed?'rgba(34,197,94,0.08)':st.claimable?'rgba(236,72,153,0.08)':'transparent',
               border:st.claimed?'1px solid rgba(34,197,94,0.25)':st.expired?'1px solid rgba(127,0,0,0.3)':st.claimable?'1px solid rgba(236,72,153,0.35)':'1px solid transparent'}}>
               <div style={{width:7,height:5,borderRadius:1,background:st.expired?'#3f1010':LED_COLORS[type],opacity:st.claimed?0.3:st.expired?0.4:1,
-                animation:st.flickering?'rapidFlicker 0.08s infinite':st.broken?'none':st.claimable&&!st.claimed&&!st.expired?'ledBlink 0.5s infinite':'none',
+                animation:st.broken?'none':st.expired?'ledExpire 0.4s ease forwards':st.flickering?'rapidFlicker 0.08s infinite':st.claimable&&!st.claimed?'ledBlink 0.6s infinite':'none',
                 boxShadow:st.claimable&&!st.claimed&&!st.expired?`0 0 4px ${LED_COLORS[type]}`:'none'}}/>
               <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:st.claimed?'#22c55e':st.claimable?'#ec4899':'#1e4a6a',whiteSpace:'nowrap'}}>
                 {st.claimed?'✓ ':st.claimable?'⚡ ':'○ '}{label}
