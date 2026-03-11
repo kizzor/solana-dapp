@@ -7,8 +7,13 @@ type Cell = { num:number|null; matched:boolean; clicked:boolean }
 type Device = { id:number; nftId:string; grid:Cell[][]; claimed:Set<string>; active:boolean; corrupted:boolean }
 type WinType = 'EARLY_FIVE'|'TOP_LINE'|'MIDDLE_LINE'|'BOTTOM_LINE'|'FULL_HOUSE_1'|'FULL_HOUSE_2'|'FULL_HOUSE_3'
 type WinState = { claimed:boolean; claimable:boolean; flickering:boolean; broken:boolean; claimers:string[] }
-type ChatLine = { t:'sys'|'user'|'cmd'|'img'; m:string; src?:string }
+type ChatLine = { t:'sys'|'user'|'cmd'|'img'; m:string; src?:string; vSrc?:string }
 type WinRecord = { wt:WinType; claimers:string[]; round:number; split:number }
+type MediaItem = { src:string; type:'image'|'video'; name:string }
+
+const STORAGE_KEY='ransome_state_v1'
+function saveState(data:object){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(data))}catch{}}
+function loadState():any{try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):null}catch{return null}}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const WIN_LABELS:Record<WinType,string> = {
@@ -573,9 +578,20 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
     if(all&&winStates[fhk]?.claimable)onClaim(device.id,fhk)
   }
   const LED_TYPES:WinType[]=['EARLY_FIVE','TOP_LINE','MIDDLE_LINE','BOTTOM_LINE','FULL_HOUSE_1','FULL_HOUSE_2','FULL_HOUSE_3']
+  // Proximity glow: compute best % toward each win condition for this device
+  const ef5p=Math.min(nc/5,1)
+  const t0p=device.grid[0].filter(c=>c.num&&c.clicked).length/Math.max(device.grid[0].filter(c=>c.num).length,1)
+  const m1p=device.grid[1].filter(c=>c.num&&c.clicked).length/Math.max(device.grid[1].filter(c=>c.num).length,1)
+  const b2p=device.grid[2].filter(c=>c.num&&c.clicked).length/Math.max(device.grid[2].filter(c=>c.num).length,1)
+  const fhp=Math.min(nc/15,1)
+  const bestPct=Math.max(ef5p,t0p,m1p,b2p,fhp)
+  // Glow intensity proportional to proximity; pulses when >80%
+  const glowR=Math.round(bestPct*255),glowG=Math.round((1-bestPct)*120)
+  const proxColor=canClaim?'#ec4899':`rgb(${glowR},${glowG},${Math.round(40+bestPct*60)})`
+  const proxGlow=bestPct>0.4?`0 0 ${Math.round(bestPct*18)}px ${proxColor}40,0 0 ${Math.round(bestPct*8)}px ${proxColor}20`:'none'
   return(
-    <div style={{background:'linear-gradient(180deg,#0d1a2e,#060e1a)',border:`2px solid ${canClaim?'#ec4899':device.active?'#00e5a030':'#162438'}`,borderRadius:14,padding:0,
-      boxShadow:canClaim?'0 0 0 2px rgba(236,72,153,0.3),0 6px 24px rgba(236,72,153,0.15)':device.active?'0 0 10px rgba(0,229,160,0.06)':'none',
+    <div style={{background:'linear-gradient(180deg,#0d1a2e,#060e1a)',border:`2px solid ${canClaim?'#ec4899':bestPct>0.5?proxColor:device.active?'#00e5a030':'#162438'}`,borderRadius:14,padding:0,
+      boxShadow:canClaim?`0 0 0 2px rgba(236,72,153,0.3),0 6px 24px rgba(236,72,153,0.15)`:bestPct>0.4?proxGlow:device.active?'0 0 10px rgba(0,229,160,0.06)':'none',
       display:'flex',flexDirection:'column',overflow:'hidden',userSelect:'none'}}>
       {/* Header */}
       <div style={{background:'linear-gradient(90deg,#0a1628,#0d1f3a)',padding:'4px 7px',borderBottom:'1px solid #0d1f3a',display:'flex',justifyContent:'space-between',alignItems:'center',gap:4}}>
@@ -650,13 +666,22 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
         <div style={{display:'flex',gap:2}}>{[0,1].map(i=><div key={i} style={{width:6,height:5,borderRadius:1,background:'#0a1628',border:'1px solid #162438'}}/>)}</div>
         {LED_TYPES.map((type,i)=>{
           const ws=winStates[type],won=device.claimed.has(type),lit=ws.claimable&&!ws.claimed,dead=ws.claimed&&!won
+          // Compute this LED's individual proximity
+          let ledPct=0
+          if(type==='EARLY_FIVE')ledPct=ef5p
+          else if(type==='TOP_LINE')ledPct=t0p
+          else if(type==='MIDDLE_LINE')ledPct=m1p
+          else if(type==='BOTTOM_LINE')ledPct=b2p
+          else ledPct=fhp
+          const proximityGlow=!ws.claimed&&!ws.broken&&!lit&&ledPct>0.3?`0 0 ${Math.round(ledPct*8)}px ${LED_COLORS[type]}${Math.round(ledPct*80).toString(16).padStart(2,'0')}`:'none'
+          const dimOpacity=(!lit&&!won&&!ws.broken)?(0.1+ledPct*0.5):1
           return(
             <div key={type} title={WIN_LABELS[type]} style={{
               width:9,height:7,borderRadius:2,position:'relative',overflow:'hidden',
-              background:ws.broken?'transparent':(won||lit)?LED_COLORS[type]:dead?'#050d17':'#0a1628',
-              border:`1px solid ${ws.broken?LED_COLORS[type]+'30':(won||lit)?LED_COLORS[type]:'#162438'}`,
-              boxShadow:(won||lit)&&!ws.broken?`0 0 4px ${LED_COLORS[type]},0 0 8px ${LED_COLORS[type]}60`:'none',
-              opacity:dead&&!ws.flickering&&!ws.broken?0.2:1,
+              background:ws.broken?'transparent':(won||lit)?LED_COLORS[type]:dead?'#050d17':ledPct>0.3?`${LED_COLORS[type]}${Math.round(ledPct*60).toString(16).padStart(2,'0')}`:'#0a1628',
+              border:`1px solid ${ws.broken?LED_COLORS[type]+'30':(won||lit)?LED_COLORS[type]:ledPct>0.3?LED_COLORS[type]+'60':'#162438'}`,
+              boxShadow:(won||lit)&&!ws.broken?`0 0 4px ${LED_COLORS[type]},0 0 8px ${LED_COLORS[type]}60`:proximityGlow,
+              opacity:dead&&!ws.flickering&&!ws.broken?0.15:dimOpacity,
               animation:ws.broken?'none':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.5s ${i*0.07}s infinite`:'none',
             }}>
               {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}50 20%,transparent 70%)`,animation:'filamentGlow 2s ease-in-out infinite'}}/>}
@@ -674,15 +699,18 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
         </div>
         <MiniStopwatch seconds={timer} total={totalTimer}/>
         <button onClick={doClaim} disabled={!canClaim} style={{
-          flex:1,background:canClaim?'linear-gradient(180deg,#1a0000,#0d0000)':'linear-gradient(180deg,#080f18,#040a10)',
-          border:`2px solid ${canClaim?'#ff2020':'#162438'}`,borderRadius:7,
+          flex:1,
+          background:canClaim?'linear-gradient(180deg,#1a0000,#0d0000)':bestPct>0.5?`linear-gradient(180deg,rgba(${glowR},${glowG},20,0.15),rgba(${glowR},${glowG},20,0.05))`:'linear-gradient(180deg,#080f18,#040a10)',
+          border:`2px solid ${canClaim?'#ff2020':bestPct>0.5?proxColor:'#162438'}`,borderRadius:7,
           padding:'8px 4px',cursor:canClaim?'pointer':'default',
           display:'flex',alignItems:'center',justifyContent:'center',
-          animation:canClaim?'ransomPulse 1s infinite':'none',
-          boxShadow:canClaim?'inset 0 0 10px rgba(255,32,32,0.3),0 0 10px rgba(255,32,32,0.4)':'none',
+          animation:canClaim?'ransomPulse 1s infinite':bestPct>0.8?'ransomPulse 2s infinite':'none',
+          boxShadow:canClaim?'inset 0 0 10px rgba(255,32,32,0.3),0 0 10px rgba(255,32,32,0.4)':bestPct>0.5?`inset 0 0 ${Math.round(bestPct*8)}px ${proxColor}30,0 0 ${Math.round(bestPct*10)}px ${proxColor}30`:'none',
           margin:'0 2px',
         }}>
-          <span style={{fontFamily:'"Syne",sans-serif',fontSize:11,fontWeight:800,letterSpacing:'0.1em',color:canClaim?'#ff4040':'#1e3a5f',textShadow:canClaim?'0 0 8px #ff2020,0 0 20px #ff202080':'none'}}>RANSOM</span>
+          <span style={{fontFamily:'"Syne",sans-serif',fontSize:11,fontWeight:800,letterSpacing:'0.1em',
+            color:canClaim?'#ff4040':bestPct>0.6?proxColor:'#1e3a5f',
+            textShadow:canClaim?'0 0 8px #ff2020,0 0 20px #ff202080':bestPct>0.6?`0 0 6px ${proxColor}`:'none'}}>RANSOM</span>
         </button>
         <div style={{display:'flex',flexDirection:'column',gap:3}}>
           {[0,1].map(i=><div key={i} style={{width:12,height:12,borderRadius:'50%',background:'radial-gradient(circle at 35% 30%,#2a4a6a,#050d17)',border:'1.5px solid #1e3a5f'}}/>)}
@@ -692,9 +720,86 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
   )
 }
 
+// ─── RNSM Price Chart (sparkline) ─────────────────────────────────────────────
+function RnsmPriceChart({contractAddr}:{contractAddr:string}){
+  const[prices,setPrices]=useState<number[]>([0.12,0.14,0.11,0.16,0.18,0.15,0.20,0.22,0.19,0.24,0.21,0.26])
+  const[live,setLive]=useState(0.26)
+  useEffect(()=>{
+    if(!contractAddr)return
+    const t=setInterval(()=>{
+      const delta=(Math.random()-0.48)*0.015
+      setLive(p=>{const n=Math.max(0.001,+(p+delta).toFixed(4));setPrices(pp=>[...pp.slice(-20),n]);return n})
+    },2000)
+    return()=>clearInterval(t)
+  },[contractAddr])
+  if(!contractAddr)return(
+    <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:6,padding:'6px 10px',display:'flex',alignItems:'center',gap:6}}>
+      <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a'}}>RNSM PRICE CHART — enter contract address to activate</span>
+    </div>
+  )
+  const min=Math.min(...prices),max=Math.max(...prices),range=Math.max(max-min,0.001)
+  const w=200,h=36
+  const pts=prices.map((p,i)=>`${(i/(prices.length-1))*w},${h-(((p-min)/range)*(h-6)+3)}`).join(' ')
+  const trend=prices[prices.length-1]>prices[0]
+  return(
+    <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:6,padding:'6px 10px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+        <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a',letterSpacing:'0.1em'}}>RNSM/USDT</span>
+        <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,fontWeight:700,color:trend?'#22c55e':'#ef4444'}}>${live.toFixed(4)} {trend?'▲':'▼'}</span>
+      </div>
+      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={trend?"#22c55e":"#ef4444"} stopOpacity="0.3"/>
+            <stop offset="100%" stopColor={trend?"#22c55e":"#ef4444"} stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <polyline points={pts} fill="none" stroke={trend?"#22c55e":"#ef4444"} strokeWidth="1.5" strokeLinejoin="round"/>
+        <polygon points={`0,${h} ${pts} ${w},${h}`} fill="url(#pg)"/>
+      </svg>
+    </div>
+  )
+}
+
+// ─── Vault Fill Animation ──────────────────────────────────────────────────────
+function VaultFill({winRecords,liveBank}:{winRecords:WinRecord[];liveBank:number}){
+  const total=1000000
+  const paid=winRecords.reduce((s,r)=>s+r.split*r.claimers.length,0)
+  const pct=Math.min(paid/total,1)
+  const remaining=total-paid
+  return(
+    <div style={{background:'#030a12',border:'1px solid #0d2035',borderRadius:6,padding:'7px 10px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
+        <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a',letterSpacing:'0.1em'}}>🏦 VAULT · {BANKS[liveBank].name.toUpperCase()}</span>
+        <span style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#00e5a0',fontWeight:700}}>${(remaining/1000).toFixed(0)}K remaining</span>
+      </div>
+      {/* Vault container */}
+      <div style={{position:'relative',height:28,background:'#020810',border:'2px solid #1e3a5f',borderRadius:4,overflow:'hidden'}}>
+        {/* Fill bar */}
+        <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${(1-pct)*100}%`,
+          background:'linear-gradient(90deg,#00e5a030,#00e5a0)',
+          transition:'width 1s ease',
+          boxShadow:'2px 0 12px rgba(0,229,160,0.6)'}}>
+          {/* Liquid shimmer */}
+          <div style={{position:'absolute',inset:0,background:'repeating-linear-gradient(90deg,transparent,transparent 8px,rgba(255,255,255,0.07) 8px,rgba(255,255,255,0.07) 10px)',animation:'vaultShimmer 2s linear infinite'}}/>
+        </div>
+        {/* Claimed overlay */}
+        <div style={{position:'absolute',right:0,top:0,bottom:0,width:`${pct*100}%`,
+          background:'linear-gradient(90deg,#ef444420,#ef4444)',opacity:0.4}}/>
+        {/* Center label */}
+        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#fff',fontWeight:700,textShadow:'0 0 6px rgba(0,0,0,0.8)'}}>${(paid/1000).toFixed(0)}K / $1,000K CLAIMED</span>
+        </div>
+        {/* Tick marks */}
+        {[25,50,75].map(p=><div key={p} style={{position:'absolute',left:`${p}%`,top:0,bottom:0,width:1,background:'rgba(30,58,95,0.5)'}}/>)}
+      </div>
+    </div>
+  )
+}
+
 // ─── Hack Matrix Display ──────────────────────────────────────────────────────
-function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords}:{
-  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[]
+function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords,liveBank,contractAddr}:{
+  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[];liveBank:number;contractAddr:string
 }){
   const[glitching,setGlitching]=useState(false)
   const[bgCmds,setBgCmds]=useState<{cmd:string;x:number;y:number;op:number;st:string;col:string}[]>([])
@@ -798,18 +903,20 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
         </div>
       </div>
 
-      {/* Winners stats below Hack Matrix */}
+      {/* Vault fill + RNSM price + winner stats */}
+      <VaultFill winRecords={winRecords} liveBank={liveBank}/>
+      <RnsmPriceChart contractAddr={contractAddr}/>
       <div style={{background:'#020d1a',border:'1px solid #0a2535',borderRadius:10,padding:'8px 10px'}}>
-        <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:6}}>🏆 WINNER STATS</div>
+        <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:5}}>🏆 WINNER STATS</div>
         {winRecords.length===0?(
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#0a2535',textAlign:'center',padding:'8px 0'}}>No wins claimed yet this round</div>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#0a2535',textAlign:'center',padding:'6px 0'}}>No wins claimed yet</div>
         ):(
           winRecords.map((r,i)=>(
-            <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'3px 0',borderBottom:'1px solid #0a1628',gap:6}}>
-              <div style={{width:8,height:6,borderRadius:1,background:LED_COLORS[r.wt],boxShadow:`0 0 4px ${LED_COLORS[r.wt]}`,flexShrink:0}}/>
-              <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#2a5a7a',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{WIN_LABELS[r.wt]}</span>
-              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#00e5a0',flexShrink:0}}>{r.claimers.join(', ')}</span>
-              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#f59e0b',flexShrink:0}}>${(r.split/1000).toFixed(0)}K ea</span>
+            <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'3px 0',borderBottom:'1px solid #0a1628',gap:4}}>
+              <div style={{width:7,height:5,borderRadius:1,background:LED_COLORS[r.wt],boxShadow:`0 0 4px ${LED_COLORS[r.wt]}`,flexShrink:0}}/>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#2a5a7a',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{WIN_LABELS[r.wt]}</span>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#00e5a0',flexShrink:0}}>{r.claimers.join('+')}</span>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#f59e0b',flexShrink:0}}>${(r.split/1000).toFixed(0)}K</span>
             </div>
           ))
         )}
@@ -818,52 +925,91 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
   )
 }
 
-// ─── Chat Terminal ────────────────────────────────────────────────────────────
+// ─── Chat Terminal (media queue, text + media only) ──────────────────────────
 function ChatTerminal({nickname}:{nickname:string}){
   const[lines,setLines]=useState<ChatLine[]>([
     {t:'sys',m:'HACKING MATRIX v3.7.1 INITIALIZED'},
     {t:'sys',m:`AGENT ${nickname.toUpperCase()} CONNECTED`},
   ])
   const[input,setInput]=useState('')
+  const[mediaQueue,setMediaQueue]=useState<MediaItem[]>([])
+  const[playIdx,setPlayIdx]=useState(0)
+  const[playing,setPlaying]=useState(false)
   const scrollRef=useRef<HTMLDivElement>(null)
   const fileRef=useRef<HTMLInputElement>(null)
+  const videoRef=useRef<HTMLVideoElement>(null)
+
   useEffect(()=>{const b=scrollRef.current;if(b)b.scrollTop=b.scrollHeight},[lines])
+
+  // Sequential media player: when queue grows or playback ends, play next
   useEffect(()=>{
-    const t=setInterval(()=>{
-      const cmd=HACK_CMDS[Math.floor(Math.random()*HACK_CMDS.length)]
-      setLines(p=>[...p.slice(-60),{t:'cmd',m:`> ${cmd}... [${Math.random().toString(16).slice(2,6).toUpperCase()}]`}])
-    },3500+Math.random()*2000)
-    return()=>clearInterval(t)
-  },[])
-  const send=()=>{if(!input.trim())return;setLines(p=>[...p,{t:'user',m:`${nickname}: ${input}`}]);setInput('')}
-  const handleFile=(e:React.ChangeEvent<HTMLInputElement>)=>{
-    const f=e.target.files?.[0];if(!f)return
-    const r=new FileReader()
-    r.onload=ev=>{
-      const src=ev.target?.result as string
-      if(f.type.startsWith('image/'))setLines(p=>[...p,{t:'img',m:`${nickname}: ${f.name}`,src}])
-      else setLines(p=>[...p,{t:'sys',m:`📎 ${nickname}: ${f.name}`}])
-    }
-    r.readAsDataURL(f);e.target.value=''
+    if(mediaQueue.length===0||playing)return
+    setPlaying(true)
+  },[mediaQueue,playing])
+
+  const handleMediaEnd=()=>{
+    const next=playIdx+1
+    if(next<mediaQueue.length){setPlayIdx(next)}
+    else{setPlaying(false);setPlayIdx(0);setMediaQueue([])}
   }
+
+  const send=()=>{
+    if(!input.trim())return
+    setLines(p=>[...p,{t:'user',m:`${nickname}: ${input}`}])
+    setInput('')
+  }
+
+  const handleFile=(e:React.ChangeEvent<HTMLInputElement>)=>{
+    const files=Array.from(e.target.files??[])
+    files.forEach(f=>{
+      if(!f.type.startsWith('image/')&&!f.type.startsWith('video/'))return
+      const r=new FileReader()
+      r.onload=ev=>{
+        const src=ev.target?.result as string
+        const type:'image'|'video'=f.type.startsWith('video/')?'video':'image'
+        setMediaQueue(q=>[...q,{src,type,name:f.name}])
+        setLines(p=>[...p,{t:'img',m:`${nickname}: ${f.name}`,src:type==='image'?src:undefined,vSrc:type==='video'?src:undefined}])
+      }
+      r.readAsDataURL(f)
+    })
+    e.target.value=''
+  }
+
+  const currentMedia=playing&&mediaQueue[playIdx]?mediaQueue[playIdx]:null
+
   return(
     <div style={{display:'flex',flexDirection:'column',background:'#020d1a',border:'1px solid #0a2535',borderRadius:12,overflow:'hidden'}}>
       <div style={{padding:'5px 10px',borderBottom:'1px solid #0a2535',fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#00e5a0',display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
         <div style={{width:5,height:5,borderRadius:'50%',background:'#22c55e',animation:'dot 1.5s infinite'}}/>
         SECURE CHAT
+        {mediaQueue.length>0&&<span style={{marginLeft:'auto',fontFamily:'"DM Mono",monospace',fontSize:6,color:'#f59e0b'}}>▶ {playIdx+1}/{mediaQueue.length} queued</span>}
       </div>
-      <div ref={scrollRef} style={{height:240,overflowY:'auto',padding:'6px 8px',display:'flex',flexDirection:'column',gap:2}}>
+      {/* Media player — sequential queue */}
+      {currentMedia&&(
+        <div style={{background:'#030a12',borderBottom:'1px solid #0a2535',padding:4}}>
+          {currentMedia.type==='image'?(
+            <img src={currentMedia.src} alt="" onLoad={()=>setTimeout(handleMediaEnd,2000)}
+              style={{width:'100%',maxHeight:120,objectFit:'contain',borderRadius:4,display:'block'}}/>
+          ):(
+            <video ref={videoRef} src={currentMedia.src} autoPlay controls onEnded={handleMediaEnd}
+              style={{width:'100%',maxHeight:120,borderRadius:4,display:'block'}}/>
+          )}
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#f59e0b',padding:'2px 4px'}}>{currentMedia.name} · {playIdx+1}/{mediaQueue.length}</div>
+        </div>
+      )}
+      <div ref={scrollRef} style={{height:200,overflowY:'auto',padding:'6px 8px',display:'flex',flexDirection:'column',gap:3}}>
         {lines.map((l,i)=>(
           <div key={i}>
-            <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:l.t==='sys'?'#00e5a0':l.t==='user'?'#00b8ff':l.t==='img'?'#f59e0b':'#2a5a7a',fontWeight:l.t==='user'?600:400}}>{l.m}</div>
-            {l.t==='img'&&l.src&&<img src={l.src} alt="" style={{maxWidth:'100%',maxHeight:100,borderRadius:5,marginTop:3,border:'1px solid #1e3a5f',display:'block'}}/>}
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,
+              color:l.t==='sys'?'#00e5a0':l.t==='user'?'#00b8ff':l.t==='img'?'#f59e0b':'#2a5a7a',
+              fontWeight:l.t==='user'?600:400}}>{l.m}</div>
           </div>
         ))}
       </div>
       <div style={{display:'flex',borderTop:'1px solid #0a2535'}}>
-        <input ref={fileRef} type="file" accept="image/*,video/*,.pdf,.txt" onChange={handleFile} style={{display:'none'}}/>
-        <button onClick={()=>fileRef.current?.click()} style={{background:'#0a1628',border:'none',borderRight:'1px solid #0a2535',padding:'6px 9px',color:'#2a5a7a',cursor:'pointer',fontSize:12}}>📎</button>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="TYPE..."
+        <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={handleFile} style={{display:'none'}}/>
+        <button onClick={()=>fileRef.current?.click()} style={{background:'#0a1628',border:'none',borderRight:'1px solid #0a2535',padding:'6px 9px',color:'#f59e0b',cursor:'pointer',fontSize:12}}>📎</button>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="TYPE MESSAGE..."
           style={{flex:1,background:'transparent',border:'none',padding:'6px 7px',fontFamily:'"DM Mono",monospace',fontSize:8,color:'#00b8ff',outline:'none'}}/>
         <button onClick={send} style={{background:'#0a1628',border:'none',borderLeft:'1px solid #0a2535',padding:'6px 9px',color:'#2a5a7a',cursor:'pointer',fontFamily:'"DM Mono",monospace',fontSize:8}}>TX</button>
       </div>
@@ -872,20 +1018,29 @@ function ChatTerminal({nickname}:{nickname:string}){
 }
 
 // ─── Game Stats ───────────────────────────────────────────────────────────────
-function GameStats({devices,calledNums,bankruptCount,liveBank,nickname,winStates}:{
-  devices:Device[];calledNums:Set<number>;bankruptCount:number;liveBank:number;nickname:string;winStates:Record<WinType,WinState>
+function GameStats({devices,calledNums,bankruptCount,liveBank,nickname,winStates,contractAddr,setContractAddr}:{
+  devices:Device[];calledNums:Set<number>;bankruptCount:number;liveBank:number;nickname:string;
+  winStates:Record<WinType,WinState>;contractAddr:string;setContractAddr:(v:string)=>void
 }){
   const LED_TYPES:WinType[]=['EARLY_FIVE','TOP_LINE','MIDDLE_LINE','BOTTOM_LINE','FULL_HOUSE_1','FULL_HOUSE_2','FULL_HOUSE_3']
   return(
     <div style={{display:'flex',flexDirection:'column',gap:8}}>
       <div style={{background:'#020d1a',border:'1px solid #0a2535',borderRadius:12,padding:10}}>
         <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#2a5a7a',marginBottom:7}}>GAME STATS</div>
-        {[['AGENT',nickname],['TARGET',BANKS[liveBank].name],['DRAWN',`${calledNums.size}/90`],['DEVICES',String(devices.length)],['ACTIVE',String(devices.filter(d=>d.active).length)],['BANKRUPT',`${bankruptCount}/3`]].map(([k,v])=>(
+        {[['AGENT',nickname],['TARGET',BANKS[liveBank].name.split(' ')[0]],['DRAWN',`${calledNums.size}/90`],['DEVICES',`${devices.filter(d=>d.active).length}/${devices.length}`],['BANKRUPT',`${bankruptCount}/3`]].map(([k,v])=>(
           <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'2px 0',borderBottom:'1px solid #0a1628'}}>
-            <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a'}}>{k}</span>
-            <span style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#4a7fa5',fontWeight:600}}>{v}</span>
+            <span style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a'}}>{k}</span>
+            <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#4a7fa5',fontWeight:600}}>{v}</span>
           </div>
         ))}
+        {/* Contract address input for RNSM price feed */}
+        <div style={{marginTop:7,paddingTop:6,borderTop:'1px solid #0a1628'}}>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a',marginBottom:3}}>RNSM CONTRACT</div>
+          <input value={contractAddr} onChange={e=>setContractAddr(e.target.value)}
+            placeholder="0x... or token addr"
+            style={{width:'100%',background:'#0a1628',border:`1px solid ${contractAddr?'#00e5a040':'#0a2535'}`,borderRadius:5,padding:'4px 6px',
+              fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#00e5a0',outline:'none',boxSizing:'border-box'}}/>
+        </div>
       </div>
       <div style={{background:'#020d1a',border:'1px solid #0a2535',borderRadius:10,padding:10}}>
         <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#1e4a6a',marginBottom:7}}>WIN STATUS</div>
@@ -1001,6 +1156,7 @@ export default function Ransome(){
   const[bankHacked,setBankHacked]=useState(false)
   const[winRecords,setWinRecords]=useState<WinRecord[]>([])
   const[roundNum,setRoundNum]=useState(0)
+  const[contractAddr,setContractAddr]=useState('')
   // claimers accumulating per round per winType
   const pendingClaimers=useRef<Record<WinType,string[]>>({EARLY_FIVE:[],TOP_LINE:[],MIDDLE_LINE:[],BOTTOM_LINE:[],FULL_HOUSE_1:[],FULL_HOUSE_2:[],FULL_HOUSE_3:[]})
   const roundTimers=useRef<Record<string,ReturnType<typeof setTimeout>>>({})
@@ -1010,6 +1166,32 @@ export default function Ransome(){
   const flickerTimers=useRef<Record<string,ReturnType<typeof setTimeout>>>({})
   const currentHour=new Date().getUTCHours()
   const liveBank=getLiveBank(currentHour)
+
+  // ── Persist & restore state ──────────────────────────────────────────────
+  useEffect(()=>{
+    const s=loadState()
+    if(!s)return
+    if(s.nickname){setNickname(s.nickname)}
+    if(s.wallet){setWallet(s.wallet)}
+    if(s.devices&&s.devices.length>0){
+      // Rehydrate devices (Sets get serialised as arrays)
+      const rehydrated=s.devices.map((d:any)=>({...d,claimed:new Set(d.claimed??[])}))
+      setDevices(rehydrated)
+    }
+    if(s.mintToken){setMintToken(s.mintToken)}
+    if(s.contractAddr){setContractAddr(s.contractAddr)}
+    if(s.phase&&s.phase!=='setup'){setPhase(s.phase)}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[])
+
+  // Save on every meaningful state change
+  useEffect(()=>{
+    if(phase==='setup')return
+    saveState({
+      nickname,wallet,phase,mintToken,contractAddr,
+      devices:devices.map(d=>({...d,claimed:Array.from(d.claimed)})),
+    })
+  },[nickname,wallet,phase,mintToken,contractAddr,devices])
   const currentNum=calledOrder[calledOrder.length-1]??null
   const hourCd=useHourCountdown()
 
@@ -1241,10 +1423,10 @@ export default function Ransome(){
         </div>
       </div>
 
-      {/* 3-col top panel */}
-      <div style={{padding:'10px 12px 0',display:'grid',gridTemplateColumns:'190px 1fr 220px',gap:10,alignItems:'start'}}>
-        <GameStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} liveBank={liveBank} nickname={nickname} winStates={winStates}/>
-        <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords}/>
+      {/* 3-col: Hack Matrix LEFT | GameStats+Win CENTER | Chat RIGHT */}
+      <div style={{padding:'10px 12px 0',display:'grid',gridTemplateColumns:'1fr 200px 220px',gap:10,alignItems:'start'}}>
+        <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr}/>
+        <GameStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} liveBank={liveBank} nickname={nickname} winStates={winStates} contractAddr={contractAddr} setContractAddr={setContractAddr}/>
         <ChatTerminal nickname={nickname}/>
       </div>
 
