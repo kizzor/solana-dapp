@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Cell = { num:number|null; matched:boolean; clicked:boolean; missed:boolean }
-type Device = { id:number; nftId:string; grid:Cell[][]; claimed:Set<string>; active:boolean; corrupted:boolean }
+type Device = {
+  walletAddr:string|null; id:number; nftId:string; grid:Cell[][]; claimed:Set<string>; active:boolean; corrupted:boolean }
 type WinType = 'EARLY_FIVE'|'TOP_LINE'|'MIDDLE_LINE'|'BOTTOM_LINE'|'FULL_HOUSE_1'|'FULL_HOUSE_2'|'FULL_HOUSE_3'
 type WinState = { claimed:boolean; claimable:boolean; flickering:boolean; broken:boolean; claimers:string[]; expired:boolean }
 type ChatLine = { t:'sys'|'user'|'cmd'|'img'; m:string; src?:string; vSrc?:string }
@@ -96,7 +97,7 @@ function generateDevice(id:number):Device{
     const picked=avail.sort(()=>Math.random()-0.5).slice(0,rows.length).sort((a,b)=>a-b)
     picked.forEach(n=>used.add(n));rows.forEach((r,i)=>{grid[r][ci]={num:picked[i],matched:false,clicked:false,missed:false}})
   }
-  return{id,nftId,grid,claimed:new Set(),active:false,corrupted:false}
+  return{id,nftId,walletAddr:null,grid,claimed:new Set(),active:false,corrupted:false}
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -597,7 +598,10 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
       <div style={{background:'linear-gradient(90deg,#0a1628,#0d1f3a)',padding:'4px 7px',borderBottom:'1px solid #0d1f3a',display:'flex',justifyContent:'space-between',alignItems:'center',gap:4}}>
         <div style={{display:'flex',alignItems:'center',gap:4}}>
           <div style={{width:11,height:11,background:'linear-gradient(135deg,#00e5a0,#00b8ff)',clipPath:'polygon(50% 0%,100% 50%,50% 100%,0% 50%)',flexShrink:0}}/>
-          <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,fontWeight:700,color:'#00e5a0'}}>{device.nftId}</span>
+          <div style={{display:'flex',flexDirection:'column'}}>
+            <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,fontWeight:700,color:'#00e5a0'}}>{device.nftId}</span>
+            {device.walletAddr&&<span style={{fontFamily:'"DM Mono",monospace',fontSize:5,color:'#0a2535',letterSpacing:'0.03em'}}>⛓ {device.walletAddr.slice(0,10)}…</span>}
+          </div>
         </div>
         <div style={{flex:1,height:14,background:'rgba(0,229,160,0.03)',border:'1px dashed #0a2535',borderRadius:3,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 3px'}}>
           <span style={{fontFamily:'"DM Mono",monospace',fontSize:5,color:'#0a2535'}}>AD</span>
@@ -1349,6 +1353,8 @@ export default function Ransome(){
   // ── Persist & restore state ──────────────────────────────────────────────
   const resumeRef=useRef(false)
   const restoredNumsRef=useRef<number[]>([])  // holds saved calledNums for resume sync
+  const restoredPreGameSecsRef=useRef<number>(0)  // >0 means reload happened during pre-game
+  const restoredTimerRef=useRef<number>(60)            // saved round timer for mid-game resume
 
   useEffect(()=>{
     const s=loadState()
@@ -1389,6 +1395,19 @@ export default function Ransome(){
     if(typeof s.roundNum==='number')setRoundNum(s.roundNum)
     if(s.phase==='game'){
       setPhase('game')
+      const elapsed=s.savedAt?Math.floor((Date.now()-s.savedAt)/1000):0
+      const savedPre=typeof s.preGameSecs==='number'?s.preGameSecs:0
+      if(savedPre>0){
+        const remaining=Math.max(savedPre-elapsed,3)
+        restoredPreGameSecsRef.current=remaining
+      } else {
+        // Restore round timer — subtract elapsed so clock resumes correctly
+        const savedTimer=typeof s.timer==='number'?s.timer:60
+        const resumeTimer=Math.max(savedTimer-elapsed,1)
+        if(typeof s.totalTimer==='number')setTotalTimer(s.totalTimer)
+        setTimer(resumeTimer)
+        restoredTimerRef.current=resumeTimer
+      }
       resumeRef.current=true
     } else if(s.phase&&s.phase!=='setup'){
       setPhase(s.phase)
@@ -1408,8 +1427,12 @@ export default function Ransome(){
       winRecords,
       bankruptCount,
       roundNum,
+      preGameSecs,
+      timer,
+      totalTimer,
+      savedAt:Date.now(),
     })
-  },[nickname,wallet,phase,mintToken,contractAddr,devices,calledNums,calledOrder,winStates,winRecords,bankruptCount,roundNum])
+  },[nickname,wallet,phase,mintToken,contractAddr,devices,calledNums,calledOrder,winStates,winRecords,bankruptCount,roundNum,preGameSecs,timer,totalTimer])
   const currentNum=calledOrder[calledOrder.length-1]??null
   const hourCd=useHourCountdown()
 
@@ -1458,7 +1481,7 @@ export default function Ransome(){
     if(!bankHacked)return
     if(timerRef.current)clearInterval(timerRef.current)
     setClickWindowOpen(false)
-    announce(`🏦 BANK HACKED! ALL 90 DRAWN!\n💸 Unclaimed → ${CLAIM_WALLET.slice(0,8)}...${CLAIM_WALLET.slice(-6)}\nReturning to lobby...`)
+    announce(`🏦 BANK HACKED! ALL 90 DRAWN!\n💸 Unclaimed → ${CLAIM_WALLET.slice(0,8)}...${CLAIM_WALLET.slice(-6)}\n🗑 NFT devices unlinked — session ended\nReturning to lobby...`)
     setTimeout(()=>{
       setPhase('lobby');setBankHacked(false);setCalledNums(new Set());setCalledOrder([])
       setWinStates(defaultWinStates());setWinRecords([]);setRoundNum(0)
@@ -1495,28 +1518,49 @@ export default function Ransome(){
     if(preTimerRef.current)clearInterval(preTimerRef.current)
     // Short delay so React fully commits restored device state
     const t=setTimeout(()=>{
-      // Sync drawnRef with the saved numbers list (not React state which may be stale)
-      drawnRef.current=new Set(restoredNumsRef.current.length>0?restoredNumsRef.current:Array.from(calledNums))
-      // Mark matched-but-unclicked cells as missed (rounds passed while away)
-      setDevices(ds=>ds.map(d=>({...d,
-        grid:d.grid.map(row=>row.map(cell=>
-          cell.matched&&!cell.clicked?{...cell,missed:true}:cell
-        ))
-      })))
-      // Start the 60s interval — next number draws after a full round, not immediately
-      setPreGameSecs(0);setTimer(60);setTotalTimer(60);setClickWindowOpen(false)
-      timerRef.current=setInterval(()=>{
-        setTimer(prev=>{
-          if(prev<=1){
-            setClickWindowOpen(false)
-            setTotalTimer(60);drawNumber();return 60
-          }
-          return prev-1
-        })
-      },1000)
+      if(restoredPreGameSecsRef.current>0){
+        // PRE-GAME RESUME: countdown was running, pick up where it left off
+        const remaining=restoredPreGameSecsRef.current
+        restoredPreGameSecsRef.current=0
+        drawnRef.current=new Set()
+        setClickWindowOpen(false)
+        setPreGameSecs(remaining)
+        preTimerRef.current=setInterval(()=>{
+          setPreGameSecs(p=>{
+            if(p<=1){
+              clearInterval(preTimerRef.current!)
+              setTimer(60);setTotalTimer(60)
+              timerRef.current=setInterval(()=>{
+                setTimer(prev=>{
+                  if(prev<=1){setClickWindowOpen(false);setTotalTimer(60);drawNumber();return 60}
+                  return prev-1
+                })
+              },1000)
+              drawNumber();return 0
+            }
+            return p-1
+          })
+        },1000)
+      } else {
+        // MID-GAME RESUME: numbers already drawn, resume draw interval
+        drawnRef.current=new Set(restoredNumsRef.current.length>0?restoredNumsRef.current:Array.from(calledNums))
+        setDevices(ds=>ds.map(d=>({...d,
+          grid:d.grid.map(row=>row.map(cell=>
+            cell.matched&&!cell.clicked?{...cell,missed:true}:cell
+          ))
+        })))
+        // Use the restored timer value so analog clock resumes at correct position
+        const rt=restoredTimerRef.current>0?restoredTimerRef.current:60
+        setPreGameSecs(0);setTimer(rt);setTotalTimer(60);setClickWindowOpen(false)
+        timerRef.current=setInterval(()=>{
+          setTimer(prev=>{
+            if(prev<=1){setClickWindowOpen(false);setTotalTimer(60);drawNumber();return 60}
+            return prev-1
+          })
+        },1000)
+      }
     },300)
     return()=>clearTimeout(t)
-  // Only run once when resumeRef is set — don't re-run on every device change
   },[phase,drawNumber])
 
   // Win detection
@@ -1600,9 +1644,9 @@ export default function Ransome(){
   }
 
   const mintDevices=()=>{
-    const nd=Array.from({length:mintCount},(_,i)=>generateDevice(devices.length+i))
+    const nd=Array.from({length:mintCount},(_,i)=>({...generateDevice(devices.length+i),walletAddr:wallet||'UNCONNECTED'}))
     setDevices(p=>[...p,...nd])
-    announce(`⚡ ${mintCount} DEVICE${mintCount>1?'S':''} MINTED`)
+    announce(`⚡ ${mintCount} DEVICE${mintCount>1?'S':''} MINTED — BOUND TO ${(wallet||'WALLET').slice(0,8)}`)
   }
 
   const enterGame=()=>{setPhase('game');startPreGame(60);announce('🔴 HACK IN 60 SECONDS')}
@@ -1640,9 +1684,21 @@ export default function Ransome(){
         </div>
         <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0}}>
           <div style={{fontFamily:'"DM Mono",monospace',fontSize:'clamp(7px,1.8vw,9px)',color:'#4a7fa5',background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:8,padding:'5px 8px'}}>👤 {nickname}</div>
-          <button onClick={()=>setWallet('HaCk...3r0x')} style={{background:wallet?'#0a1628':'linear-gradient(135deg,#00e5a0,#00b8ff)',color:wallet?'#00e5a0':'#000',border:wallet?'1px solid #00e5a040':'none',borderRadius:8,padding:'6px 10px',fontFamily:'"DM Mono",monospace',fontSize:'clamp(8px,1.8vw,10px)',cursor:'pointer',fontWeight:600,whiteSpace:'nowrap'}}>
-            {wallet?`✓ ${wallet}`:'CONNECT'}
-          </button>
+          {wallet?(
+            <div style={{display:'flex',alignItems:'center',gap:4}}>
+              <div style={{background:'#0a1628',border:'1px solid #00e5a040',borderRadius:8,padding:'5px 9px',fontFamily:'"DM Mono",monospace',fontSize:'clamp(7px,1.6vw,9px)',color:'#00e5a0',display:'flex',alignItems:'center',gap:5}}>
+                <div style={{width:5,height:5,borderRadius:'50%',background:'#22c55e',flexShrink:0}}/>
+                {wallet}
+              </div>
+              <button onClick={()=>setWallet(null)} style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',borderRadius:8,padding:'5px 8px',fontFamily:'"DM Mono",monospace',fontSize:'clamp(7px,1.6vw,8px)',color:'#ef4444',cursor:'pointer',whiteSpace:'nowrap'}}>
+                ✕ DISCONNECT
+              </button>
+            </div>
+          ):(
+            <button onClick={()=>setWallet('HaCk...3r0x')} style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:8,padding:'6px 12px',fontFamily:'"DM Mono",monospace',fontSize:'clamp(8px,1.8vw,10px)',cursor:'pointer',fontWeight:700,whiteSpace:'nowrap'}}>
+              CONNECT WALLET →
+            </button>
+          )}
         </div>
       </div>
 
@@ -1721,6 +1777,19 @@ export default function Ransome(){
           {preGameSecs>0&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#f59e0b',background:'rgba(245,158,11,0.08)',border:'1px solid rgba(245,158,11,0.25)',borderRadius:6,padding:'3px 7px'}}>⏱ {fmtTime(preGameSecs)}</div>}
           <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#ef4444',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:6,padding:'3px 7px'}}>🔴 {BANKS[liveBank].name}</div>
           <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#4a7fa5',background:'#0a1628',borderRadius:6,padding:'3px 7px'}}>👤 {nickname}</div>
+          {wallet?(
+            <div style={{display:'flex',alignItems:'center',gap:3}}>
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#00e5a0',background:'#0a1628',border:'1px solid #00e5a030',borderRadius:6,padding:'3px 7px',display:'flex',alignItems:'center',gap:4}}>
+                <div style={{width:4,height:4,borderRadius:'50%',background:'#22c55e'}}/>
+                {wallet.slice(0,6)}…{wallet.slice(-4)}
+              </div>
+              <button onClick={()=>setWallet(null)} style={{background:'transparent',border:'1px solid rgba(239,68,68,0.2)',borderRadius:6,padding:'3px 6px',color:'#ef4444',cursor:'pointer',fontSize:9,lineHeight:1}}>✕</button>
+            </div>
+          ):(
+            <button onClick={()=>setWallet('HaCk...3r0x')} style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:6,padding:'4px 8px',fontFamily:'"DM Mono",monospace',fontSize:7.5,cursor:'pointer',fontWeight:700}}>
+              CONNECT
+            </button>
+          )}
         </div>
       </div>
 
