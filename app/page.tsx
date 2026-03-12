@@ -1401,16 +1401,19 @@ export default function Ransome(){
       setPhase('game')
       const elapsed=s.savedAt?Math.floor((Date.now()-s.savedAt)/1000):0
       const savedPre=typeof s.preGameSecs==='number'?s.preGameSecs:0
-      if(savedPre>0){
+      const hasDrawn=(s.calledNums&&s.calledNums.length>0)  // numbers exist = mid-game
+      if(savedPre>0&&!hasDrawn){
+        // PRE-GAME: countdown was running, no numbers drawn yet
         const remaining=Math.max(savedPre-elapsed,3)
         restoredPreGameSecsRef.current=remaining
       } else {
-        // Restore round timer — subtract elapsed so clock resumes correctly
+        // MID-GAME: numbers already drawn — ignore any stale preGameSecs
         const savedTimer=typeof s.timer==='number'?s.timer:60
         const resumeTimer=Math.max(savedTimer-elapsed,1)
         if(typeof s.totalTimer==='number')setTotalTimer(s.totalTimer)
         setTimer(resumeTimer)
         restoredTimerRef.current=resumeTimer
+        restoredPreGameSecsRef.current=0  // explicitly clear — never show pre-game overlay
       }
       resumeRef.current=true
     } else if(s.phase&&s.phase!=='setup'){
@@ -1431,7 +1434,7 @@ export default function Ransome(){
       winRecords,
       bankruptCount,
       roundNum,
-      preGameSecs,
+      preGameSecs:calledNums.size===0?preGameSecs:0,  // only meaningful before first draw
       timer,
       totalTimer,
       savedAt:Date.now(),
@@ -1559,8 +1562,8 @@ export default function Ransome(){
             cell.matched&&!cell.clicked?{...cell,missed:true}:cell
           ))
         })))
-        // Use the restored timer value so analog clock resumes at correct position
         const rt=restoredTimerRef.current>0?restoredTimerRef.current:60
+        // Force preGameSecs to 0 — this is the authoritative clear for the overlay
         setPreGameSecs(0);setTimer(rt);setTotalTimer(60);setClickWindowOpen(false)
         timerRef.current=setInterval(()=>{
           setTimer(prev=>{
