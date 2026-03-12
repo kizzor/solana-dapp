@@ -976,7 +976,7 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
             </div>
           </div>
 
-          {preGameSecs>0?(
+          {preGameSecs>0&&calledOrder.length===0?(
             <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8}}>
               <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#2a5a7a',letterSpacing:'0.2em'}}>HACK INITIATES IN</div>
               <div style={{fontFamily:'"Syne",sans-serif',fontSize:56,fontWeight:800,color:'#fff',lineHeight:1,
@@ -1400,20 +1400,19 @@ export default function Ransome(){
     if(s.phase==='game'){
       setPhase('game')
       const elapsed=s.savedAt?Math.floor((Date.now()-s.savedAt)/1000):0
-      const savedPre=typeof s.preGameSecs==='number'?s.preGameSecs:0
-      const hasDrawn=(s.calledNums&&s.calledNums.length>0)  // numbers exist = mid-game
-      if(savedPre>0&&!hasDrawn){
-        // PRE-GAME: countdown was running, no numbers drawn yet
-        const remaining=Math.max(savedPre-elapsed,3)
+      const hasDrawn=(s.calledNums&&s.calledNums.length>0)
+      if(!hasDrawn){
+        // PRE-GAME: no numbers drawn — resume countdown (60s fresh start, elapsed accounted)
+        const remaining=Math.max(60-elapsed,3)
         restoredPreGameSecsRef.current=remaining
       } else {
-        // MID-GAME: numbers already drawn — ignore any stale preGameSecs
+        // MID-GAME: resume round timer from saved position
         const savedTimer=typeof s.timer==='number'?s.timer:60
         const resumeTimer=Math.max(savedTimer-elapsed,1)
         if(typeof s.totalTimer==='number')setTotalTimer(s.totalTimer)
         setTimer(resumeTimer)
         restoredTimerRef.current=resumeTimer
-        restoredPreGameSecsRef.current=0  // explicitly clear — never show pre-game overlay
+        restoredPreGameSecsRef.current=0
       }
       resumeRef.current=true
     } else if(s.phase&&s.phase!=='setup'){
@@ -1434,12 +1433,11 @@ export default function Ransome(){
       winRecords,
       bankruptCount,
       roundNum,
-      preGameSecs:calledNums.size===0?preGameSecs:0,  // only meaningful before first draw
       timer,
       totalTimer,
       savedAt:Date.now(),
     })
-  },[nickname,wallet,phase,mintToken,contractAddr,devices,calledNums,calledOrder,winStates,winRecords,bankruptCount,roundNum,preGameSecs,timer,totalTimer])
+  },[nickname,wallet,phase,mintToken,contractAddr,devices,calledNums,calledOrder,winStates,winRecords,bankruptCount,roundNum,timer,totalTimer])
   const currentNum=calledOrder[calledOrder.length-1]??null
   const hourCd=useHourCountdown()
 
@@ -1801,11 +1799,21 @@ export default function Ransome(){
         </div>
       </div>
 
-      {/* 3-col: Hack Matrix LEFT | GameStats+Win CENTER | Chat RIGHT */}
-      <div style={{padding:'10px 12px 0',display:'grid',gridTemplateColumns:'1fr 200px 220px',gap:10,alignItems:'start'}}>
-        <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr}/>
-        <GameStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} liveBank={liveBank} nickname={nickname} winStates={winStates} contractAddr={contractAddr} setContractAddr={setContractAddr}/>
-        <ChatTerminal nickname={nickname}/>
+      {/* Responsive layout: 3-col on wide, stacked on mobile */}
+      <div style={{padding:'10px 12px 0',display:'grid',
+        gridTemplateColumns:'minmax(0,1fr) minmax(0,200px) minmax(0,220px)',
+        gridTemplateAreas:'"matrix stats chat"',
+        gap:10,alignItems:'start'}}
+        className="game-grid">
+        <div style={{gridArea:'matrix',minWidth:0}}>
+          <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr}/>
+        </div>
+        <div style={{gridArea:'stats',minWidth:0}}>
+          <GameStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} liveBank={liveBank} nickname={nickname} winStates={winStates} contractAddr={contractAddr} setContractAddr={setContractAddr}/>
+        </div>
+        <div style={{gridArea:'chat',minWidth:0}}>
+          <ChatTerminal nickname={nickname}/>
+        </div>
       </div>
 
       {/* Win strip */}
