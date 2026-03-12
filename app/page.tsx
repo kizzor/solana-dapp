@@ -7,7 +7,7 @@ type Cell = { num:number|null; matched:boolean; clicked:boolean; missed:boolean 
 type Device = {
   walletAddr:string|null; id:number; nftId:string; grid:Cell[][]; claimed:Set<string>; active:boolean; corrupted:boolean }
 type WinType = 'EARLY_FIVE'|'TOP_LINE'|'MIDDLE_LINE'|'BOTTOM_LINE'|'FULL_HOUSE_1'|'FULL_HOUSE_2'|'FULL_HOUSE_3'
-type WinState = { claimed:boolean; claimable:boolean; flickering:boolean; broken:boolean; claimers:string[]; expired:boolean }
+type WinState = { claimed:boolean; claimable:boolean; flickering:boolean; broken:boolean; claimers:string[]; expired:boolean; bursting:boolean }
 type ChatLine = { t:'sys'|'user'|'cmd'|'img'; m:string; src?:string; vSrc?:string }
 type WinRecord = { wt:WinType; claimers:string[]; round:number; split:number; rnsmEach:number }
 type MediaItem = { src:string; type:'image'|'video'; name:string }
@@ -64,13 +64,13 @@ const BANKS = [
 const REGION_COLORS:{[k:string]:string}={APAC:'#0ea5e9',EUR:'#22c55e',AMER:'#f59e0b',MENA:'#f97316',AFR:'#a855f7',ASIA:'#ec4899'}
 
 const defaultWinStates=():Record<WinType,WinState>=>({
-  EARLY_FIVE:  {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
-  TOP_LINE:    {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
-  MIDDLE_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
-  BOTTOM_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
-  FULL_HOUSE_1:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
-  FULL_HOUSE_2:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
-  FULL_HOUSE_3:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false},
+  EARLY_FIVE:  {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false,bursting:false},
+  TOP_LINE:    {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false,bursting:false},
+  MIDDLE_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false,bursting:false},
+  BOTTOM_LINE: {claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false,bursting:false},
+  FULL_HOUSE_1:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false,bursting:false},
+  FULL_HOUSE_2:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false,bursting:false},
+  FULL_HOUSE_3:{claimed:false,claimable:false,flickering:false,broken:false,claimers:[],expired:false,bursting:false},
 })
 
 function getLiveBank(h:number){return h%23}
@@ -670,7 +670,9 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
       <div style={{display:'flex',justifyContent:'center',gap:3,padding:'3px 5px 1px',alignItems:'center'}}>
         <div style={{display:'flex',gap:2}}>{[0,1].map(i=><div key={i} style={{width:6,height:5,borderRadius:1,background:'#0a1628',border:'1px solid #162438'}}/>)}</div>
         {LED_TYPES.map((type,i)=>{
-          const ws=winStates[type],won=device.claimed.has(type),lit=ws.claimable&&!ws.claimed,dead=ws.claimed&&!won
+          const ws=winStates[type],won=device.claimed.has(type),lit=ws.claimable&&!ws.claimed
+          // dead = win claimed by others and filament phase started — NOT during flicker window
+          const dead=ws.claimed&&!won&&ws.broken
           // Compute this LED's individual proximity
           let ledPct=0
           if(type==='EARLY_FIVE')ledPct=ef5p
@@ -683,13 +685,14 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
           return(
             <div key={type} title={WIN_LABELS[type]} style={{
               width:9,height:7,borderRadius:2,position:'relative',overflow:'hidden',
-              background:ws.broken?'transparent':(won||lit)?LED_COLORS[type]:dead?'#050d17':ledPct>0.3?`${LED_COLORS[type]}${Math.round(ledPct*60).toString(16).padStart(2,'0')}`:'#0a1628',
-              border:`1px solid ${ws.broken?LED_COLORS[type]+'30':(won||lit)?LED_COLORS[type]:ledPct>0.3?LED_COLORS[type]+'60':'#162438'}`,
-              boxShadow:(won||lit)&&!ws.broken?`0 0 4px ${LED_COLORS[type]},0 0 8px ${LED_COLORS[type]}60`:proximityGlow,
-              opacity:dead&&!ws.flickering&&!ws.broken?0.15:dimOpacity,
-              animation:ws.broken?'none':ws.expired?'ledExpire 0.4s ease forwards':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.6s ${i*0.07}s infinite`:'none',
+              background:ws.broken?'transparent':won&&ws.bursting?LED_COLORS[type]:(won||lit)?LED_COLORS[type]:dead?'#050d17':ledPct>0.3?`${LED_COLORS[type]}${Math.round(ledPct*60).toString(16).padStart(2,'0')}`:'#0a1628',
+              border:`1px solid ${ws.broken?LED_COLORS[type]+'90':(won||lit)||ws.bursting?LED_COLORS[type]:ledPct>0.3?LED_COLORS[type]+'60':'#162438'}`,
+              boxShadow:ws.broken?`0 0 8px ${LED_COLORS[type]},0 0 20px ${LED_COLORS[type]}80,0 0 40px ${LED_COLORS[type]}40`:won&&ws.bursting?`0 0 12px ${LED_COLORS[type]},0 0 30px ${LED_COLORS[type]}80`:(won||lit)&&!ws.broken?`0 0 4px ${LED_COLORS[type]},0 0 8px ${LED_COLORS[type]}60`:proximityGlow,
+              opacity:dead?0.15:dimOpacity,
+              animation:ws.broken?'filamentGlow 1.5s ease-in-out infinite':won&&ws.bursting?'ledBurst 0.4s ease-out forwards':ws.expired?'ledExpire 0.4s ease forwards':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.6s ${i*0.07}s infinite`:'none',
             }}>
-              {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}50 20%,transparent 70%)`,animation:'filamentGlow 2s ease-in-out infinite'}}/>}
+              {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}ff 0%,${LED_COLORS[type]}99 30%,transparent 75%)`,animation:'filamentGlow 1.5s ease-in-out infinite'}}/>}
+              {won&&ws.bursting&&<div style={{position:'absolute',inset:-8,borderRadius:'50%',background:`radial-gradient(circle,${LED_COLORS[type]}99 0%,transparent 70%)`,animation:'burstRing 0.5s ease-out forwards',pointerEvents:'none'}}/>}
             </div>
           )
         })}
@@ -1355,6 +1358,7 @@ export default function Ransome(){
   const restoredNumsRef=useRef<number[]>([])  // holds saved calledNums for resume sync
   const restoredPreGameSecsRef=useRef<number>(0)  // >0 means reload happened during pre-game
   const restoredTimerRef=useRef<number>(60)            // saved round timer for mid-game resume
+  const pendingAnnounce=useRef<string[]>([])              // win announcements queued for next round
 
   useEffect(()=>{
     const s=loadState()
@@ -1457,16 +1461,16 @@ export default function Ransome(){
       if(!d.active||d.corrupted)return d
       return{...d,grid:d.grid.map(row=>row.map(cell=>cell.num===num?{...cell,matched:true}:cell))}
     }))
-    // When a new number draws: expire any wins that were claimable but unclaimed
-    // Lightning blink for 400ms then go expired/dark
+    // On new round: process claimed→filament, announce winners, expire unclaimed wins
     setWinStates(prev=>{
       const next={...prev}
-      let anyExpired=false
       ;(Object.keys(next) as WinType[]).forEach(wt=>{
-        if(next[wt].claimable&&!next[wt].claimed&&!next[wt].expired){
+        if(next[wt].claimed&&next[wt].bursting){
+          // Claiming devices: burst→filament. Flicker stops for all, broken goes bright
+          next[wt]={...next[wt],flickering:false,bursting:false,broken:true}
+        } else if(next[wt].claimable&&!next[wt].claimed&&!next[wt].expired){
+          // Unclaimed claimable: lightning blink then expire
           next[wt]={...next[wt],claimable:false,flickering:true,expired:false}
-          anyExpired=true
-          // After lightning blink duration → mark expired, stop flicker
           setTimeout(()=>{
             setWinStates(p=>({...p,[wt]:{...p[wt],flickering:false,expired:true}}))
           },400)
@@ -1474,6 +1478,11 @@ export default function Ransome(){
       })
       return next
     })
+    // Announce queued winners now (start of new round)
+    if(pendingAnnounce.current.length>0){
+      pendingAnnounce.current.forEach(msg=>announce(msg))
+      pendingAnnounce.current=[]
+    }
     setTimeout(()=>{setClickWindowOpen(true);drawLockRef.current=false},150)
   },[])
 
@@ -1483,6 +1492,7 @@ export default function Ransome(){
     setClickWindowOpen(false)
     announce(`🏦 BANK HACKED! ALL 90 DRAWN!\n💸 Unclaimed → ${CLAIM_WALLET.slice(0,8)}...${CLAIM_WALLET.slice(-6)}\n🗑 NFT devices unlinked — session ended\nReturning to lobby...`)
     setTimeout(()=>{
+      pendingAnnounce.current=[]
       setPhase('lobby');setBankHacked(false);setCalledNums(new Set());setCalledOrder([])
       setWinStates(defaultWinStates());setWinRecords([]);setRoundNum(0)
     },8000)
@@ -1621,14 +1631,17 @@ export default function Ransome(){
       const split=Math.floor(vault/final.length)
       const rnsmEach=Math.floor(RNSM_ALLOC[wt]/Math.max(final.length,1))
       setWinRecords(r=>[...r,{wt,claimers:final,round:roundNum,split,rnsmEach}])
-      announce(`✅ ${WIN_LABELS[wt]} CLAIMED!\n${final.join(' + ')} → $${(split/1000).toFixed(0)}K + ${rnsmEach} RNSM each`)
-      // Mark claimed + flicker all devices' LEDs for this win
-      setWinStates(prev=>({...prev,[wt]:{...prev[wt],claimed:true,claimers:final,flickering:true,broken:false}}))
-      const fKey=`flicker_${wt}`
-      if(flickerTimers.current[fKey])clearTimeout(flickerTimers.current[fKey])
-      flickerTimers.current[fKey]=setTimeout(()=>{
-        setWinStates(p=>({...p,[wt]:{...p[wt],flickering:false,broken:true}}))
-      },60000)
+      // Queue winner announcement for the START of next round (when next number draws)
+      const walletSnip=(addr:string|null)=>addr?`${addr.slice(0,6)}…${addr.slice(-4)}`:'?'
+      const claimerLines=final.map(nftId=>{
+        const dev2=devices.find(d=>d.nftId===nftId)
+        return `  ${nftId} (${walletSnip(dev2?.walletAddr??null)}) → $${(split/1000).toFixed(0)}K + ${rnsmEach} RNSM`
+      }).join('\n')
+      pendingAnnounce.current.push(`🏆 ${WIN_LABELS[wt]} — ROUND ${roundNum}\n${claimerLines}\n💸 Vault → wallets`)
+      // Keep flickering:true so ALL unclaimed devices keep flickering this round
+      // bursting:true marks the claiming devices for burst effect
+      // broken:false — filament fires at next round start via drawNumber
+      setWinStates(prev=>({...prev,[wt]:{...prev[wt],claimed:true,claimers:final,flickering:true,broken:false,bursting:true}}))
     },500)
   }
 
@@ -1652,15 +1665,7 @@ export default function Ransome(){
   const enterGame=()=>{setPhase('game');startPreGame(60);announce('🔴 HACK IN 60 SECONDS')}
   const terminateGame=()=>{
     try{localStorage.removeItem('ransome_state_v1')}catch{}
-    setDevices([]);setCalledNums(new Set());setCalledOrder([]);setWinStates({
-      EARLY_FIVE:{claimable:false,claimed:false,flickering:false,broken:false},
-      TOP_LINE:{claimable:false,claimed:false,flickering:false,broken:false},
-      MIDDLE_LINE:{claimable:false,claimed:false,flickering:false,broken:false},
-      BOTTOM_LINE:{claimable:false,claimed:false,flickering:false,broken:false},
-      FULL_HOUSE_1:{claimable:false,claimed:false,flickering:false,broken:false},
-      FULL_HOUSE_2:{claimable:false,claimed:false,flickering:false,broken:false},
-      FULL_HOUSE_3:{claimable:false,claimed:false,flickering:false,broken:false},
-    });setWinRecords([]);setBankHacked(false);setPreGameSecs(0)
+    setDevices([]);setCalledNums(new Set());setCalledOrder([]);setWinStates(defaultWinStates());setWinRecords([]);setBankHacked(false);setPreGameSecs(0)
     setShowTerminate(false);setPhase('lobby')
   }
 
