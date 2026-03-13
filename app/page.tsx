@@ -1355,6 +1355,10 @@ export default function Ransome(){
   const timerRef=useRef<ReturnType<typeof setInterval>|null>(null)
   const preTimerRef=useRef<ReturnType<typeof setInterval>|null>(null)
   const flickerTimers=useRef<Record<string,ReturnType<typeof setTimeout>>>({})
+  const sessionStartRef=useRef<number>(0)       // Date.now() when game started
+  const sessionTimerRef=useRef<ReturnType<typeof setInterval>|null>(null)
+  const[sessionSecs,setSessionSecs]=useState(0) // elapsed seconds this session
+  const[showEndScreen,setShowEndScreen]=useState(false) // all bankrupts done
   const currentHour=new Date().getUTCHours()
   const liveBank=getLiveBank(currentHour)
 
@@ -1489,6 +1493,7 @@ export default function Ransome(){
       pendingAnnounce.current.forEach(msg=>announce(msg))
       pendingAnnounce.current=[]
     }
+    setTotalTimer(60)  // reset arc AFTER new number — clean sync with timer
     setTimeout(()=>{setClickWindowOpen(true);drawLockRef.current=false},150)
   },[])
 
@@ -1505,16 +1510,33 @@ export default function Ransome(){
     },8000)
   },[bankHacked])
 
+  const startSessionClock=useCallback(()=>{
+    sessionStartRef.current=Date.now()
+    setSessionSecs(0)
+    if(sessionTimerRef.current)clearInterval(sessionTimerRef.current)
+    sessionTimerRef.current=setInterval(()=>{
+      const elapsed=Math.floor((Date.now()-sessionStartRef.current)/1000)
+      setSessionSecs(elapsed)
+    },1000)
+  },[])
+
+  const stopSessionClock=useCallback(()=>{
+    if(sessionTimerRef.current){clearInterval(sessionTimerRef.current);sessionTimerRef.current=null}
+  },[])
+
   const startPreGame=useCallback((secs:number)=>{
     setPreGameSecs(secs)
     preTimerRef.current=setInterval(()=>{
       setPreGameSecs(p=>{
         if(p<=1){
           clearInterval(preTimerRef.current!)
+          // Start session clock the moment first number draws
+          startSessionClock()
           const t=60;setTimer(t);setTotalTimer(t)
           timerRef.current=setInterval(()=>{
             setTimer(prev=>{
-              if(prev<=1){setClickWindowOpen(false);const nxt=60;setTotalTimer(nxt);drawNumber();return nxt}
+              // totalTimer stays at 60 — only reset when new round starts in drawNumber
+              if(prev<=1){setClickWindowOpen(false);drawNumber();return 60}  // totalTimer reset in drawNumber
               return prev-1
             })
           },1000)
@@ -1523,7 +1545,7 @@ export default function Ransome(){
         return p-1
       })
     },1000)
-  },[drawNumber])
+  },[drawNumber,startSessionClock])
 
   // Resume game after page reload — fires whenever devices state settles with resumeRef flagged
   useEffect(()=>{
@@ -1567,7 +1589,8 @@ export default function Ransome(){
           ))
         })))
         const rt=restoredTimerRef.current>0?restoredTimerRef.current:60
-        drawLockRef.current=false  // clear any stale lock from previous session
+        drawLockRef.current=false
+        startSessionClock()  // restart session clock — elapsed from savedAt is unavailable
         setPreGameSecs(0);setTimer(rt);setTotalTimer(60)
         // Open click window if the current number exists (restored mid-round)
         setClickWindowOpen(restoredNumsRef.current.length>0)
@@ -1581,6 +1604,82 @@ export default function Ransome(){
     },300)
     return()=>clearTimeout(t)
   },[phase,drawNumber])
+
+
+  const warnedRef=useRef(false)  // tracks 57-min warning fired
+
+  // ── 57/58 minute session enforcement ──────────────────────────────────────
+  useEffect(()=>{
+    if(phase!=='game'||showEndScreen)return
+    if(sessionSecs>=(3420)&&!warnedRef.current){
+      warnedRef.current=true
+      announce(`⚠️ SECURITY BREACH TRACKER DETECTED\n🚨 HACK SESSION ENDING IN 60 SECONDS\nAll active ransoms will be auto-liquidated`)
+    }
+    if(sessionSecs>=3480){
+      // Hard stop — end session now
+      stopSessionClock()
+      if(timerRef.current)clearInterval(timerRef.current)
+      if(preTimerRef.current)clearInterval(preTimerRef.current)
+      setClickWindowOpen(false)
+      setShowEndScreen(true)
+      // Deactivate all devices
+      setDevices(ds=>ds.map(d=>({...d,active:false})))
+      // Build final payout: split remaining vault equally among all winners
+      // If no winners, full vault to CLAIM_WALLET
+      setWinRecords(wr=>{
+        const allWinners=Array.from(new Set(wr.flatMap(r=>r.claimers)))
+        const totalPaid=wr.reduce((s,r)=>s+r.split*r.claimers.length,0)
+        const remaining=Math.max(1000000-totalPaid,0)
+        if(remaining>0){
+          const dest=allWinners.length>0?allWinners:[CLAIM_WALLET.slice(0,8)+'…']
+          const cut=Math.floor(remaining/dest.length)
+          announce(`🚨 VAULT HIJACKED BY TOP HACKERS\n💸 ${(remaining/1000).toFixed(0)}K split:\n${dest.map(w=>`  ${w} → $${(cut/1000).toFixed(0)}K`).join('\n')}`)
+        }
+        return wr
+      })
+      // Return to lobby after 60s
+      setTimeout(()=>{
+        stopSessionClock()
+        warnedRef.current=false
+        setShowEndScreen(false)
+        setDevices([])
+        setCalledNums(new Set())
+        setCalledOrder([])
+        setWinStates(defaultWinStates())
+        setWinRecords([])
+        setRoundNum(0)
+        setBankruptCount(0)
+        setPhase('lobby')
+        try{localStorage.removeItem('ransome_state_v1')}catch{}
+      },60000)
+    }
+  },[phase,sessionSecs,showEndScreen,stopSessionClock])
+
+
+  // ── All bankrupts claimed → show end screen ───────────────────────────────
+  useEffect(()=>{
+    if(phase!=='game'||bankruptCount<3||showEndScreen)return
+    stopSessionClock()
+    if(timerRef.current)clearInterval(timerRef.current)
+    setClickWindowOpen(false)
+    setShowEndScreen(true)
+    setDevices(ds=>ds.map(d=>({...d,active:false})))
+    announce(`🏆 ALL RANSOMS CLAIMED!\n💰 Final vault summary broadcasting...\nSession ending in 60 seconds`)
+    setTimeout(()=>{
+      stopSessionClock()
+      warnedRef.current=false
+      setShowEndScreen(false)
+      setDevices([])
+      setCalledNums(new Set())
+      setCalledOrder([])
+      setWinStates(defaultWinStates())
+      setWinRecords([])
+      setRoundNum(0)
+      setBankruptCount(0)
+      setPhase('lobby')
+      try{localStorage.removeItem('ransome_state_v1')}catch{}
+    },60000)
+  },[phase,bankruptCount,showEndScreen,stopSessionClock])
 
   // Win detection
   useEffect(()=>{
@@ -1675,9 +1774,10 @@ export default function Ransome(){
     // Clear all previous game state — fresh session
     setCalledNums(new Set());setCalledOrder([])
     setWinStates(defaultWinStates());setWinRecords([]);setRoundNum(0);setBankruptCount(0)
-    setBankHacked(false);setClickWindowOpen(false)
+    setBankHacked(false);setClickWindowOpen(false);setShowEndScreen(false)
     drawnRef.current=new Set();drawLockRef.current=false
-    pendingAnnounce.current=[]
+    pendingAnnounce.current=[];warnedRef.current=false
+    stopSessionClock();setSessionSecs(0)
     setPhase('game');startPreGame(60);announce('🔴 HACK IN 60 SECONDS')
   }
   const terminateGame=()=>{
@@ -1771,6 +1871,46 @@ export default function Ransome(){
         <ChatTerminal nickname={nickname}/>
       </div>
 
+      {/* ── End Screen Overlay ─────────────────────────────────────── */}
+      {showEndScreen&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(1,8,16,0.96)',zIndex:200,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16,padding:20}}>
+          <div style={{fontFamily:'"Syne",sans-serif',fontSize:28,fontWeight:800,color:'#00e5a0',textShadow:'0 0 30px #00e5a080',textAlign:'center'}}>
+            {bankruptCount>=3?'🏆 ALL RANSOMS CLAIMED':'🚨 VAULT HIJACKED'}
+          </div>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:'#2a5a7a',letterSpacing:'0.1em'}}>
+            SESSION SUMMARY — RETURNING TO LOBBY
+          </div>
+          <div style={{width:'100%',maxWidth:480,background:'#020d1a',border:'1px solid #0a3a5a',borderRadius:14,padding:16,display:'flex',flexDirection:'column',gap:8}}>
+            {winRecords.length>0?(
+              winRecords.map((r,i)=>(
+                <div key={i} style={{borderBottom:'1px solid #0a2535',paddingBottom:6,marginBottom:2}}>
+                  <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:LED_COLORS[r.wt],marginBottom:3}}>
+                    {WIN_LABELS[r.wt]} — Round {r.round}
+                  </div>
+                  {r.claimers.map((cl,j)=>(
+                    <div key={j} style={{display:'flex',justifyContent:'space-between',padding:'1px 8px'}}>
+                      <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#4a7fa5'}}>{cl}</span>
+                      <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#f59e0b'}}>${(r.split/1000).toFixed(0)}K + {r.rnsmEach} RNSM</span>
+                    </div>
+                  ))}
+                </div>
+              ))
+            ):(
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',textAlign:'center',padding:12}}>
+                No ransoms claimed — vault transferred to treasury
+              </div>
+            )}
+            <div style={{display:'flex',justifyContent:'space-between',paddingTop:4,borderTop:'1px solid #0a3a5a'}}>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a'}}>TOTAL CLAIMED</span>
+              <span style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#00e5a0',fontWeight:700}}>${(winRecords.reduce((s,r)=>s+r.split*r.claimers.length,0)/1000).toFixed(0)}K</span>
+            </div>
+          </div>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#1e4a6a',animation:'ledBlink 1s infinite'}}>
+            ⬡ ALL DEVICES DEACTIVATED — WIPING SESSION DATA…
+          </div>
+        </div>
+      )}
+
       {announcement&&(
         <div style={{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',background:'#020d1a',border:'1px solid #00e5a040',borderRadius:10,padding:'10px 18px',fontFamily:'"DM Mono",monospace',fontSize:10,color:'#00e5a0',zIndex:999,whiteSpace:'pre',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',maxWidth:'90vw'}}>
           {announcement}
@@ -1797,6 +1937,9 @@ export default function Ransome(){
         </div>
         <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0,flexWrap:'wrap'}}>
           {preGameSecs>0&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#f59e0b',background:'rgba(245,158,11,0.08)',border:'1px solid rgba(245,158,11,0.25)',borderRadius:6,padding:'3px 7px'}}>⏱ {fmtTime(preGameSecs)}</div>}
+          {phase==='game'&&preGameSecs===0&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:sessionSecs>=(57*60)?'#ef4444':'#2a5a7a',background:sessionSecs>=(57*60)?'rgba(239,68,68,0.08)':'transparent',border:sessionSecs>=(57*60)?'1px solid rgba(239,68,68,0.25)':'none',borderRadius:6,padding:'3px 6px',transition:'all 0.5s'}}>
+            {sessionSecs>=(57*60)?'🚨':'⏱'} {String(Math.floor(sessionSecs/60)).padStart(2,'0')}:{String(sessionSecs%60).padStart(2,'0')}
+          </div>}
           <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#ef4444',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:6,padding:'3px 7px'}}>🔴 {BANKS[liveBank].name}</div>
           <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#4a7fa5',background:'#0a1628',borderRadius:6,padding:'3px 7px'}}>👤 {nickname}</div>
           {wallet?(
