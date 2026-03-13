@@ -905,8 +905,8 @@ function WinnersTerminal({winRecords}:{winRecords:WinRecord[]}){
 }
 
 // ─── Hack Matrix Display (bisected vertically) ────────────────────────────────
-function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords,liveBank,contractAddr}:{
-  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[];liveBank:number;contractAddr:string
+function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords,liveBank,contractAddr,timer,totalTimer}:{
+  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[];liveBank:number;contractAddr:string;timer:number;totalTimer:number
 }){
   const[glitching,setGlitching]=useState(false)
   const[bgCmds,setBgCmds]=useState<{cmd:string;x:number;y:number;op:number;st:string;col:string}[]>([])
@@ -1013,15 +1013,30 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
                 )}
               </div>
 
-              {/* Click window pill */}
-              <div style={{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 10px',
-                background:clickWindowOpen?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.06)',
-                border:`1px solid ${clickWindowOpen?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.2)'}`,borderRadius:20}}>
-                <div style={{width:4,height:4,borderRadius:'50%',background:clickWindowOpen?'#22c55e':'#ef4444',
-                  animation:clickWindowOpen?'dot 1s infinite':'none'}}/>
-                <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:clickWindowOpen?'#22c55e':'#ef4444'}}>
-                  {clickWindowOpen?'CLICK WINDOW OPEN':'WINDOW CLOSED'}
-                </span>
+              {/* Click window pill + round timer arc — synced with device clocks */}
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <div style={{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 10px',
+                  background:clickWindowOpen?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.06)',
+                  border:`1px solid ${clickWindowOpen?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.2)'}`,borderRadius:20}}>
+                  <div style={{width:4,height:4,borderRadius:'50%',background:clickWindowOpen?'#22c55e':'#ef4444',
+                    animation:clickWindowOpen?'dot 1s infinite':'none'}}/>
+                  <span style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:clickWindowOpen?'#22c55e':'#ef4444'}}>
+                    {clickWindowOpen?'CLICK WINDOW OPEN':'WINDOW CLOSED'}
+                  </span>
+                </div>
+                {/* Round timer arc — identical to device MiniStopwatch */}
+                {(()=>{const danger=timer<=10,r=10,circ=2*Math.PI*r,dash=circ*(timer/Math.max(totalTimer,1));return(
+                  <div style={{position:'relative',width:26,height:26,flexShrink:0}}>
+                    <svg width="26" height="26" style={{transform:'rotate(-90deg)'}}>
+                      <circle cx="13" cy="13" r={r} fill="none" stroke="#0a1628" strokeWidth="2"/>
+                      <circle cx="13" cy="13" r={r} fill="none" stroke={danger?'#ef4444':'#00e5a0'} strokeWidth="2"
+                        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" style={{transition:'stroke-dasharray 0.9s linear,stroke 0.3s'}}/>
+                    </svg>
+                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <span style={{fontFamily:'"DM Mono",monospace',fontSize:6,fontWeight:700,color:danger?'#ef4444':'#00e5a0'}}>{String(timer%60).padStart(2,'0')}</span>
+                    </div>
+                  </div>
+                )})()}
               </div>
 
               {/* Prev 5 */}
@@ -1368,6 +1383,7 @@ export default function Ransome(){
   const restoredPreGameSecsRef=useRef<number>(0)  // >0 means reload happened during pre-game
   const restoredTimerRef=useRef<number>(60)            // saved round timer for mid-game resume
   const pendingAnnounce=useRef<string[]>([])              // win announcements queued for next round
+  const startRoundRef=useRef<()=>void>(()=>{})               // stable ref to startRound
 
   useEffect(()=>{
     const s=loadState()
@@ -1493,7 +1509,6 @@ export default function Ransome(){
       pendingAnnounce.current.forEach(msg=>announce(msg))
       pendingAnnounce.current=[]
     }
-    setTotalTimer(60)  // reset arc AFTER new number — clean sync with timer
     setTimeout(()=>{setClickWindowOpen(true);drawLockRef.current=false},150)
   },[])
 
@@ -1524,28 +1539,44 @@ export default function Ransome(){
     if(sessionTimerRef.current){clearInterval(sessionTimerRef.current);sessionTimerRef.current=null}
   },[])
 
+  // startRound: draws a number then starts a fresh 60s countdown.
+  // Called by startPreGame when countdown ends, and recursively by the interval.
+  // Number draw and clock reset happen atomically — guaranteed sync.
+  const startRound=useCallback(()=>{
+    if(timerRef.current)clearInterval(timerRef.current)
+    drawNumber()          // draw number first
+    setTimer(60)          // THEN reset clock — both happen in same React batch
+    setTotalTimer(60)
+    timerRef.current=setInterval(()=>{
+      setTimer(prev=>{
+        if(prev<=1){
+          clearInterval(timerRef.current!)
+          setClickWindowOpen(false)
+          // Schedule next round via ref to avoid stale closure
+          startRoundRef.current()
+          return 60
+        }
+        return prev-1
+      })
+    },1000)
+  },[drawNumber])
+
+  // Keep startRoundRef current so the interval closure always calls latest version
+  useEffect(()=>{startRoundRef.current=startRound},[startRound])
+
   const startPreGame=useCallback((secs:number)=>{
     setPreGameSecs(secs)
     preTimerRef.current=setInterval(()=>{
       setPreGameSecs(p=>{
         if(p<=1){
           clearInterval(preTimerRef.current!)
-          // Start session clock the moment first number draws
           startSessionClock()
-          const t=60;setTimer(t);setTotalTimer(t)
-          timerRef.current=setInterval(()=>{
-            setTimer(prev=>{
-              // totalTimer stays at 60 — only reset when new round starts in drawNumber
-              if(prev<=1){setClickWindowOpen(false);drawNumber();return 60}  // totalTimer reset in drawNumber
-              return prev-1
-            })
-          },1000)
-          drawNumber();return 0
+          startRound();return 0
         }
         return p-1
       })
     },1000)
-  },[drawNumber,startSessionClock])
+  },[startRound,startSessionClock])
 
   // Resume game after page reload — fires whenever devices state settles with resumeRef flagged
   useEffect(()=>{
@@ -1568,14 +1599,8 @@ export default function Ransome(){
           setPreGameSecs(p=>{
             if(p<=1){
               clearInterval(preTimerRef.current!)
-              setTimer(60);setTotalTimer(60)
-              timerRef.current=setInterval(()=>{
-                setTimer(prev=>{
-                  if(prev<=1){setClickWindowOpen(false);setTotalTimer(60);drawNumber();return 60}
-                  return prev-1
-                })
-              },1000)
-              drawNumber();return 0
+              startSessionClock()
+              startRound();return 0
             }
             return p-1
           })
@@ -1590,13 +1615,20 @@ export default function Ransome(){
         })))
         const rt=restoredTimerRef.current>0?restoredTimerRef.current:60
         drawLockRef.current=false
-        startSessionClock()  // restart session clock — elapsed from savedAt is unavailable
-        setPreGameSecs(0);setTimer(rt);setTotalTimer(60)
-        // Open click window if the current number exists (restored mid-round)
+        startSessionClock()
+        setPreGameSecs(0);setTotalTimer(60)
+        // Restore clock position — resume remaining seconds then continue with startRound
         setClickWindowOpen(restoredNumsRef.current.length>0)
+        setTimer(rt)
+        if(timerRef.current)clearInterval(timerRef.current)
         timerRef.current=setInterval(()=>{
           setTimer(prev=>{
-            if(prev<=1){setClickWindowOpen(false);setTotalTimer(60);drawNumber();return 60}
+            if(prev<=1){
+              clearInterval(timerRef.current!)
+              setClickWindowOpen(false)
+              startRoundRef.current()  // use ref so closure is always fresh
+              return 60
+            }
             return prev-1
           })
         },1000)
@@ -1965,7 +1997,7 @@ export default function Ransome(){
         gap:10,alignItems:'start'}}
         className="game-grid">
         <div style={{gridArea:'matrix',minWidth:0}}>
-          <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr}/>
+          <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr} timer={timer} totalTimer={totalTimer}/>
         </div>
         <div style={{gridArea:'stats',minWidth:0}}>
           <GameStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} liveBank={liveBank} nickname={nickname} winStates={winStates} contractAddr={contractAddr} setContractAddr={setContractAddr}/>
