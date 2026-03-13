@@ -1384,6 +1384,8 @@ export default function Ransome(){
   const restoredTimerRef=useRef<number>(60)            // saved round timer for mid-game resume
   const pendingAnnounce=useRef<string[]>([])              // win announcements queued for next round
   const startRoundRef=useRef<()=>void>(()=>{})               // stable ref to startRound
+  const masterRef=useRef<ReturnType<typeof setInterval>|null>(null)  // ONE master clock
+  const clockPhaseRef=useRef<'idle'|'pregame'|'round'>('idle')       // master clock state
 
   useEffect(()=>{
     const s=loadState()
@@ -1514,7 +1516,7 @@ export default function Ransome(){
 
   useEffect(()=>{
     if(!bankHacked)return
-    if(timerRef.current)clearInterval(timerRef.current)
+    stopMaster()
     setClickWindowOpen(false)
     announce(`🏦 BANK HACKED! ALL 90 DRAWN!\n💸 Unclaimed → ${CLAIM_WALLET.slice(0,8)}...${CLAIM_WALLET.slice(-6)}\n🗑 NFT devices unlinked — session ended\nReturning to lobby...`)
     setTimeout(()=>{
@@ -1525,58 +1527,72 @@ export default function Ransome(){
     },8000)
   },[bankHacked])
 
-  const startSessionClock=useCallback(()=>{
-    sessionStartRef.current=Date.now()
-    setSessionSecs(0)
-    if(sessionTimerRef.current)clearInterval(sessionTimerRef.current)
-    sessionTimerRef.current=setInterval(()=>{
-      const elapsed=Math.floor((Date.now()-sessionStartRef.current)/1000)
-      setSessionSecs(elapsed)
-    },1000)
-  },[])
-
   const stopSessionClock=useCallback(()=>{
     if(sessionTimerRef.current){clearInterval(sessionTimerRef.current);sessionTimerRef.current=null}
   },[])
 
-  // startRound: draws a number then starts a fresh 60s countdown.
-  // Called by startPreGame when countdown ends, and recursively by the interval.
-  // Number draw and clock reset happen atomically — guaranteed sync.
-  const startRound=useCallback(()=>{
-    if(timerRef.current)clearInterval(timerRef.current)
-    drawNumber()          // draw number first
-    setTimer(60)          // THEN reset clock — both happen in same React batch
-    setTotalTimer(60)
-    timerRef.current=setInterval(()=>{
-      setTimer(prev=>{
-        if(prev<=1){
-          clearInterval(timerRef.current!)
-          setClickWindowOpen(false)
-          // Schedule next round via ref to avoid stale closure
-          startRoundRef.current()
-          return 60
-        }
-        return prev-1
-      })
+  const startSessionClock=useCallback(()=>{
+    sessionStartRef.current=Date.now()
+    setSessionSecs(0)
+    stopSessionClock()
+    sessionTimerRef.current=setInterval(()=>{
+      setSessionSecs(Math.floor((Date.now()-sessionStartRef.current)/1000))
     },1000)
+  },[stopSessionClock])
+
+  // ── MASTER CLOCK ──────────────────────────────────────────────────────────
+  // One interval drives pre-game countdown AND round countdown.
+  // Switching phases is atomic — no drift between two separate setIntervals.
+  const stopMaster=useCallback(()=>{
+    if(masterRef.current){clearInterval(masterRef.current);masterRef.current=null}
+    clockPhaseRef.current='idle'
+  },[])
+
+  const beginRound=useCallback(()=>{
+    // Called when it's time to draw a number and run a 60s round
+    drawNumber()        // draw first
+    setTimer(60)        // clock reset in same render batch — guaranteed sync
+    setTotalTimer(60)
+    clockPhaseRef.current='round'
   },[drawNumber])
 
-  // Keep startRoundRef current so the interval closure always calls latest version
-  useEffect(()=>{startRoundRef.current=startRound},[startRound])
+  // Keep startRoundRef pointing at beginRound for legacy resume paths
+  useEffect(()=>{startRoundRef.current=beginRound},[beginRound])
 
   const startPreGame=useCallback((secs:number)=>{
+    stopMaster()
+    clockPhaseRef.current='pregame'
     setPreGameSecs(secs)
-    preTimerRef.current=setInterval(()=>{
-      setPreGameSecs(p=>{
-        if(p<=1){
-          clearInterval(preTimerRef.current!)
-          startSessionClock()
-          startRound();return 0
-        }
-        return p-1
-      })
+    setTimer(60);setTotalTimer(60)
+    masterRef.current=setInterval(()=>{
+      if(clockPhaseRef.current==='pregame'){
+        setPreGameSecs(p=>{
+          if(p<=1){
+            // Pre-game done — switch to first round atomically in this same tick
+            clockPhaseRef.current='round'
+            startSessionClock()
+            drawNumber()       // draw number NOW
+            setTimer(60)       // clock resets NOW — same JS tick, same React batch
+            setTotalTimer(60)
+            return 0
+          }
+          return p-1
+        })
+      } else if(clockPhaseRef.current==='round'){
+        setTimer(prev=>{
+          if(prev<=1){
+            // Round done — draw next number, reset clock atomically
+            setClickWindowOpen(false)
+            drawNumber()
+            setTimer(60)
+            setTotalTimer(60)
+            return 60
+          }
+          return prev-1
+        })
+      }
     },1000)
-  },[startRound,startSessionClock])
+  },[stopMaster,startSessionClock,drawNumber])
 
   // Resume game after page reload — fires whenever devices state settles with resumeRef flagged
   useEffect(()=>{
@@ -1584,8 +1600,7 @@ export default function Ransome(){
     if(phase!=='game')return
     resumeRef.current=false
     // Clear any stale timers
-    if(timerRef.current)clearInterval(timerRef.current)
-    if(preTimerRef.current)clearInterval(preTimerRef.current)
+    stopMaster()
     // Short delay so React fully commits restored device state
     const t=setTimeout(()=>{
       if(restoredPreGameSecsRef.current>0){
@@ -1594,17 +1609,8 @@ export default function Ransome(){
         restoredPreGameSecsRef.current=0
         drawnRef.current=new Set()
         setClickWindowOpen(false)
-        setPreGameSecs(remaining)
-        preTimerRef.current=setInterval(()=>{
-          setPreGameSecs(p=>{
-            if(p<=1){
-              clearInterval(preTimerRef.current!)
-              startSessionClock()
-              startRound();return 0
-            }
-            return p-1
-          })
-        },1000)
+        // Resume via master clock — same atomic pre-game flow
+        startPreGame(remaining)
       } else {
         // MID-GAME RESUME: numbers already drawn, resume draw interval
         drawnRef.current=new Set(restoredNumsRef.current.length>0?restoredNumsRef.current:Array.from(calledNums))
@@ -1616,21 +1622,23 @@ export default function Ransome(){
         const rt=restoredTimerRef.current>0?restoredTimerRef.current:60
         drawLockRef.current=false
         startSessionClock()
-        setPreGameSecs(0);setTotalTimer(60)
-        // Restore clock position — resume remaining seconds then continue with startRound
+        setPreGameSecs(0);setTotalTimer(60);setTimer(rt)
         setClickWindowOpen(restoredNumsRef.current.length>0)
-        setTimer(rt)
-        if(timerRef.current)clearInterval(timerRef.current)
-        timerRef.current=setInterval(()=>{
-          setTimer(prev=>{
-            if(prev<=1){
-              clearInterval(timerRef.current!)
-              setClickWindowOpen(false)
-              startRoundRef.current()  // use ref so closure is always fresh
-              return 60
-            }
-            return prev-1
-          })
+        // Resume mid-game via master clock at remaining seconds
+        stopMaster()
+        clockPhaseRef.current='round'
+        masterRef.current=setInterval(()=>{
+          if(clockPhaseRef.current==='round'){
+            setTimer(prev=>{
+              if(prev<=1){
+                setClickWindowOpen(false)
+                drawNumber()
+                setTimer(60);setTotalTimer(60)
+                return 60
+              }
+              return prev-1
+            })
+          }
         },1000)
       }
     },300)
@@ -1649,9 +1657,7 @@ export default function Ransome(){
     }
     if(sessionSecs>=3480){
       // Hard stop — end session now
-      stopSessionClock()
-      if(timerRef.current)clearInterval(timerRef.current)
-      if(preTimerRef.current)clearInterval(preTimerRef.current)
+      stopMaster();stopSessionClock()
       setClickWindowOpen(false)
       setShowEndScreen(true)
       // Deactivate all devices
@@ -1691,8 +1697,7 @@ export default function Ransome(){
   // ── All bankrupts claimed → show end screen ───────────────────────────────
   useEffect(()=>{
     if(phase!=='game'||bankruptCount<3||showEndScreen)return
-    stopSessionClock()
-    if(timerRef.current)clearInterval(timerRef.current)
+    stopMaster();stopSessionClock()
     setClickWindowOpen(false)
     setShowEndScreen(true)
     setDevices(ds=>ds.map(d=>({...d,active:false})))
@@ -1813,6 +1818,7 @@ export default function Ransome(){
     setPhase('game');startPreGame(60);announce('🔴 HACK IN 60 SECONDS')
   }
   const terminateGame=()=>{
+    stopMaster();stopSessionClock()
     try{localStorage.removeItem('ransome_state_v1')}catch{}
     setDevices([]);setCalledNums(new Set());setCalledOrder([]);setWinStates(defaultWinStates());setWinRecords([]);setBankHacked(false);setPreGameSecs(0)
     setShowTerminate(false);setPhase('lobby')
