@@ -691,7 +691,12 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
               opacity:dead?0.15:dimOpacity,
               animation:ws.broken?'filamentGlow 1.5s ease-in-out infinite':won&&ws.bursting?'ledBurst 0.4s ease-out forwards':ws.expired?'ledExpire 0.4s ease forwards':ws.flickering?'rapidFlicker 0.08s infinite':lit&&!won?`ledBlink 0.6s ${i*0.07}s infinite`:'none',
             }}>
-              {ws.broken&&<div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}ff 0%,${LED_COLORS[type]}99 30%,transparent 75%)`,animation:'filamentGlow 1.5s ease-in-out infinite'}}/>}
+              {ws.broken&&!type.startsWith('FULL_HOUSE')&&(
+                <div style={{position:'absolute',inset:0,background:`radial-gradient(circle,${LED_COLORS[type]}ff 0%,${LED_COLORS[type]}99 30%,transparent 75%)`,animation:'filamentGlow 1.5s ease-in-out infinite'}}/>
+              )}
+              {ws.broken&&type==='FULL_HOUSE_1'&&<div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'"DM Mono",monospace',fontSize:6,fontWeight:700,color:LED_COLORS[type],textShadow:`0 0 4px ${LED_COLORS[type]}`}}>1</div>}
+              {ws.broken&&type==='FULL_HOUSE_2'&&<div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'"DM Mono",monospace',fontSize:6,fontWeight:700,color:LED_COLORS[type],textShadow:`0 0 4px ${LED_COLORS[type]}`}}>2</div>}
+              {ws.broken&&type==='FULL_HOUSE_3'&&<div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'"DM Mono",monospace',fontSize:6,fontWeight:700,color:LED_COLORS[type],textShadow:`0 0 4px ${LED_COLORS[type]}`}}>3</div>}
               {won&&ws.bursting&&<div style={{position:'absolute',inset:-8,borderRadius:'50%',background:`radial-gradient(circle,${LED_COLORS[type]}99 0%,transparent 70%)`,animation:'burstRing 0.5s ease-out forwards',pointerEvents:'none'}}/>}
             </div>
           )
@@ -1060,10 +1065,10 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
       </div>
 
       {/* ════ Divider ════ */}
-      <div style={{width:1,background:'linear-gradient(180deg,transparent,#0a3a5a60,#0a3a5a60,transparent)',flexShrink:0,zIndex:2,alignSelf:'stretch'}}/>
+      <div className="matrix-right-divider" style={{width:1,background:'linear-gradient(180deg,transparent,#0a3a5a60,#0a3a5a60,transparent)',flexShrink:0,zIndex:2,alignSelf:'stretch'}}/>
 
-      {/* ════ RIGHT — Vault + Chart + Stats ════ */}
-      <div style={{width:170,flexShrink:0,padding:'10px 10px',zIndex:2,display:'flex',flexDirection:'column',gap:6}}>
+      {/* ════ RIGHT — Vault + Chart + Stats (hidden on mobile) ════ */}
+      <div className="matrix-right-panel" style={{width:170,flexShrink:0,padding:'10px 10px',zIndex:2,display:'flex',flexDirection:'column',gap:6}}>
 
         {/* Bank name */}
         <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#2a5a7a',letterSpacing:'0.1em',fontWeight:700}}>
@@ -1494,8 +1499,9 @@ export default function Ransome(){
     announce(`🏦 BANK HACKED! ALL 90 DRAWN!\n💸 Unclaimed → ${CLAIM_WALLET.slice(0,8)}...${CLAIM_WALLET.slice(-6)}\n🗑 NFT devices unlinked — session ended\nReturning to lobby...`)
     setTimeout(()=>{
       pendingAnnounce.current=[]
+      setDevices([])  // trash NFT devices — session ended
       setPhase('lobby');setBankHacked(false);setCalledNums(new Set());setCalledOrder([])
-      setWinStates(defaultWinStates());setWinRecords([]);setRoundNum(0)
+      setWinStates(defaultWinStates());setWinRecords([]);setRoundNum(0);setBankruptCount(0)
     },8000)
   },[bankHacked])
 
@@ -1561,8 +1567,10 @@ export default function Ransome(){
           ))
         })))
         const rt=restoredTimerRef.current>0?restoredTimerRef.current:60
-        // Force preGameSecs to 0 — this is the authoritative clear for the overlay
-        setPreGameSecs(0);setTimer(rt);setTotalTimer(60);setClickWindowOpen(false)
+        drawLockRef.current=false  // clear any stale lock from previous session
+        setPreGameSecs(0);setTimer(rt);setTotalTimer(60)
+        // Open click window if the current number exists (restored mid-round)
+        setClickWindowOpen(restoredNumsRef.current.length>0)
         timerRef.current=setInterval(()=>{
           setTimer(prev=>{
             if(prev<=1){setClickWindowOpen(false);setTotalTimer(60);drawNumber();return 60}
@@ -1663,7 +1671,15 @@ export default function Ransome(){
     announce(`⚡ ${mintCount} DEVICE${mintCount>1?'S':''} MINTED — BOUND TO ${(wallet||'WALLET').slice(0,8)}`)
   }
 
-  const enterGame=()=>{setPhase('game');startPreGame(60);announce('🔴 HACK IN 60 SECONDS')}
+  const enterGame=()=>{
+    // Clear all previous game state — fresh session
+    setCalledNums(new Set());setCalledOrder([])
+    setWinStates(defaultWinStates());setWinRecords([]);setRoundNum(0);setBankruptCount(0)
+    setBankHacked(false);setClickWindowOpen(false)
+    drawnRef.current=new Set();drawLockRef.current=false
+    pendingAnnounce.current=[]
+    setPhase('game');startPreGame(60);announce('🔴 HACK IN 60 SECONDS')
+  }
   const terminateGame=()=>{
     try{localStorage.removeItem('ransome_state_v1')}catch{}
     setDevices([]);setCalledNums(new Set());setCalledOrder([]);setWinStates(defaultWinStates());setWinRecords([]);setBankHacked(false);setPreGameSecs(0)
