@@ -107,6 +107,19 @@ function useHourCountdown(){
   useEffect(()=>{const t=setInterval(()=>setS(get()),1000);return()=>clearInterval(t)},[])
   return s
 }
+// 59-minute lobby cycle — resets every 59 minutes from UTC epoch
+// Fill pct rises 0→1 as countdown falls 59min→0
+const LOBBY_CYCLE=59*60
+function useLobbyCountdown(){
+  const get=()=>{
+    const now=new Date()
+    const elapsed=now.getUTCHours()*3600+now.getUTCMinutes()*60+now.getUTCSeconds()
+    return LOBBY_CYCLE-(elapsed%LOBBY_CYCLE)
+  }
+  const[s,setS]=useState(get)
+  useEffect(()=>{const t=setInterval(()=>setS(get()),1000);return()=>clearInterval(t)},[])
+  return s
+}
 function fmtTime(s:number){const m=Math.floor(s/60),ss=s%60;return`${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`}
 
 // ─── MiniStopwatch ────────────────────────────────────────────────────────────
@@ -1376,6 +1389,8 @@ export default function Ransome(){
   const[showEndScreen,setShowEndScreen]=useState(false) // all bankrupts done
   const currentHour=new Date().getUTCHours()
   const liveBank=getLiveBank(currentHour)
+  const lobbyCountdown=useLobbyCountdown()           // 59-min cycle countdown
+  const lobbyFill=Math.min(1-(lobbyCountdown/LOBBY_CYCLE),1)  // 0→1 as vault fills
 
   // ── Persist & restore state ──────────────────────────────────────────────
   const resumeRef=useRef(false)
@@ -1718,6 +1733,19 @@ export default function Ransome(){
     },60000)
   },[phase,bankruptCount,showEndScreen,stopSessionClock])
 
+
+  // ── Auto-launch: when lobby countdown hits 0, enter game if devices minted ──
+  const autoLaunchedRef=useRef(false)
+  useEffect(()=>{
+    if(phase!=='lobby')return
+    if(lobbyCountdown<=1&&!autoLaunchedRef.current&&devices.length>0){
+      autoLaunchedRef.current=true
+      announce('🚀 BATCH LAUNCHING — TRANSFERRING TO HACK MATRIX')
+      setTimeout(()=>enterGame(),1200)
+    }
+    if(lobbyCountdown>5)autoLaunchedRef.current=false  // reset for next cycle
+  },[phase,lobbyCountdown,devices.length])
+
   // Win detection
   useEffect(()=>{
     if(phase!=='game')return
@@ -1871,17 +1899,17 @@ export default function Ransome(){
         </div>
         <div style={{textAlign:'right'}}>
           <div style={{fontFamily:'"Syne",sans-serif',fontSize:'clamp(16px,4vw,22px)',fontWeight:800,color:'#00e5a0'}}>$1,000,000</div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:hourCd===0?'#22c55e':'#ef4444',fontWeight:700}}>
-            {hourCd===0?'🟢 OPEN':`⏱ ${fmtTime(hourCd)}`}
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:lobbyCountdown<=60?'#ef4444':'#2a5a7a',fontWeight:700}}>
+            {lobbyCountdown<=60?'🚀 LAUNCHING NOW':`NEXT BATCH: ${fmtTime(lobbyCountdown)}`}
           </div>
         </div>
       </div>
 
-      {/* Main layout: Map full width, then Device skeleton below on mobile / side by side on wide */}
-      <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,340px)',gap:14,marginBottom:14,alignItems:'start'}}>
-        {/* Left: World map sketch */}
+      {/* Main layout: 3-col on wide, stacked on mobile */}
+      <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,200px) minmax(0,300px)',gap:14,marginBottom:14,alignItems:'start'}} className="lobby-grid">
+        {/* Col 1: World map */}
         <div>
-          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:6}}>⬡ GLOBAL BANK NETWORK — 23 BANKS · 55 MIN ROUNDS</div>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#1e4a6a',letterSpacing:'0.1em',marginBottom:6}}>⬡ GLOBAL BANK NETWORK — 23 BANKS · 59 MIN CYCLES</div>
           <WorldMapSketch currentHour={currentHour} onSelectBank={setSelectedBank}/>
           {selectedBank!==null&&(
             <div style={{marginTop:8,background:'#020d1a',border:'1px solid #0a2535',borderRadius:8,padding:'8px 12px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -1889,11 +1917,77 @@ export default function Ransome(){
                 <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,color:'#00e5a0',fontWeight:700}}>{BANKS[selectedBank].name}</div>
                 <div style={{fontFamily:'"DM Mono",monospace',fontSize:7.5,color:'#2a5a7a'}}>{BANKS[selectedBank].city} · {BANKS[selectedBank].region} · {BANKS[selectedBank].vault}</div>
               </div>
-              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:selectedBank===liveBank?'#22c55e':'#1e4a6a'}}>{selectedBank===liveBank?`⏱ ${fmtTime(hourCd)}`:`UTC${BANKS[selectedBank].tz>=0?'+':''}${BANKS[selectedBank].tz}`}</div>
+              <div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:selectedBank===liveBank?'#22c55e':'#1e4a6a'}}>{selectedBank===liveBank?'🟢 LIVE':`UTC${BANKS[selectedBank].tz>=0?'+':''}${BANKS[selectedBank].tz}`}</div>
             </div>
           )}
         </div>
-        {/* Right: Device skeleton with Mint/Demo/Rules */}
+
+        {/* Col 2: LOBBY VAULT — accumulating ransom funds */}
+        <div style={{background:'#020d1a',border:'2px solid #0a3a5a',borderRadius:14,padding:'12px 10px',display:'flex',flexDirection:'column',gap:8,alignItems:'center'}}>
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#2a5a7a',letterSpacing:'0.12em',textAlign:'center'}}>
+            🏦 NEXT VAULT
+          </div>
+          {/* Vault fill indicator */}
+          <div style={{position:'relative',width:'100%'}}>
+            <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill*1000000)}/>
+          </div>
+          {/* Accumulation bar */}
+          <div style={{width:'100%',background:'#0a1628',borderRadius:3,overflow:'hidden',height:6,border:'1px solid #0d2035'}}>
+            <div style={{height:'100%',width:`${lobbyFill*100}%`,
+              background:`linear-gradient(90deg,#00e5a0,${lobbyFill>0.8?'#ef4444':'#00b8ff'})`,
+              borderRadius:3,transition:'width 1s linear',
+              boxShadow:`0 0 ${Math.round(lobbyFill*12)}px rgba(0,229,160,${(lobbyFill*0.7).toFixed(2)})`}}/>
+          </div>
+          {/* Vault amount accumulating */}
+          <div style={{textAlign:'center'}}>
+            <div style={{fontFamily:'"Syne",sans-serif',fontSize:18,fontWeight:800,
+              color:lobbyFill>0.8?'#ef4444':'#00e5a0',
+              textShadow:`0 0 16px ${lobbyFill>0.8?'#ef4444':'#00e5a0'}60`}}>
+              ${Math.round(lobbyFill*1000000).toLocaleString()}
+            </div>
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a',marginTop:1}}>
+              ACCUMULATING
+            </div>
+          </div>
+          {/* Countdown to next batch */}
+          <div style={{width:'100%',background:'rgba(0,0,0,0.3)',borderRadius:8,padding:'6px 10px',textAlign:'center',
+            border:`1px solid ${lobbyCountdown<=60?'rgba(239,68,68,0.4)':'rgba(10,58,90,0.8)'}`,
+            animation:lobbyCountdown<=60?'ledBlink 0.8s infinite':'none'}}>
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:lobbyCountdown<=60?'#ef4444':'#2a5a7a',marginBottom:2}}>
+              {lobbyCountdown<=60?'🚀 BATCH LAUNCHING':'⏳ NEXT BATCH'}
+            </div>
+            <div style={{fontFamily:'"Syne",sans-serif',fontSize:22,fontWeight:800,
+              color:lobbyCountdown<=60?'#ef4444':'#fff',
+              textShadow:lobbyCountdown<=60?'0 0 20px #ef4444':'none'}}>
+              {fmtTime(lobbyCountdown)}
+            </div>
+          </div>
+          {/* Device count */}
+          <div style={{fontFamily:'"DM Mono",monospace',fontSize:6.5,color:'#1e4a6a',textAlign:'center'}}>
+            {devices.length>0?(
+              <span style={{color:'#00e5a0'}}>⚡ {devices.length} DEVICE{devices.length>1?'S':''} READY</span>
+            ):(
+              <span>MINT DEVICES TO JOIN →</span>
+            )}
+          </div>
+          {/* Enter game button — only in final 60s window */}
+          {lobbyCountdown<=60&&devices.length>0&&(
+            <button onClick={enterGame} style={{
+              width:'100%',background:'linear-gradient(135deg,#ef4444,#dc2626)',
+              color:'#fff',border:'none',borderRadius:8,padding:'7px 0',
+              fontFamily:'"DM Mono",monospace',fontSize:8,fontWeight:700,cursor:'pointer',
+              boxShadow:'0 0 16px rgba(239,68,68,0.4)',animation:'ledBlink 0.6s infinite'}}>
+              🚀 ENTER HACK MATRIX
+            </button>
+          )}
+          {lobbyCountdown>60&&devices.length>0&&(
+            <div style={{fontFamily:'"DM Mono",monospace',fontSize:6,color:'#1e4a6a',textAlign:'center'}}>
+              Entry opens in {fmtTime(lobbyCountdown-60)}
+            </div>
+          )}
+        </div>
+
+        {/* Col 3: Device skeleton with Mint/Demo/Rules */}
         <DeviceSkeleton title="RNSM-MINT-01">
           <MintPanel wallet={wallet} devices={devices} mintCount={mintCount} mintToken={mintToken}
             setMintCount={setMintCount} setMintToken={setMintToken}

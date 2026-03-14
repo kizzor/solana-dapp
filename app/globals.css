@@ -189,3 +189,19 @@ body {
     display: none !important;
   }
 }
+
+/* ── Lobby 3-col grid ─────────────────────────────────────────────────────── */
+.lobby-grid {
+  grid-template-columns: minmax(0,1fr) minmax(0,200px) minmax(0,300px) !important;
+}
+@media (max-width: 900px) {
+  .lobby-grid {
+    grid-template-columns: minmax(0,1fr) minmax(0,180px) !important;
+    grid-template-areas: "map vault" "mint mint" !important;
+  }
+}
+@media (max-width: 600px) {
+  .lobby-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
