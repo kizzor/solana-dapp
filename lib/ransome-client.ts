@@ -26,7 +26,7 @@ import {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 export const PROGRAM_ID = new PublicKey(
-  "CZmrXHfMXuP3uUPGApinsKH9dfQZVdNehAmsnpLqTw6d"
+  "5ZFVc4h5Z6ccuxCRNM1Ubr1LC5cv6bvPugYFMJMgRU31"
 );
 
 export const TREASURY = new PublicKey(

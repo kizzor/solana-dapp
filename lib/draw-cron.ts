@@ -31,7 +31,7 @@ import {
 const RPC_URL        = process.env.RPC_URL        || "https://api.devnet.solana.com";
 const AUTHORITY_KEY  = process.env.AUTHORITY_KEYPAIR; // JSON array of secret key bytes
 const SESSION_AUTH   = process.env.SESSION_AUTHORITY;
-const PROGRAM_ID_STR = "CZmrXHfMXuP3uUPGApinsKH9dfQZVdNehAmsnpLqTw6d";
+const PROGRAM_ID_STR = "5ZFVc4h5Z6ccuxCRNM1Ubr1LC5cv6bvPugYFMJMgRU31";
 const SESSION_MAX    = 58 * 60; // seconds
 
 if (!AUTHORITY_KEY) throw new Error("AUTHORITY_KEYPAIR env not set");
