@@ -1,0 +1,14 @@
+name: Ransome Draw Number
+on:
+  schedule:
+    - cron: '* * * * *'
+  workflow_dispatch:
+jobs:
+  draw:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger draw endpoint
+        run: |
+          curl -s -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://solana-dapp-dun.vercel.app/api/draw
