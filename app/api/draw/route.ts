@@ -42,7 +42,7 @@ export async function GET(req: Request) {
     // Read active flag (offset: 8 discriminator + 32+32+1+1+8+8+1+90+1+1+8+8+7+224+7 = 439)
     // active is at byte 439 in the account data
     const data = sessionInfo.data
-    const active = data[439] === 1
+    const active = data[437] === 1
     if (!active) {
       return NextResponse.json({ ok: false, msg: 'Session not active' })
     }
@@ -72,8 +72,8 @@ export async function GET(req: Request) {
 
     // Read new last_number from session (offset 8+32+32+1+1+8+8+1+90+1 = 183, last_number at 184)
     const updated = await connection.getAccountInfo(sessionKey)
-    const drawCount = updated?.data[183] ?? 0
-    const lastNum   = updated?.data[184] ?? 0
+    const drawCount = updated?.data[181] ?? 0
+    const lastNum   = updated?.data[182] ?? 0
 
     return NextResponse.json({
       ok: true,
