@@ -49,7 +49,7 @@ export async function GET(req: Request) {
 
     // Anchor discriminator for draw_number instruction
     // sha256("global:draw_number")[0..8]
-    const disc = Buffer.from([144, 134, 159, 234, 135, 217, 134, 239])
+    const disc = Buffer.from([52, 82, 15, 76, 74, 208, 200, 63])
 
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
