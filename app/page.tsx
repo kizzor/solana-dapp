@@ -1,6 +1,11 @@
 'use client'
 import './globals.css'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import '@solana/wallet-adapter-react-ui/styles.css'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react'
+import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
+import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets'
+import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Cell = { num:number|null; matched:boolean; clicked:boolean; missed:boolean }
@@ -1376,11 +1381,28 @@ function MaximizedDevices({devices,currentNum,clickWindowOpen,calledNums,onCellC
 }
 
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-export default function Ransome(){
+// ─── Main (wrapped with wallet providers) ─────────────────────────────────────
+export default function RansomeApp(){
+  const network = WalletAdapterNetwork.Devnet
+  const endpoint = 'https://api.devnet.solana.com'
+  const wallets = useMemo(()=>[new PhantomWalletAdapter(), new SolflareWalletAdapter()],[])
+  return(
+    <ConnectionProvider endpoint={endpoint}>
+      <WalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>
+          <Ransome/>
+        </WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
+  )
+}
+
+function Ransome(){
+  const { publicKey, disconnect, connected } = useWallet()
   const[phase,setPhase]=useState<string>('setup')
   const[nickname,setNickname]=useState('')
-  const[wallet,setWallet]=useState<string|null>(null)
+  // wallet derived from real Phantom/Solflare connection
+  const wallet = connected && publicKey ? publicKey.toBase58() : null
   const[devices,setDevices]=useState<Device[]>([])
   const[calledNums,setCalledNums]=useState<Set<number>>(new Set())
   const[calledOrder,setCalledOrder]=useState<number[]>([])
@@ -1430,7 +1452,7 @@ export default function Ransome(){
     const s=loadState()
     if(!s)return
     if(s.nickname)setNickname(s.nickname)
-    if(s.wallet)setWallet(s.wallet)
+    // wallet restored from adapter, not localStorage
     if(s.mintToken)setMintToken(s.mintToken)
     if(s.contractAddr)setContractAddr(s.contractAddr)
     // Restore devices with claimed Sets
@@ -1491,7 +1513,7 @@ export default function Ransome(){
   useEffect(()=>{
     if(phase==='setup')return
     saveState({
-      nickname,wallet,phase,mintToken,contractAddr,
+      nickname,phase,mintToken,contractAddr,
       devices:devices.map(d=>({...d,claimed:Array.from(d.claimed)})),
       calledNums:Array.from(calledNums),
       calledOrder,
@@ -1503,7 +1525,7 @@ export default function Ransome(){
       totalTimer,
       savedAt:Date.now(),
     })
-  },[nickname,wallet,phase,mintToken,contractAddr,devices,calledNums,calledOrder,winStates,winRecords,bankruptCount,roundNum,timer,totalTimer])
+  },[nickname,phase,mintToken,contractAddr,devices,calledNums,calledOrder,winStates,winRecords,bankruptCount,roundNum,timer,totalTimer])
   const currentNum=calledOrder[calledOrder.length-1]??null
   const hourCd=useHourCountdown()
 
@@ -1838,8 +1860,44 @@ export default function Ransome(){
   }
 
   // Claim: accumulate claimers within same round, split prize, then flicker ALL devices
-  const handleClaim=(devId:number,wt:WinType)=>{
+  const handleClaim=async(devId:number,wt:WinType)=>{
     if(winStates[wt].claimed)return
+    // ── On-chain claim if real wallet connected ──────────────────────────────
+    if(connected&&publicKey&&sendTransaction&&solanaConnection){
+      try{
+        const{PublicKey,Transaction,TransactionInstruction,SystemProgram}=await import('@solana/web3.js')
+        const programId=new PublicKey(PROGRAM_ID_STR)
+        const sessionAuth=new PublicKey(SESSION_AUTH_STR)
+        const winner=publicKey
+        const[sessionKey]=PublicKey.findProgramAddressSync([Buffer.from('session'),sessionAuth.toBuffer()],programId)
+        const[vaultKey]=PublicKey.findProgramAddressSync([Buffer.from('vault'),sessionKey.toBuffer()],programId)
+        const[deviceKey]=PublicKey.findProgramAddressSync(
+          [Buffer.from('device'),sessionKey.toBuffer(),winner.toBuffer(),Buffer.from([devId])],programId
+        )
+        const disc=Buffer.from([163,215,101,246,25,134,110,194])
+        const data=Buffer.concat([disc,Buffer.from([WIN_TYPE_INDEX[wt]??0])])
+        const ix=new TransactionInstruction({
+          programId,
+          keys:[
+            {pubkey:winner,isSigner:true,isWritable:true},
+            {pubkey:sessionKey,isSigner:false,isWritable:true},
+            {pubkey:vaultKey,isSigner:false,isWritable:true},
+            {pubkey:deviceKey,isSigner:false,isWritable:false},
+            {pubkey:winner,isSigner:false,isWritable:false},
+            {pubkey:SystemProgram.programId,isSigner:false,isWritable:false},
+          ],
+          data
+        })
+        const{blockhash,lastValidBlockHeight}=await solanaConnection.getLatestBlockhash('confirmed')
+        const tx=new Transaction({blockhash,lastValidBlockHeight,feePayer:winner})
+        tx.add(ix)
+        const sig=await sendTransaction(tx,solanaConnection)
+        await solanaConnection.confirmTransaction({signature:sig,blockhash,lastValidBlockHeight},'confirmed')
+        announce(`✅ ON-CHAIN CLAIM!\n${WIN_LABELS[wt]}\nSig: ${sig.slice(0,16)}...`)
+      }catch(e:any){
+        console.error('On-chain claim error:',e.message)
+      }
+    }
     const dev=devices.find(d=>d.id===devId)
     if(!dev)return
     // Add to pending claimers for this win type
@@ -1934,14 +1992,12 @@ export default function Ransome(){
                 <div style={{width:5,height:5,borderRadius:'50%',background:'#22c55e',flexShrink:0}}/>
                 {wallet}
               </div>
-              <button onClick={()=>setWallet(null)} style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',borderRadius:8,padding:'5px 8px',fontFamily:'"DM Mono",monospace',fontSize:'clamp(7px,1.6vw,8px)',color:'#ef4444',cursor:'pointer',whiteSpace:'nowrap'}}>
+              <button onClick={()=>disconnect()} style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',borderRadius:8,padding:'5px 8px',fontFamily:'"DM Mono",monospace',fontSize:'clamp(7px,1.6vw,8px)',color:'#ef4444',cursor:'pointer',whiteSpace:'nowrap'}}>
                 ✕ DISCONNECT
               </button>
             </div>
           ):(
-            <button onClick={()=>setWallet('HaCk...3r0x')} style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:8,padding:'6px 12px',fontFamily:'"DM Mono",monospace',fontSize:'clamp(8px,1.8vw,10px)',cursor:'pointer',fontWeight:700,whiteSpace:'nowrap'}}>
-              CONNECT WALLET →
-            </button>
+            <WalletMultiButton style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',borderRadius:8,fontFamily:'"DM Mono",monospace',fontSize:'clamp(8px,1.8vw,10px)',fontWeight:700,height:'auto',padding:'6px 12px'}}/>
           )}
         </div>
       </div>
@@ -2047,7 +2103,7 @@ export default function Ransome(){
         <DeviceSkeleton title="RNSM-MINT-01">
           <MintPanel wallet={wallet} devices={devices} mintCount={mintCount} mintToken={mintToken}
             setMintCount={setMintCount} setMintToken={setMintToken}
-            onMint={mintDevices} onEnterGame={enterGame} onConnectWallet={()=>setWallet('HaCk...3r0x')}/>
+            onMint={mintDevices} onEnterGame={enterGame} onConnectWallet={()=>{}}/>
         </DeviceSkeleton>
       </div>
 
@@ -2139,12 +2195,10 @@ export default function Ransome(){
                 <div style={{width:4,height:4,borderRadius:'50%',background:'#22c55e'}}/>
                 {wallet.slice(0,6)}…{wallet.slice(-4)}
               </div>
-              <button onClick={()=>setWallet(null)} style={{background:'transparent',border:'1px solid rgba(239,68,68,0.2)',borderRadius:6,padding:'3px 6px',color:'#ef4444',cursor:'pointer',fontSize:9,lineHeight:1}}>✕</button>
+              <button onClick={()=>disconnect()} style={{background:'transparent',border:'1px solid rgba(239,68,68,0.2)',borderRadius:6,padding:'3px 6px',color:'#ef4444',cursor:'pointer',fontSize:9,lineHeight:1}}>✕</button>
             </div>
           ):(
-            <button onClick={()=>setWallet('HaCk...3r0x')} style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',borderRadius:6,padding:'4px 8px',fontFamily:'"DM Mono",monospace',fontSize:7.5,cursor:'pointer',fontWeight:700}}>
-              CONNECT
-            </button>
+            <WalletMultiButton style={{background:'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',borderRadius:6,fontFamily:'"DM Mono",monospace',fontSize:7.5,fontWeight:700,height:'auto',padding:'4px 8px'}}/>
           )}
         </div>
       </div>
