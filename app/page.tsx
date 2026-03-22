@@ -122,6 +122,29 @@ function useLobbyCountdown(){
 }
 function fmtTime(s:number){const m=Math.floor(s/60),ss=s%60;return`${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`}
 
+
+// ─── On-chain session polling ──────────────────────────────────────────────
+// Polls /api/session-state every 2s during game to get live on-chain numbers
+function useOnChainSession(active:boolean){
+  const[onChain,setOnChain]=useState<{
+    lastNumber:number;drawCount:number;drawn:number[];
+    active:boolean;bankruptCount:number;winsClaimed:boolean[]
+  }|null>(null)
+  useEffect(()=>{
+    if(!active)return
+    const poll=async()=>{
+      try{
+        const r=await fetch('/api/session-state')
+        if(r.ok){const d=await r.json();if(d.ok)setOnChain(d)}
+      }catch{}
+    }
+    poll()
+    const t=setInterval(poll,2000)
+    return()=>clearInterval(t)
+  },[active])
+  return onChain
+}
+
 // ─── MiniStopwatch ────────────────────────────────────────────────────────────
 function MiniStopwatch({seconds,total}:{seconds:number;total:number}){
   const danger=seconds<=10,r=12,circ=2*Math.PI*r,dash=circ*(seconds/Math.max(total,1))
@@ -1391,6 +1414,7 @@ export default function Ransome(){
   const liveBank=getLiveBank(currentHour)
   const lobbyCountdown=useLobbyCountdown()           // 59-min cycle countdown
   const lobbyFill=Math.min(1-(lobbyCountdown/LOBBY_CYCLE),1)  // 0→1 as vault fills
+  const onChainSession=useOnChainSession(phase==='game')  // poll on-chain state during game
 
   // ── Persist & restore state ──────────────────────────────────────────────
   const resumeRef=useRef(false)
@@ -1746,6 +1770,38 @@ export default function Ransome(){
     if(lobbyCountdown>5)autoLaunchedRef.current=false  // reset for next cycle
   },[phase,lobbyCountdown,devices.length])
 
+
+  // ── Sync on-chain numbers to frontend ─────────────────────────────────────
+  // When the cron draws a new number on-chain, push it to the local game state
+  const lastOnChainNumRef=useRef<number>(0)
+  useEffect(()=>{
+    if(!onChainSession||phase!=='game'||preGameSecs>0)return
+    const newNum=onChainSession.lastNumber
+    if(newNum>0&&newNum!==lastOnChainNumRef.current){
+      lastOnChainNumRef.current=newNum
+      // If this number isn't already in our local state, add it
+      if(!drawnRef.current.has(newNum)){
+        drawLockRef.current=false  // allow the draw
+        // Directly update state with on-chain number (bypass Math.random)
+        drawnRef.current=new Set(Array.from(drawnRef.current).concat([newNum]))
+        setCalledOrder(o=>[...o,newNum])
+        setCalledNums(new Set(Array.from(drawnRef.current)))
+        setRoundNum(r=>r+1)
+        setDevices(ds=>ds.map(d=>{
+          if(!d.active||d.corrupted)return d
+          return{...d,grid:d.grid.map(row=>row.map(cell=>cell.num===newNum?{...cell,matched:true}:cell))}
+        }))
+        // Reset timer to 60 and open click window
+        setTimer(60);setTotalTimer(60)
+        setTimeout(()=>setClickWindowOpen(true),150)
+      }
+    }
+    // Sync draw count — if on-chain shows all 90 drawn
+    if(onChainSession.drawCount>=90&&!bankHacked){
+      setBankHacked(true)
+    }
+  },[onChainSession,phase,preGameSecs,bankHacked])
+
   // Win detection
   useEffect(()=>{
     if(phase!=='game')return
@@ -2069,6 +2125,9 @@ export default function Ransome(){
         </div>
         <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0,flexWrap:'wrap'}}>
           {preGameSecs>0&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:8,color:'#f59e0b',background:'rgba(245,158,11,0.08)',border:'1px solid rgba(245,158,11,0.25)',borderRadius:6,padding:'3px 7px'}}>⏱ {fmtTime(preGameSecs)}</div>}
+          {onChainSession&&phase==='game'&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:'#00e5a0',background:'rgba(0,229,160,0.06)',border:'1px solid rgba(0,229,160,0.2)',borderRadius:6,padding:'3px 6px'}}>
+            ⛓ {onChainSession.drawCount}/90 on-chain
+          </div>}
           {phase==='game'&&preGameSecs===0&&<div style={{fontFamily:'"DM Mono",monospace',fontSize:7,color:sessionSecs>=(57*60)?'#ef4444':'#2a5a7a',background:sessionSecs>=(57*60)?'rgba(239,68,68,0.08)':'transparent',border:sessionSecs>=(57*60)?'1px solid rgba(239,68,68,0.25)':'none',borderRadius:6,padding:'3px 6px',transition:'all 0.5s'}}>
             {sessionSecs>=(57*60)?'🚨':'⏱'} {String(Math.floor(sessionSecs/60)).padStart(2,'0')}:{String(sessionSecs%60).padStart(2,'0')}
           </div>}
