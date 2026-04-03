@@ -1,6 +1,5 @@
 'use client'
 import './globals.css'
-import '@solana/wallet-adapter-react-ui/styles.css'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react'
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
@@ -2162,7 +2161,7 @@ function Ransome(){
 
             {/* Liquid vault */}
             <div style={{position:'relative',background:'#050f17',border:'1px solid rgba(63,73,83,0.15)',overflow:'hidden',minHeight:220,display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <div style={{position:'absolute',bottom:0,left:0,width:'100%',height:`${lobbyFill*100}%`,background:'linear-gradient(180deg,#2ff3ad,#00658e)',opacity:0.25,transition:'height 1s linear',maskImage:'radial-gradient(circle at 50% -20%,black 50%,transparent 100%)',WebkitMaskImage:'radial-gradient(circle at 50% -20%,black 50%,transparent 100%)'}}/>
+              <div style={{position:'absolute',bottom:0,left:0,width:'100%',height:`${lobbyFill*100}%`,background:'linear-gradient(180deg,#2ff3ad,#00658e)',opacity:0.25,transition:'height 1s linear',WebkitMaskImage:'radial-gradient(circle at 50% -20%,black 50%,transparent 100%)'}}/>
               <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill*1000000)}/>
               <div style={{position:'absolute',bottom:8,width:'100%',textAlign:'center'}}>
                 <div style={{fontSize:9,color:'#4a6a7a',textTransform:'uppercase',letterSpacing:'0.1em'}}>Global Liquid Assets</div>
