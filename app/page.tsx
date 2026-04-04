@@ -2075,9 +2075,10 @@ function Ransome(){
             {/* World map */}
             <div style={{position:'relative',background:'#09141e',border:'1px solid rgba(63,73,83,0.3)',overflow:'hidden'}}>
               {/* Corner brackets */}
-              {[{top:0,left:0,borderTop:'2px solid',borderLeft:'2px solid'},{top:0,right:0,borderTop:'2px solid',borderRight:'2px solid'},{bottom:0,left:0,borderBottom:'2px solid',borderLeft:'2px solid'},{bottom:0,right:0,borderBottom:'2px solid',borderRight:'2px solid'}].map((s,i)=>(
-                <div key={i} style={{position:'absolute',width:14,height:14,borderColor:'rgba(0,229,160,0.4)',opacity:0.7,...s,zIndex:3}}/>
-              ))}
+              <div style={{position:'absolute',top:0,left:0,width:14,height:14,borderTop:'2px solid',borderLeft:'2px solid',borderColor:'rgba(0,229,160,0.4)',opacity:0.7,zIndex:3}}/>
+              <div style={{position:'absolute',top:0,right:0,width:14,height:14,borderTop:'2px solid',borderRight:'2px solid',borderColor:'rgba(0,229,160,0.4)',opacity:0.7,zIndex:3}}/>
+              <div style={{position:'absolute',bottom:0,left:0,width:14,height:14,borderBottom:'2px solid',borderLeft:'2px solid',borderColor:'rgba(0,229,160,0.4)',opacity:0.7,zIndex:3}}/>
+              <div style={{position:'absolute',bottom:0,right:0,width:14,height:14,borderBottom:'2px solid',borderRight:'2px solid',borderColor:'rgba(0,229,160,0.4)',opacity:0.7,zIndex:3}}/>
               <div style={{position:'absolute',top:12,left:16,zIndex:4,display:'flex',gap:10,alignItems:'center'}}>
                 <div style={{background:'rgba(47,243,173,0.15)',color:'#00e5a0',padding:'2px 8px',fontSize:9,fontWeight:700,letterSpacing:'0.1em'}}>LIVE_MAP_FEED</div>
                 <span style={{fontSize:9,color:'#4a6a7a'}}>TARGET: {BANKS[liveBank].name.toUpperCase()}</span>
@@ -2151,9 +2152,8 @@ function Ransome(){
 
           {/* ── RIGHT COL: VAULT STATUS ─────────────────────────────── */}
           <aside style={{background:'#09141e',border:'1px solid rgba(63,73,83,0.2)',padding:20,display:'flex',flexDirection:'column',gap:16,position:'relative'}}>
-            {[{top:0,left:0,borderTop:'2px solid',borderLeft:'2px solid'},{top:0,right:0,borderTop:'2px solid',borderRight:'2px solid'}].map((s,i)=>(
-              <div key={i} style={{position:'absolute',width:14,height:14,borderColor:'rgba(0,229,160,0.3)',...s}}/>
-            ))}
+            <div style={{position:'absolute',top:0,left:0,width:14,height:14,borderTop:'2px solid',borderLeft:'2px solid',borderColor:'rgba(0,229,160,0.3)'}}/>
+            <div style={{position:'absolute',top:0,right:0,width:14,height:14,borderTop:'2px solid',borderRight:'2px solid',borderColor:'rgba(0,229,160,0.3)'}}/>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
               <span style={{fontSize:16}}>💎</span>
               <span style={{fontFamily:'"Syne",sans-serif',fontSize:15,fontWeight:700,color:'#dce6f3',letterSpacing:'0.08em'}}>VAULT_STATUS</span>
