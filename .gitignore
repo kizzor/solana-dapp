@@ -1,5 +1,49 @@
 node_modules
 .vercel
 .env*.local
+.env
+.env.*
 .next/
 page (2).tsx
+
+# Sensitive scripts — may contain MNEMONIC/SECRET_KEY at runtime
+publish-testnet.mjs
+init-session-testnet.mjs
+init-session.mjs
+*.mjs
+
+# Keypairs and secrets
+*.key
+*.pem
+*.p12
+*.pfx
+*.keystore
+*.jks
+secrets.json
+credentials.json
+service-account*.json
+
+# Deployment secrets
+deployment_status.json
+authority.json
+wallet.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Tool artifacts
+.mimocode/
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env*

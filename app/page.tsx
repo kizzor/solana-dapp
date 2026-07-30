@@ -7,7 +7,7 @@ import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets'
 import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 // SUI imports
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc'
+import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import { Transaction } from '@mysten/sui/transactions'
 import { getWallets } from '@wallet-standard/app'
 import { isWalletWithRequiredFeatureSet } from '@mysten/wallet-standard'
@@ -19,7 +19,7 @@ type Device = {
 type WinType = 'EARLY_FIVE'|'TOP_LINE'|'MIDDLE_LINE'|'BOTTOM_LINE'|'FULL_HOUSE_1'|'FULL_HOUSE_2'|'FULL_HOUSE_3'
 type WinState = { claimed:boolean; claimable:boolean; flickering:boolean; broken:boolean; claimers:string[]; expired:boolean; bursting:boolean }
 type ChatLine = { t:'sys'|'user'|'cmd'|'img'; m:string; src?:string; vSrc?:string }
-type WinRecord = { wt:WinType; claimers:string[]; round:number; split:number; rnsmEach:number }
+type WinRecord = { wt:WinType; claimers:string[]; round:number; split:number; heistEach:number }
 type MediaItem = { src:string; type:'image'|'video'; name:string }
 
 const STORAGE_KEY='ransome_state_v1'
@@ -27,8 +27,8 @@ function saveState(data:object){try{localStorage.setItem(STORAGE_KEY,JSON.string
 function loadState():any{try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):null}catch{return null}}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-// ⚠️ DEV MODE — Set to false before mainnet deployment
-const DEV_MODE = true
+// ⚠️ DEV MODE — Set to false for production
+const DEV_MODE = false
 // ──────────────────────────────────────────────────────────────────────────────
 const WIN_LABELS:Record<WinType,string> = {
   EARLY_FIVE:'5 Digit Accounts Hacked', TOP_LINE:'Top Accounts Hacked',
@@ -39,13 +39,53 @@ const LED_COLORS:Record<WinType,string> = {
   EARLY_FIVE:'#f59e0b', TOP_LINE:'#0ea5e9', MIDDLE_LINE:'#22c55e', BOTTOM_LINE:'#a16207',
   FULL_HOUSE_1:'#f472b6', FULL_HOUSE_2:'#ec4899', FULL_HOUSE_3:'#db2777',
 }
-const WIN_VAULT:Record<WinType,number> = {
-  EARLY_FIVE:50000, TOP_LINE:100000, MIDDLE_LINE:100000, BOTTOM_LINE:100000,
-  FULL_HOUSE_1:250000, FULL_HOUSE_2:250000, FULL_HOUSE_3:150000,
-}
+// Win type payouts in basis points — FULL_HOUSE_3 is the 40% jackpot
+// All other wins split their % equally among same-round claimers
+const WIN_BPS:Record<WinType,number> = {
+  EARLY_FIVE:500, TOP_LINE:500, MIDDLE_LINE:500, BOTTOM_LINE:500,   //  5% each = 20%
+  FULL_HOUSE_1:1950, FULL_HOUSE_2:1950,                            // 19.5% each = 39%
+  FULL_HOUSE_3:4000,                                                // 40%     = 40%
+}                                                                   // Total:   99%
+// Treasury fee: 1% of vault (deducted upfront)
+// Remaining 99% = game vault — fully allocated to the 7 win positions above
+// Unclaimed positions at game end → treasury. No other distribution.
+
+// ─── HEIST Token Economics ──────────────────────────────────────────────────
+// Device price: 0.5 USDC worth of HEIST tokens
+// 1 HEIST = $0.001 USDC (i.e. 1/10th of a cent per HEIST)
+// 0.5 USDC ÷ $0.001/HEIST = 500 HEIST per device
+const HEIST_PRICE_USDC = 0.001  // 1 HEIST = $0.001 USDC
+const DEVICE_PRICE_USDC = 0.5   // Device price in USDC
+const DEVICE_PRICE_HEIST = Math.floor(DEVICE_PRICE_USDC / HEIST_PRICE_USDC) // = 500 HEIST
+// SUI exchange rate (hardcoded for MVP, add oracle in production)
+// ⚠️ UPDATE SUI_PRICE_USD to the current market price before deploying
+// The mint always charges $0.50 USDC/USDT worth of SUI, variable with SUI price
+const SUI_PRICE_USD = 0.68  // 1 SUI ≈ $0.68 USD (as of 2026-07-30) — UPDATE when SUI price changes
+// On-chain mint amount per device: $0.50 USDC worth of SUI, in MIST (1 SUI = 1e9 MIST)
+// Guard: minimum 0.001 SUI (1_000_000 MIST) to prevent near-zero tx if SUI_PRICE_USD is misconfigured
+const DEVICE_PRICE_SUI = Math.max(1_000_000, Math.floor(DEVICE_PRICE_USDC / SUI_PRICE_USD * 1_000_000_000))
+
+// ─── MTRX Governance Token (Solana) ───────────────────────────────────────
+// Placeholder addresses — user provides actual after deployment
+const MTRX_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_MTRX_CONTRACT_ADDRESS || 'MTRX_PLACEHOLDER_ADDRESS'
+const MTRX_DELEGATION_VAULT = process.env.NEXT_PUBLIC_MTRX_DELEGATION_VAULT || 'VAULT_PLACEHOLDER_ADDRESS'
+const MTRX_DECIMALS = 9
+const MTRX_DELEGATION_THRESHOLD = 1000
+
+// Full price = $0.50 USD worth of SUI (variable based on SUI_PRICE_USD)
+// Discounted price (MTRX holders) = $0.25 USD worth of SUI
+// DEVICE_PRICE_SUI is the same value — used for clarity where full price is explicit
+const DEVICE_PRICE_SUI_DISCOUNTED = Math.max(500_000, Math.floor(DEVICE_PRICE_USDC / 2 / SUI_PRICE_USD * 1_000_000_000))   // $0.25 USD worth
+
+// Fallback vault estimate when session-state isn't available
+const VAULT_ESTIMATE = 0
+
 const COL_HEADERS = ['1-10','11-20','21-30','31-40','41-50','51-60','61-70','71-80','81-90']
 const COL_RANGES:[number,number][] = [[1,10],[11,20],[21,30],[31,40],[41,50],[51,60],[61,70],[71,80],[81,90]]
-const CLAIM_WALLET = 'F6bbR6ro9W4nS6uBMmSLhsknhQ6NJR523DZXkRQnkFcx'
+// ─── SUI Treasury Wallet ───────────────────────────────────────────────
+// Where unclaimed vault funds go at session end.
+// Should match the treasury_address passed to initialize_session in the HEIST contract.
+const CLAIM_WALLET = process.env.NEXT_PUBLIC_TREASURY_ADDRESS || '0x01d4a72efddaa35d8196b2d07f32b619a1e237e74200d5331f565a925bb8ace1'
 const HACK_CMDS = ['INIT PAYLOAD','BYPASS FIREWALL','SCAN PORT 8443','BRUTE SHA-256','DECRYPT TLS','EXPLOIT CVE-2024','INJECT SQL','PIVOT SUBNET','EXFIL VAULT','SPOOF MAC','ARP POISON','DUMP LSASS','ESCALATE PRIV','DEPLOY ROOTKIT','TUNNEL SSH','SNIFF ETH0','CRACK WPA2','OVERFLOW STACK','COVER TRACKS','FORGE JWT','EXFIL DB','PIVOT VPN','DEPLOY METERP','RCE SHELL','WIPE LOGS']
 const HACK_STATUSES = ['[OK]','[ACK]','[ERR]','[WARN]','[DONE]','[LIVE]']
 
@@ -90,7 +130,7 @@ function getLiveBank(h:number){return h%23}
 
 // ─── Ticket Generator ─────────────────────────────────────────────────────────
 function generateDevice(id:number):Device{
-  const nftId=`RNSM-${String(id).padStart(4,'0')}`
+  const nftId=`HEIST-${String(id).padStart(4,'0')}`
   const colCounts=Array(9).fill(1)
   Array.from({length:9},(_,i)=>i).sort(()=>Math.random()-0.5).slice(0,6).forEach(i=>colCounts[i]++)
   const colRows:number[][]=colCounts.map(cnt=>[0,1,2].sort(()=>Math.random()-0.5).slice(0,cnt))
@@ -142,7 +182,8 @@ function fmtTime(s:number){const m=Math.floor(s/60),ss=s%60;return`${String(m).p
 function useOnChainSession(active:boolean){
   const[onChain,setOnChain]=useState<{
     lastNumber:number;drawCount:number;drawn:number[];
-    active:boolean;bankruptCount:number;winsClaimed:boolean[]
+    active:boolean;bankruptCount:number;winsClaimed:boolean[];
+    vaultTotal:number;
   }|null>(null)
   useEffect(()=>{
     if(!active)return
@@ -460,9 +501,20 @@ function MintPanel({wallet,devices,mintCount,mintToken,setMintCount,setMintToken
             </div>
           ):(
             <>
+              {/* Price display */}
+              <div style={{background:'linear-gradient(90deg,rgba(0,229,160,0.06),transparent)',border:'1px solid rgba(0,229,160,0.12)',borderRadius:6,padding:'7px 10px',marginBottom:10}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
+                  <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#1e4a6a'}}>PRICE PER DEVICE</span>
+                  <span style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:800,color:'#00e5a0',textShadow:'0 0 8px rgba(0,229,160,0.4)'}}>{DEVICE_PRICE_HEIST.toLocaleString()}<span style={{fontSize:9,fontWeight:400,color:'#4a7fa5',marginLeft:3}}>HEIST</span></span>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:'#1e4a6a'}}>≈ ${DEVICE_PRICE_USDC.toFixed(2)} USDC <span style={{color:'#2a5a7a'}}|</span> ${(DEVICE_PRICE_SUI / 1e9).toFixed(4)} SUI</span>
+                  <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:'#2a5a7a'}}>1 SUI = $${SUI_PRICE_USD.toFixed(2)}</span>
+                </div>
+              </div>
               <div style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#2a5a7a',marginBottom:6}}>SELECT TOKEN</div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6,marginBottom:12}}>
-                {['USDT','USDC','SOL','RNSM'].map(t=>(
+                {['USDT','USDC','SOL','HEIST'].map(t=>(
                   <button key={t} onClick={()=>setMintToken(t)} style={{...btnBase,padding:'10px 6px',fontSize:10,
                     background:mintToken===t?'#0a3a5a':'transparent',
                     color:mintToken===t?'#00e5a0':'#2a5a7a',
@@ -817,8 +869,8 @@ function VaultSketch({pct,paid}:{pct:number;paid:number}){
   )
 }
 
-// ─── RNSM Sparkline Chart ─────────────────────────────────────────────────────
-function RnsmChart({prices,trend,live,contractAddr}:{prices:number[];trend:boolean;live:number;contractAddr:string}){
+// ─── HEIST Sparkline Chart ────────────────────────────────────────────────────
+function HeistChart({prices,trend,live,contractAddr}:{prices:number[];trend:boolean;live:number;contractAddr:string}){
   const W=140,H=54
   const min=Math.min(...prices),max=Math.max(...prices),range=Math.max(max-min,0.001)
   const pts=prices.map((p,i)=>`${(i/Math.max(prices.length-1,1))*W},${H-4-(((p-min)/range)*(H-10))}`).join(' ')
@@ -835,7 +887,7 @@ function RnsmChart({prices,trend,live,contractAddr}:{prices:number[];trend:boole
   return(
     <div style={{background:'#010a10',border:'1px solid #0a2535',borderRadius:6,padding:'4px 6px'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:2}}>
-        <span style={{fontFamily:'DM Mono,monospace',fontSize:6,color:'#1e4a6a'}}>RNSM/USDT</span>
+        <span style={{fontFamily:'DM Mono,monospace',fontSize:6,color:'#1e4a6a'}}>HEIST/USDT</span>
         <span style={{fontFamily:'DM Mono,monospace',fontSize:7.5,fontWeight:700,color:col}}>{trend?'▲':'▼'} ${live.toFixed(4)}</span>
       </div>
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
@@ -873,7 +925,7 @@ function WinnersTerminal({winRecords}:{winRecords:WinRecord[]}){
     prevLen.current=winRecords.length
     const cols=['#00e5a0','#f59e0b','#00b8ff','#a855f7','#ec4899']
     const col=cols[(winRecords.length-1)%cols.length]
-    const full=`> ${WIN_LABELS[rec.wt]} · ${rec.claimers.join('+')} · $${(rec.split/1000).toFixed(0)}K + ${rec.rnsmEach??0} RNSM each`
+    const full=`> ${WIN_LABELS[rec.wt]} · ${rec.claimers.join('+')} · ${rec.heistEach??0} HEIST each`
     let i=0
     setLines(p=>[...p,{text:'',col}])
     const iv=setInterval(()=>{
@@ -901,8 +953,8 @@ function WinnersTerminal({winRecords}:{winRecords:WinRecord[]}){
 }
 
 // ─── Hack Matrix Display (bisected vertically) ────────────────────────────────
-function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords,liveBank,contractAddr,timer,totalTimer}:{
-  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[];liveBank:number;contractAddr:string;timer:number;totalTimer:number
+function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords,liveBank,contractAddr,timer,totalTimer,deviceCount,vaultTotal}:{
+  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[];liveBank:number;contractAddr:string;timer:number;totalTimer:number;deviceCount:number;vaultTotal:number
 }){
   const[glitching,setGlitching]=useState(false)
   const[bgCmds,setBgCmds]=useState<{cmd:string;x:number;y:number;op:number;st:string;col:string}[]>([])
@@ -915,8 +967,12 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
   const drawn=calledNums.size
   const pct=Math.round((drawn/90)*100)
   const paid=winRecords.reduce((s,r)=>s+r.split*r.claimers.length,0)
-  const vaultPct=Math.min(paid/1000000,1)
+  const vaultPct=Math.min(vaultTotal>0?paid/vaultTotal:0,1)
   const trend=prices[prices.length-1]>=prices[0]
+  // HEIST calculations
+  // Convert vault MIST → SUI → USD → HEIST
+  const vaultHeist=Math.max(0,Math.floor(vaultTotal*SUI_PRICE_USD/(HEIST_PRICE_USDC*1e9)))
+  const totalPaidHeist=paid
 
   useEffect(()=>{
     if(lastNum!==null&&lastNum!==prevRef.current){
@@ -1097,19 +1153,19 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
             borderRadius:2,transition:'width 1.2s ease',boxShadow:'0 0 4px rgba(0,229,160,0.5)'}}/>
         </div>
 
-        {/* ── 2. RNSM chart ── */}
+        {/* ── 2. HEIST chart ── */}
         <div>
           <div style={{fontFamily:'DM Mono,monospace',fontSize:6,color:'#1e4a6a',letterSpacing:'0.08em',marginBottom:3}}>
-            📈 RNSM PRICE
+            📈 HEIST PRICE
           </div>
-          <RnsmChart prices={prices} trend={trend} live={live} contractAddr={contractAddr}/>
+          <HeistChart prices={prices} trend={trend} live={live} contractAddr={contractAddr}/>
         </div>
 
         {/* ── 3. Mini stats ── */}
         <div style={{marginTop:'auto',borderTop:'1px solid #0a2535',paddingTop:5}}>
           {[
             ['CLAIMED',`$${(paid/1000).toFixed(0)}K`,'#00e5a0'],
-            ['REMAINING',`$${((1000000-paid)/1000).toFixed(0)}K`,'#f59e0b'],
+            ['REMAINING',`$${((vaultTotal-paid)/1000).toFixed(1)}K`,'#f59e0b'],
             ['DRAWN',`${drawn}/90`,'#4a7fa5'],
             ['WINS',String(winRecords.length),'#a855f7'],
           ].map(([k,v,col])=>(
@@ -1118,6 +1174,34 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
               <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:col,fontWeight:700}}>{v}</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ════ BOTTOM — Vault Info Bar ════ */}
+      <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:10,background:'linear-gradient(180deg,rgba(2,13,26,0.92),rgba(2,13,26,0.98))',borderTop:'1px solid #0a3a5a',padding:'6px 14px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}>
+        {/* Vault HEIST tokens */}
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          <div style={{width:6,height:6,borderRadius:'50%',background:'#00e5a0',boxShadow:'0 0 6px #00e5a0'}}/>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#1e4a6a',letterSpacing:'0.05em'}}>VAULT</span>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#00e5a0',fontWeight:700}}>{Math.max(0,Math.floor(vaultHeist-totalPaidHeist)).toLocaleString()} HEIST</span>
+        </div>
+        {/* Devices */}
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          <div style={{width:6,height:6,borderRadius:'50%',background:'#a855f7',boxShadow:'0 0 6px #a855f7'}}/>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#1e4a6a',letterSpacing:'0.05em'}}>DEVICES</span>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#a855f7',fontWeight:700}}>{deviceCount}/20</span>
+        </div>
+        {/* Claimed */}
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          <div style={{width:6,height:6,borderRadius:'50%',background:'#ec4899',boxShadow:'0 0 6px #ec4899'}}/>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#1e4a6a',letterSpacing:'0.05em'}}>CLAIMED</span>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#ec4899',fontWeight:700}}>{winRecords.length}/7 wins</span>
+        </div>
+        {/* USDC equivalent */}
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          <div style={{width:6,height:6,borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 6px #f59e0b'}}/>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#1e4a6a',letterSpacing:'0.05em'}}>VALUE</span>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#f59e0b',fontWeight:700}}>${(Math.max(0,vaultHeist-totalPaidHeist)*HEIST_PRICE_USDC).toFixed(2)}</span>
         </div>
       </div>
     </div>
@@ -1234,9 +1318,9 @@ function GameStats({devices,calledNums,bankruptCount,liveBank,nickname,winStates
             <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#4a7fa5',fontWeight:600}}>{v}</span>
           </div>
         ))}
-        {/* Contract address input for RNSM price feed */}
+        {/* Contract address input for HEIST price feed */}
         <div style={{marginTop:7,paddingTop:6,borderTop:'1px solid #0a1628'}}>
-          <div style={{fontFamily:'DM Mono,monospace',fontSize:6,color:'#1e4a6a',marginBottom:3}}>RNSM CONTRACT</div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:6,color:'#1e4a6a',marginBottom:3}}>HEIST CONTRACT</div>
           <input value={contractAddr} onChange={e=>setContractAddr(e.target.value)}
             placeholder="0x... or token addr"
             style={{width:'100%',background:'#0a1628',border:`1px solid ${contractAddr?'#00e5a040':'#0a2535'}`,borderRadius:5,padding:'4px 6px',
@@ -1626,12 +1710,23 @@ function Ransome(){
   const[suiAddress,setSuiAddress]=useState<string|null>(null)
   const[suiConnected,setSuiConnected]=useState(false)
   const[suiWalletRef,setSuiWalletRef]=useState<any>(null) // stored wallet object for signing
-  const SUI_PROGRAM_ID='0x1b619b460ec98c6c531ed7084d1dff3d786f66bc02e3969cc95e68de6095ce30'
-  const DEVICE_PRICE_SUI=500_000_000 // 0.5 SUI in MIST
-  const suiClient=useMemo(()=>new SuiJsonRpcClient({network:'testnet'}),[])
-  const SESSION_OBJECT_ID='0xde3f711f9e35d967f4d61fe3098d7bcacf4d043ddb92c6e0c50e534888b92d9f'
+  // ═══ SET AFTER PUBLISHING HEIST CONTRACT — then set env vars in Vercel ═══
+  const SUI_PROGRAM_ID = process.env.NEXT_PUBLIC_SUI_PROGRAM_ID || 'SET_AFTER_PUBLISH'
+  const SESSION_OBJECT_ID = process.env.NEXT_PUBLIC_SESSION_OBJECT_ID || 'SET_AFTER_PUBLISH'
+  // DEVICE_PRICE_SUI defined globally above; this is the on-chain payment amount
+  const suiClient=useMemo(()=>new SuiClient({url: getFullnodeUrl('mainnet')}),[])
   // Unified wallet address
   const wallet = chain==='solana' && connected && publicKey ? publicKey.toBase58() : chain==='sui' && suiConnected ? suiAddress : null
+  // ── Check MTRX delegation status ───────────────────────────────────
+  const checkMtrxDelegation=useCallback(async(addr:string)=>{
+    if(!addr||addr.length<32){setMtrxDelegated(false);setMtrxBalance(0);return}
+    setCheckingMtrx(true)
+    try{
+      const r=await fetch('/api/check-mtrx-delegation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})})
+      if(r.ok){const d=await r.json();if(d.ok){setMtrxDelegated(d.delegated);setMtrxBalance(d.balance)}}
+    }catch{}finally{setCheckingMtrx(false)}
+  },[])
+
   const[phase,setPhase]=useState<string>('setup')
   const[nickname,setNickname]=useState('')
   const[devices,setDevices]=useState<Device[]>([])
@@ -1643,7 +1738,11 @@ function Ransome(){
   const[announcement,setAnnouncement]=useState<string|null>(null)
   const[bankruptCount,setBankruptCount]=useState(0)
   const[mintCount,setMintCount]=useState(1)
-  const[mintToken,setMintToken]=useState('USDT')
+  const[mintToken,setMintToken]=useState('USDC')
+  const[mtrxDelegated,setMtrxDelegated]=useState(false)
+  const[mtrxBalance,setMtrxBalance]=useState(0)
+  const[solAddress,setSolAddress]=useState('')
+  const[checkingMtrx,setCheckingMtrx]=useState(false)
   const[selectedBank,setSelectedBank]=useState<number|null>(null)
   const[devicesExpanded,setDevicesExpanded]=useState(false)
   const[showTerminate,setShowTerminate]=useState(false)
@@ -1687,6 +1786,9 @@ function Ransome(){
     if(s.nickname)setNickname(s.nickname)
     // wallet restored from adapter, not localStorage
     if(s.mintToken)setMintToken(s.mintToken)
+    if(s.solAddress)setSolAddress(s.solAddress)
+    if(s.mtrxDelegated!==undefined)setMtrxDelegated(s.mtrxDelegated)
+    if(s.mtrxBalance!==undefined)setMtrxBalance(s.mtrxBalance)
     if(s.contractAddr)setContractAddr(s.contractAddr)
     // Restore devices with claimed Sets
     if(s.devices&&s.devices.length>0){
@@ -1770,7 +1872,7 @@ function Ransome(){
   useEffect(()=>{
     if(phase==='setup')return
     saveState({
-      nickname,phase,mintToken,contractAddr,
+      nickname,phase,mintToken,contractAddr,solAddress,mtrxDelegated,mtrxBalance,
       devices:devices.map(d=>({...d,claimed:Array.from(d.claimed)})),
       calledNums:Array.from(calledNums),
       calledOrder,
@@ -1985,7 +2087,7 @@ function Ransome(){
       setWinRecords(wr=>{
         const allWinners=Array.from(new Set(wr.flatMap(r=>r.claimers)))
         const totalPaid=wr.reduce((s,r)=>s+r.split*r.claimers.length,0)
-        const remaining=Math.max(1000000-totalPaid,0)
+        const remaining=Math.max((onChainSession?.vaultTotal??VAULT_ESTIMATE)-totalPaid,0)
         if(remaining>0){
           const dest=allWinners.length>0?allWinners:[CLAIM_WALLET.slice(0,8)+'…']
           const cut=Math.floor(remaining/dest.length)
@@ -2116,45 +2218,9 @@ function Ransome(){
     }))
   }
 
-  // Claim: accumulate claimers within same round, split prize, then flicker ALL devices
+  // Claim: accumulate claimers within same round, then split on-chain after debounce
   const handleClaim=async(devId:number,wt:WinType)=>{
     if(winStates[wt].claimed)return
-    // ── On-chain claim if real wallet connected ──────────────────────────────
-    if(connected&&publicKey&&sendTransaction&&solanaConnection){
-      try{
-        const{PublicKey,Transaction,TransactionInstruction,SystemProgram}=await import('@solana/web3.js')
-        const programId=new PublicKey(PROGRAM_ID_STR)
-        const sessionAuth=new PublicKey(SESSION_AUTH_STR)
-        const winner=publicKey
-        const[sessionKey]=PublicKey.findProgramAddressSync([Buffer.from('session'),sessionAuth.toBuffer()],programId)
-        const[vaultKey]=PublicKey.findProgramAddressSync([Buffer.from('vault'),sessionKey.toBuffer()],programId)
-        const[deviceKey]=PublicKey.findProgramAddressSync(
-          [Buffer.from('device'),sessionKey.toBuffer(),winner.toBuffer(),Buffer.from([devId])],programId
-        )
-        const disc=Buffer.from([163,215,101,246,25,134,110,194])
-        const data=Buffer.concat([disc,Buffer.from([WIN_TYPE_INDEX[wt]??0])])
-        const ix=new TransactionInstruction({
-          programId,
-          keys:[
-            {pubkey:winner,isSigner:true,isWritable:true},
-            {pubkey:sessionKey,isSigner:false,isWritable:true},
-            {pubkey:vaultKey,isSigner:false,isWritable:true},
-            {pubkey:deviceKey,isSigner:false,isWritable:false},
-            {pubkey:winner,isSigner:false,isWritable:false},
-            {pubkey:SystemProgram.programId,isSigner:false,isWritable:false},
-          ],
-          data
-        })
-        const{blockhash,lastValidBlockHeight}=await solanaConnection.getLatestBlockhash('confirmed')
-        const tx=new Transaction({blockhash,lastValidBlockHeight,feePayer:winner})
-        tx.add(ix)
-        const sig=await sendTransaction(tx,solanaConnection)
-        await solanaConnection.confirmTransaction({signature:sig,blockhash,lastValidBlockHeight},'confirmed')
-        announce(`✅ ON-CHAIN CLAIM!\n${WIN_LABELS[wt]}\nSig: ${sig.slice(0,16)}...`)
-      }catch(e:any){
-        console.error('On-chain claim error:',e.message)
-      }
-    }
     const dev=devices.find(d=>d.id===devId)
     if(!dev)return
     // Add to pending claimers for this win type
@@ -2165,26 +2231,56 @@ function Ransome(){
     }
     if(wt.startsWith('FULL_HOUSE'))setBankruptCount(b=>Math.min(b+1,3))
 
-    // Debounce: wait 500ms for other same-round claimers
+    // Debounce: wait 500ms for other same-round claimers, then execute on-chain split
     const key=`claim_${wt}`
     if(roundTimers.current[key])clearTimeout(roundTimers.current[key])
-    roundTimers.current[key]=setTimeout(()=>{
+    roundTimers.current[key]=setTimeout(async()=>{
       const final=[...pendingClaimers.current[wt]]
       pendingClaimers.current[wt]=[]
-      const vault=WIN_VAULT[wt]
-      const split=Math.floor(vault/final.length)
-      const rnsmEach=Math.floor(RNSM_ALLOC[wt]/Math.max(final.length,1))
-      setWinRecords(r=>[...r,{wt,claimers:final,round:roundNum,split,rnsmEach}])
-      // Queue winner announcement for the START of next round (when next number draws)
+      if(final.length===0)return
+
+      // Collect wallet addresses for each claimer NFT
+      const winnerAddresses:string[]=[]
+      for(const nftId of final){
+        const d=devices.find(dd=>dd.nftId===nftId)
+        const addr=d?.walletAddr
+        if(addr)winnerAddresses.push(addr)
+      }
+
+      // ── On-chain split claim via server ──────────────────────────────────
+      if(winnerAddresses.length>0){
+        try{
+          const res=await fetch('/api/claim-sui',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({winners:winnerAddresses,winType:WIN_TYPE_INDEX[wt]??0}),
+          })
+          const data=await res.json()
+          if(data.ok){
+            announce(`✅ ON-CHAIN SPLIT!\n${WIN_LABELS[wt]}\nTx: ${(data.digest||'').slice(0,16)}…\n${winnerAddresses.length} winners split equally`)
+          }else{
+            console.error('Claim split error:',data.error)
+          }
+        }catch(e:any){
+          console.error('Claim split fetch error:',e.message)
+        }
+      }
+
+      // ── Frontend state update (HEIST tokens from vault balance) ──────────
+      // Vault holds SUI/USDC — convert to HEIST at market rate
+      const vaultUsdc=onChainSession?.vaultTotal??0
+      // Convert vault MIST → SUI → USD → HEIST
+      const vaultHeist=Math.max(0,Math.floor(vaultUsdc*SUI_PRICE_USD/(HEIST_PRICE_USDC*1e9)))
+      const bps=WIN_BPS[wt]
+      const totalPayoutHeist=Math.floor(vaultHeist*bps/10_000)
+      const splitHeist=Math.floor(totalPayoutHeist/Math.max(final.length,1))
+      setWinRecords(r=>[...r,{wt,claimers:final,round:roundNum,split:splitHeist,heistEach:splitHeist}])
       const walletSnip=(addr:string|null)=>addr?`${addr.slice(0,6)}…${addr.slice(-4)}`:'?'
       const claimerLines=final.map(nftId=>{
         const dev2=devices.find(d=>d.nftId===nftId)
-        return `  ${nftId} (${walletSnip(dev2?.walletAddr??null)}) → $${(split/1000).toFixed(0)}K + ${rnsmEach} RNSM`
+        return `  ${nftId} (${walletSnip(dev2?.walletAddr??null)}) → ${splitHeist} HEIST`
       }).join('\n')
       pendingAnnounce.current.push(`🏆 ${WIN_LABELS[wt]} — ROUND ${roundNum}\n${claimerLines}\n💸 Vault → wallets`)
-      // Keep flickering:true so ALL unclaimed devices keep flickering this round
-      // bursting:true marks the claiming devices for burst effect
-      // broken:false — filament fires at next round start via drawNumber
       setWinStates(prev=>({...prev,[wt]:{...prev[wt],claimed:true,claimers:final,flickering:true,broken:false,bursting:true}}))
     },500)
   }
@@ -2248,7 +2344,7 @@ function Ransome(){
   // ─── Mint devices (SUI or Solana) ──────────────────────────────────────
   const mintDevices=async()=>{
     const count=mintCount
-    const pricePer=DEVICE_PRICE_SUI // 0.5 SUI in MIST
+    const pricePer=mtrxDelegated?DEVICE_PRICE_SUI_DISCOUNTED:DEVICE_PRICE_SUI // 0.5 or 0.25 SUI in MIST
     const totalCost=pricePer*count
 
     // DEV MODE — allow up to 20 devices locally without wallet
@@ -2266,10 +2362,10 @@ function Ransome(){
         const txb=new Transaction()
         txb.setSender(suiAddress)
         for(let i=0;i<count;i++){
-          const[paymentCoin]=txb.splitCoins(txb.gas,[BigInt(totalCost)])
+          const[paymentCoin]=txb.splitCoins(txb.gas,[BigInt(pricePer)])
           txb.moveCall({
-            target:`${SUI_PROGRAM_ID}::ransome::mint_device`,
-            arguments:[paymentCoin,txb.object(SESSION_OBJECT_ID),txb.pure.u8(i)],
+            target:`${SUI_PROGRAM_ID}::heist::mint_device`,
+            arguments:[paymentCoin,txb.object(SESSION_OBJECT_ID),txb.pure.u64(pricePer),txb.pure.u8(devices.length+i)],
           })
         }
 
@@ -2283,13 +2379,13 @@ function Ransome(){
           result=await suiWalletRef.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
             transaction:txb,
             account:suiWalletRef.accounts[0],
-            chain:'sui:testnet',
+            chain:'sui:mainnet',
           })
         }else if(hasLegacy){
           result=await suiWalletRef.features['sui:signAndExecuteTransactionBlock'].signAndExecuteTransactionBlock({
             transactionBlock:txb,
             account:suiWalletRef.accounts[0],
-            chain:'sui:testnet',
+            chain:'sui:mainnet',
           })
         }else{
           announce('⚠ Wallet does not support signAndExecuteTransaction')
@@ -2363,6 +2459,14 @@ function Ransome(){
         <div style={{display:'flex',gap:10,alignItems:'center'}}>
           <div style={{background:'rgba(24,39,51,0.5)',padding:'4px 10px',border:'1px solid rgba(47,243,173,0.2)',fontSize:12,color:'#00e5a0',fontWeight:700}}>{fmtTime(lobbyCountdown)}</div>
           <div style={{fontSize:10,color:'#4a7fa5',background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:6,padding:'4px 8px'}}>👤 {nickname}</div>
+          {/* Governance button */}
+          <a href="/governance" style={{textDecoration:'none'}}>
+            <div style={{display:'flex',alignItems:'center',gap:4,background:chain==='sui'?'rgba(168,85,247,0.1)':'rgba(0,229,160,0.1)',border:`1px solid ${chain==='sui'?'rgba(168,85,247,0.3)':'rgba(0,229,160,0.3)'}`,borderRadius:6,padding:'4px 8px',cursor:'pointer',transition:'all 0.2s',whiteSpace:'nowrap'}}>
+              <span style={{fontSize:10}}>🗳</span>
+              <span style={{fontSize:8,fontWeight:700,color:chain==='sui'?'#a855f7':'#00e5a0'}}>GOVERN</span>
+              {mtrxDelegated&&<span style={{fontSize:6,color:'#22c55e',background:'rgba(34,197,94,0.15)',borderRadius:3,padding:'1px 4px'}}>MTRX</span>}
+            </div>
+          </a>
           {/* Chain selector */}
           <div style={{display:'flex',borderRadius:6,overflow:'hidden',border:'1px solid #1e3a5f'}}>
             <button onClick={()=>setChain('solana')} style={{padding:'4px 8px',fontSize:9,fontWeight:700,cursor:'pointer',background:chain==='solana'?'#00e5a020':'transparent',color:chain==='solana'?'#00e5a0':'#4a7fa5',border:'none'}}>SOL</button>
@@ -2424,11 +2528,30 @@ function Ransome(){
             <div style={{background:'#0e1b25',border:'1px solid rgba(63,73,83,0.2)',padding:16}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
                 <span style={{fontSize:14,fontWeight:700,color:'#dce6f3'}}>💻 MINT_TERMINAL</span>
-                <span style={{fontSize:9,color:chain==='sui'?'#4da6ff':'#00e5a0',fontWeight:700}}>{chain.toUpperCase()} · {mintCount}× 0.5 {chain==='sui'?'SUI':'SOL'} = {(mintCount*0.5).toFixed(1)} {chain==='sui'?'SUI':'SOL'}</span>
+                <span style={{fontSize:9,color:chain==='sui'?'#4da6ff':'#00e5a0',fontWeight:700}}>{chain.toUpperCase()} · {mintCount}× ${mtrxDelegated?'0.25':'0.50'} = ${(mintCount*(mtrxDelegated?0.25:0.5)).toFixed(2)} {chain==='sui'?'USDC':'SOL'}</span>
+              {mtrxDelegated&&chain==='sui'&&<span style={{fontSize:7,color:'#22c55e',marginLeft:4}}>⚡MTRX 50% OFF</span>}
               </div>
+              {/* MTRX Delegation strip */}
+              {chain==='sui'&&(
+                <div style={{background:'linear-gradient(90deg,rgba(168,85,247,0.04),transparent)',border:'1px solid rgba(168,85,247,0.12)',borderRadius:6,padding:'6px 10px',marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{fontSize:8,color:'#a855f7',whiteSpace:'nowrap',fontWeight:700}}>🗳 MTRX</span>
+                  <input
+                    type="text"
+                    placeholder="Your Solana address to check delegation"
+                    value={solAddress}
+                    onChange={e=>setSolAddress(e.target.value)}
+                    style={{flex:1,background:'#0a1628',border:'1px solid #0a2535',borderRadius:4,padding:'4px 6px',fontFamily:'DM Mono,monospace',fontSize:7,color:'#00e5a0',outline:'none',minWidth:0}}
+                  />
+                  <button onClick={()=>checkMtrxDelegation(solAddress)} disabled={checkingMtrx||solAddress.length<32} style={{padding:'4px 8px',background:'linear-gradient(135deg,#a855f7,#7c3aed)',color:'#fff',border:'none',borderRadius:4,fontSize:7,fontWeight:700,cursor:checkingMtrx||solAddress.length<32?'default':'pointer',opacity:checkingMtrx||solAddress.length<32?0.5:1,whiteSpace:'nowrap'}}>
+                    {checkingMtrx?'...':'CHECK'}
+                  </button>
+                  {mtrxDelegated&&<span style={{fontSize:7,color:'#22c55e',background:'rgba(34,197,94,0.1)',borderRadius:4,padding:'2px 6px',whiteSpace:'nowrap'}}>✓ {mtrxBalance.toFixed(0)} MTRX</span>}
+                  {!mtrxDelegated&&mtrxBalance>0&&<span style={{fontSize:7,color:'#f59e0b',whiteSpace:'nowrap'}}>{mtrxBalance.toFixed(1)}/1000</span>}
+                </div>
+              )}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,alignItems:'end'}}>
                 <div><div style={{fontSize:9,color:'#4a6a7a',marginBottom:4}}>QTY{DEV_MODE&&<span style={{color:'#f59e0b',marginLeft:4}}>DEV</span>}</div><div style={{display:'flex',gap:3}}>{(DEV_MODE?[1,3,5,10,20]:[1,3,5,10]).map(n=>(<button key={n} onClick={()=>setMintCount(n)} style={{flex:1,padding:'7px 0',background:mintCount===n?(chain==='sui'?'rgba(77,166,255,0.15)':'rgba(0,229,160,0.15)'):'rgba(0,0,0,0.3)',border:'1px solid '+(mintCount===n?(chain==='sui'?'rgba(77,166,255,0.5)':'rgba(0,229,160,0.5)'):'rgba(63,73,83,0.3)'),color:mintCount===n?(chain==='sui'?'#4da6ff':'#00e5a0'):'#4a6a7a',fontSize:10,fontWeight:700,cursor:'pointer'}}>{n}</button>))}</div></div>
-                <div><div style={{fontSize:9,color:'#4a6a7a',marginBottom:4}}>TOKEN</div><div style={{display:'flex',gap:3}}>{(chain==='sui'?['SUI']:['SOL','USDT','RNSM']).map(t=>(<button key={t} onClick={()=>setMintToken(t)} style={{flex:1,padding:'7px 3px',background:mintToken===t?'rgba(0,229,160,0.15)':'rgba(0,0,0,0.3)',border:'1px solid '+(mintToken===t?'rgba(0,229,160,0.5)':'rgba(63,73,83,0.3)'),color:mintToken===t?'#00e5a0':'#4a6a7a',fontSize:9,fontWeight:700,cursor:'pointer'}}>{t}</button>))}</div></div>
+                <div><div style={{fontSize:9,color:'#4a6a7a',marginBottom:4}}>TOKEN</div><div style={{display:'flex',gap:3}}>{(chain==='sui'?['USDC','USDT','HEIST']:['SOL','USDT','HEIST']).map(t=>(<button key={t} onClick={()=>setMintToken(t)} style={{flex:1,padding:'7px 3px',background:mintToken===t?'rgba(0,229,160,0.15)':'rgba(0,0,0,0.3)',border:'1px solid '+(mintToken===t?'rgba(0,229,160,0.5)':'rgba(63,73,83,0.3)'),color:mintToken===t?'#00e5a0':'#4a6a7a',fontSize:9,fontWeight:700,cursor:'pointer'}}>{t}</button>))}</div></div>
                 <div>{wallet?(<button onClick={mintDevices} style={{width:'100%',padding:'9px 0',background:chain==='sui'?'linear-gradient(135deg,#4da6ff,#2563eb)':'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',fontSize:11,fontWeight:700,cursor:'pointer'}}>MINT →</button>):(
                   chain==='sui'?(
                     <button onClick={connectSui} style={{width:'100%',padding:'9px 0',background:'linear-gradient(135deg,#4da6ff,#2563eb)',color:'#000',border:'none',fontSize:10,fontWeight:700,cursor:'pointer'}}>CONNECT SUI →</button>
@@ -2486,7 +2609,7 @@ function Ransome(){
                   {r.claimers.map((cl,j)=>(
                     <div key={j} style={{display:'flex',justifyContent:'space-between',padding:'1px 8px'}}>
                       <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#4a7fa5'}}>{cl}</span>
-                      <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#f59e0b'}}>${(r.split/1000).toFixed(0)}K + {r.rnsmEach} RNSM</span>
+                      <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#f59e0b'}}>{r.heistEach} HEIST</span>
                     </div>
                   ))}
                 </div>
@@ -2562,7 +2685,7 @@ function Ransome(){
         gap:10,alignItems:'start'}}
         className="game-grid">
         <div style={{gridArea:'matrix',minWidth:0}}>
-          <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr} timer={timer} totalTimer={totalTimer}/>
+          <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr} timer={timer} totalTimer={totalTimer} deviceCount={devices.filter(d=>d.active).length} vaultTotal={onChainSession?.vaultTotal??VAULT_ESTIMATE}/>
         </div>
         <div style={{gridArea:'stats',minWidth:0}}>
           <GameStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} liveBank={liveBank} nickname={nickname} winStates={winStates} contractAddr={contractAddr} setContractAddr={setContractAddr}/>
@@ -2682,5 +2805,5 @@ function Ransome(){
 
 // tiny clamp helper (returns px string)
 function clamp(min:number,val:number,unit:string){return`clamp(${min}px,${val}${unit},${min+8}px)`}
-// RNSM tokens allocated per win type (split equally among winning devices for that round)
-const RNSM_ALLOC:Record<WinType,number>={EARLY_FIVE:500,TOP_LINE:1000,MIDDLE_LINE:1000,BOTTOM_LINE:1000,FULL_HOUSE_1:2500,FULL_HOUSE_2:2500,FULL_HOUSE_3:1500}
+// HEIST tokens allocated per win type (split equally among winning devices for that round)
+const HEIST_ALLOC:Record<WinType,number>={EARLY_FIVE:500,TOP_LINE:1000,MIDDLE_LINE:1000,BOTTOM_LINE:1000,FULL_HOUSE_1:2500,FULL_HOUSE_2:2500,FULL_HOUSE_3:1500}

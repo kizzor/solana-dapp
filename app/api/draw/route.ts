@@ -2,75 +2,131 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
+import { SuiGrpcClient } from '@mysten/sui/grpc'
+import { Transaction } from '@mysten/sui/transactions'
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+const SUI_PROGRAM_ID = process.env.SUI_PROGRAM_ID
+const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
+const RPC_URL = 'https://fullnode.mainnet.sui.io:443'
+
+function getAuthorityKeypair(): Ed25519Keypair {
+  const privKey = process.env.SUI_PRIVATE_KEY
+  if (privKey) {
+    if (/^[0-9a-fA-F]{128}$/.test(privKey)) {
+      const bytes = Uint8Array.from(Buffer.from(privKey, 'hex'))
+      return Ed25519Keypair.fromSecretKey(bytes)
+    }
+    try {
+      const bytes = Uint8Array.from(Buffer.from(privKey, 'base64'))
+      return Ed25519Keypair.fromSecretKey(bytes)
+    } catch {}
+  }
+  throw new Error('No SUI authority keypair found. Set SUI_PRIVATE_KEY env var.')
+}
 
 export async function GET(req: Request) {
+  // ── Auth check ─────────────────────────────────────────────────
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // ── Guard: env vars must be set ────────────────────────────────
+  if (!SUI_PROGRAM_ID || !SESSION_OBJECT_ID) {
+    return NextResponse.json({
+      ok: false,
+      error: 'SUI_PROGRAM_ID and SESSION_OBJECT_ID must be set in env vars after publishing the HEIST contract',
+    }, { status: 500 })
+  }
+
   try {
-    const {
-      Connection, Keypair, PublicKey, Transaction,
-      TransactionInstruction, SYSVAR_SLOT_HASHES_PUBKEY
-    } = await import('@solana/web3.js')
+    const keypair = getAuthorityKeypair()
+    const senderAddr = keypair.toSuiAddress()
 
-    const PROGRAM_ID = new PublicKey('5ZFVc4h5Z6ccuxCRNM1Ubr1LC5cv6bvPugYFMJMgRU31')
-
-    const keyArr = JSON.parse(process.env.AUTHORITY_KEYPAIR || '[]')
-    if (!keyArr.length) throw new Error('AUTHORITY_KEYPAIR not set')
-    const authority = Keypair.fromSecretKey(Uint8Array.from(keyArr))
-
-    const rpc = process.env.RPC_URL || 'https://api.devnet.solana.com'
-    const connection = new Connection(rpc, 'confirmed')
-
-    const [sessionKey] = PublicKey.findProgramAddressSync(
-      [Buffer.from('session'), authority.publicKey.toBuffer()],
-      PROGRAM_ID
-    )
-
-    const sessionInfo = await connection.getAccountInfo(sessionKey)
-    if (!sessionInfo) {
-      return NextResponse.json({ ok: false, msg: 'No session found — initialize first' })
-    }
-
-    const data = sessionInfo.data
-    const active = data[437] === 1
-    if (!active) {
-      return NextResponse.json({ ok: false, msg: 'Session not active' })
-    }
-
-    // Correct discriminator for draw_number instruction
-    const disc = Buffer.from([144, 134, 159, 234, 135, 217, 134, 239])
-
-    const ix = new TransactionInstruction({
-      programId: PROGRAM_ID,
-      keys: [
-        { pubkey: authority.publicKey,       isSigner: true,  isWritable: false },
-        { pubkey: sessionKey,                isSigner: false, isWritable: true  },
-        { pubkey: SYSVAR_SLOT_HASHES_PUBKEY, isSigner: false, isWritable: false },
-      ],
-      data: disc,
+    const sui = new SuiGrpcClient({
+      network: 'mainnet',
+      baseUrl: RPC_URL,
     })
 
-    const { blockhash, lastValidBlockHeight } =
-      await connection.getLatestBlockhash('confirmed')
-    const tx = new Transaction({ blockhash, lastValidBlockHeight, feePayer: authority.publicKey })
-    tx.add(ix)
-    tx.sign(authority)
+    // Check session is active
+    const sessionObj = await sui.getObject({
+      id: SESSION_OBJECT_ID,
+      options: { showContent: true },
+    })
+    if (!sessionObj.data) {
+      return NextResponse.json({ ok: false, error: 'Session object not found' }, { status: 404 })
+    }
+    const fields = (sessionObj.data.content as any)?.fields
+    if (!fields?.active) {
+      return NextResponse.json({ ok: false, error: 'Session is not active' }, { status: 400 })
+    }
+    if (fields.paused) {
+      return NextResponse.json({ ok: false, error: 'Session is paused' }, { status: 400 })
+    }
 
-    const sig = await connection.sendRawTransaction(tx.serialize())
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
+    // Check not all numbers drawn
+    const drawnNumbers = fields.drawn_numbers || []
+    if (drawnNumbers.length >= 90) {
+      return NextResponse.json({ ok: false, error: 'All 90 numbers already drawn' }, { status: 400 })
+    }
 
-    const updated = await connection.getAccountInfo(sessionKey)
-    const drawCount = updated?.data[181] ?? 0
-    const lastNum   = updated?.data[182] ?? 0
+    // Build PTB: draw_number(session, ctx)
+    const txb = new Transaction()
+    txb.setSender(senderAddr)
 
-    return NextResponse.json({ ok: true, sig: sig.slice(0,16)+'...', number: lastNum, drawCount, ts: Date.now() })
+    txb.moveCall({
+      target: `${SUI_PROGRAM_ID}::heist::draw_number`,
+      arguments: [
+        txb.object(SESSION_OBJECT_ID),
+      ],
+    })
+
+    txb.setGasBudget(10_000_000)
+    txb.setGasPayment([]) // use address-balance accumulator for gas
+
+    // Sign and execute
+    const result = await sui.signAndExecuteTransaction({
+      signer: keypair,
+      transaction: txb,
+      include: { effects: true, objectTypes: true },
+    })
+
+    // Unwrap gRPC response
+    const txResult = result.Transaction ?? result.FailedTransaction
+    const isSuccess = result.$kind === 'Transaction'
+
+    if (!isSuccess) {
+      return NextResponse.json({
+        ok: false,
+        error: `On-chain error: ${txResult?.effects?.status?.error?.message || 'unknown'}`,
+        digest: txResult?.digest,
+      }, { status: 500 })
+    }
+
+    // Read the new session state after draw
+    const updatedSession = await sui.getObject({
+      id: SESSION_OBJECT_ID,
+      options: { showContent: true },
+    })
+    const updatedFields = (updatedSession.data?.content as any)?.fields || {}
+
+    return NextResponse.json({
+      ok: true,
+      digest: txResult?.digest,
+      number: Number(updatedFields.last_number || 0),
+      drawCount: Number(updatedFields.draw_count || 0),
+      drawnCount: (updatedFields.drawn_numbers || []).length,
+      remaining: 90 - (updatedFields.drawn_numbers || []).length,
+      ts: Date.now(),
+    })
 
   } catch (e: any) {
-    // Sanitize error - don't leak internal details
     console.error('Draw error:', e)
-    return NextResponse.json({ ok: false, error: 'Draw failed' }, { status: 500 })
+    return NextResponse.json({
+      ok: false,
+      error: e.message || 'Draw failed',
+    }, { status: 500 })
   }
 }

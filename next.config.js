@@ -3,7 +3,9 @@ const nextConfig = {
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
   experimental: {
-    serverComponentsExternalPackages: ['@solana/web3.js', '@coral-xyz/anchor', 'rpc-websockets', 'jayson']
+    // SUI SDK packages (bundled within @mysten/sui, no externals needed)
+    // Solana externals removed — API routes migrated to SUI.
+    serverComponentsExternalPackages: []
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {

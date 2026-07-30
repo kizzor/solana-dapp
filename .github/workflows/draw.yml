@@ -1,4 +1,4 @@
-name: Ransome Draw Number
+name: HEIST Draw Number
 on:
   schedule:
     - cron: '* * * * *'
@@ -11,4 +11,4 @@ jobs:
         run: |
           curl -s -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            https://solana-dapp-dun.vercel.app/api/draw
+            https://ransomematrix.xyz/api/draw
