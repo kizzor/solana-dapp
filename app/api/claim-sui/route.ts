@@ -125,11 +125,12 @@ export async function POST(req: Request) {
     const sui = new SuiGrpcClient({ network: 'mainnet', baseUrl: 'https://fullnode.mainnet.sui.io:443' })
 
     // Check session is active
-    const sessionObj = await sui.getObject({ id: SESSION_OBJECT_ID, options: { showContent: true } })
-    if (!sessionObj.data) {
+    // v2.22.x gRPC client: objectId + include.json, response is { object: { json } }
+    const sessionObj = await sui.getObject({ objectId: SESSION_OBJECT_ID, include: { json: true } })
+    if (!sessionObj.object || !sessionObj.object.json) {
       return NextResponse.json({ ok: false, error: 'Session object not found' }, { status: 404 })
     }
-    const fields = (sessionObj.data.content as any)?.fields
+    const fields = sessionObj.object.json as any
     if (!fields?.active) {
       return NextResponse.json({ ok: false, error: 'Session is not active' }, { status: 400 })
     }
@@ -144,7 +145,7 @@ export async function POST(req: Request) {
     }
 
     // Calculate expected payout for info
-    const vaultBalance = parseInt(fields.vault_balance || '0')
+    const vaultBalance = parseInt(fields.vault || fields.vault_balance || '0')
     const payoutBps = WIN_PAYOUTS[winType] || 0
     const totalPayout = Math.floor(vaultBalance * payoutBps / 10000)
     const perWinner = Math.floor(totalPayout / winners.length)

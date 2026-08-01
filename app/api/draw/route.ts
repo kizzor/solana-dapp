@@ -51,14 +51,15 @@ export async function GET(req: Request) {
     })
 
     // Check session is active
+    // v2.22.x gRPC client: objectId + include.json, response is { object: { json } }
     const sessionObj = await sui.getObject({
-      id: SESSION_OBJECT_ID,
-      options: { showContent: true },
+      objectId: SESSION_OBJECT_ID,
+      include: { json: true },
     })
-    if (!sessionObj.data) {
+    if (!sessionObj.object || !sessionObj.object.json) {
       return NextResponse.json({ ok: false, error: 'Session object not found' }, { status: 404 })
     }
-    const fields = (sessionObj.data.content as any)?.fields
+    const fields = sessionObj.object.json as any
     if (!fields?.active) {
       return NextResponse.json({ ok: false, error: 'Session is not active' }, { status: 400 })
     }
@@ -107,10 +108,10 @@ export async function GET(req: Request) {
 
     // Read the new session state after draw
     const updatedSession = await sui.getObject({
-      id: SESSION_OBJECT_ID,
-      options: { showContent: true },
+      objectId: SESSION_OBJECT_ID,
+      include: { json: true },
     })
-    const updatedFields = (updatedSession.data?.content as any)?.fields || {}
+    const updatedFields = (updatedSession.object?.json as any) || {}
 
     return NextResponse.json({
       ok: true,

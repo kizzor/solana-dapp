@@ -26,16 +26,17 @@ export async function GET() {
   try {
     const sui = new SuiGrpcClient({ network: SUI_NETWORK, baseUrl: RPC_URL })
 
+    // v2.22.x gRPC client: objectId + include.json, response is { object: { json } }
     const sessionObj = await sui.getObject({
-      id: SESSION_OBJECT_ID,
-      options: { showContent: true },
+      objectId: SESSION_OBJECT_ID,
+      include: { json: true },
     })
 
-    if (!sessionObj.data || !sessionObj.data.content) {
+    if (!sessionObj.object || !sessionObj.object.json) {
       return NextResponse.json({ ok: false, msg: 'Session object not found' })
     }
 
-    const fields = (sessionObj.data.content as any)?.fields
+    const fields = sessionObj.object.json as any
     if (!fields) {
       return NextResponse.json({ ok: false, msg: 'Could not parse session fields' })
     }
