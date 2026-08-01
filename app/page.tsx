@@ -7,7 +7,6 @@ import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets'
 import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 // SUI imports
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import { Transaction } from '@mysten/sui/transactions'
 import { getWallets } from '@wallet-standard/app'
 import { isWalletWithRequiredFeatureSet } from '@mysten/wallet-standard'
@@ -508,7 +507,7 @@ function MintPanel({wallet,devices,mintCount,mintToken,setMintCount,setMintToken
                   <span style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:800,color:'#00e5a0',textShadow:'0 0 8px rgba(0,229,160,0.4)'}}>{DEVICE_PRICE_HEIST.toLocaleString()}<span style={{fontSize:9,fontWeight:400,color:'#4a7fa5',marginLeft:3}}>HEIST</span></span>
                 </div>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:'#1e4a6a'}}>≈ ${DEVICE_PRICE_USDC.toFixed(2)} USDC <span style={{color:'#2a5a7a'}}|</span> ${(DEVICE_PRICE_SUI / 1e9).toFixed(4)} SUI</span>
+                  <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:'#1e4a6a'}}>≈ ${DEVICE_PRICE_USDC.toFixed(2)} USDC <span style={{color:'#2a5a7a'}}>|</span> ${(DEVICE_PRICE_SUI / 1e9).toFixed(4)} SUI</span>
                   <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:'#2a5a7a'}}>1 SUI = $${SUI_PRICE_USD.toFixed(2)}</span>
                 </div>
               </div>
@@ -1714,7 +1713,6 @@ function Ransome(){
   const SUI_PROGRAM_ID = process.env.NEXT_PUBLIC_SUI_PROGRAM_ID || 'SET_AFTER_PUBLISH'
   const SESSION_OBJECT_ID = process.env.NEXT_PUBLIC_SESSION_OBJECT_ID || 'SET_AFTER_PUBLISH'
   // DEVICE_PRICE_SUI defined globally above; this is the on-chain payment amount
-  const suiClient=useMemo(()=>new SuiClient({url: getFullnodeUrl('mainnet')}),[])
   // Unified wallet address
   const wallet = chain==='solana' && connected && publicKey ? publicKey.toBase58() : chain==='sui' && suiConnected ? suiAddress : null
   // ── Check MTRX delegation status ───────────────────────────────────

@@ -72,7 +72,9 @@ At the end of every session, the LLM MUST update the
   ✅ SUI CLI fixed (was 0-byte corrupted file, replaced with v1.76.1)
   ✅ Anti-cheat rate limiting added to /api/claim-sui
   ✅ Vercel env vars SET via website dashboard
-  ⏳ **NEXT: git commit + push** so Vercel picks up SUI code changes
+  ✅ **git commit + push DONE** — SUI migration committed as `530f0fe` on origin/main
+  ✅ **BUILD FIXED** (2026-08-01) — was failing, which is why Vercel kept serving OLD Solana code
+  ⏳ **NEXT: commit + push the build fixes** so Vercel finally deploys the SUI code
   ⏳ Need to finish @mysten/dapp-kit hooks upgrade in page.tsx
   ⏳ Need to fix TypeScript errors (remove ignoreBuildErrors)
   ⏳ CRON_SECRET rotation
@@ -229,10 +231,11 @@ Browser (page.tsx)
 
 ### PENDING NEXT SESSION
 
-**1. 🔴 COMMIT + PUSH local changes to git**
-   - All SUI migration changes are UNCOMMITTED — Vercel still runs old Solana code
-   - Run: `git add . && git commit -m "feat: migrate to SUI mainnet" && git push`
-   - Then Vercel auto-deploys the SUI code
+**1. ✅ COMMIT + PUSH DONE (530f0fe)** — SUI migration is on origin/main
+   - BUT live site still ran OLD Solana code because `npm run build` was FAILING
+   - **FIXED 2026-08-01** — see Session Log
+   - 🔴 **NEXT: commit + push these build fixes** so Vercel auto-deploys SUI code:
+     `git add . && git commit -m "fix: build - dapp-kit providers, sui v2 imports, jsx typo" && git push`
 
 **2. 🟢 ENV VARS already set** — but need values filled for:
    - `CRON_SECRET` — blank (draw cron won't auth)
@@ -464,6 +467,20 @@ NEW heist.move (ready to publish): FH1=19.5% FH2=19.5% FH3=40% total=99%
 3. ⏳ dApp Kit hooks upgrade in page.tsx (replace manual getWallets())
 4. ⏳ Fix TS errors (remove ignoreBuildErrors)
 5. ⏳ Rotate CRON_SECRET (last step)
+
+### Session: 2026-08-01 — Build Fixed (Vercel deploy unblocked)
+**Root cause found:** Live site ran old Solana code because `npm run build` FAILED → Vercel auto-deploy failed → kept serving last good (old) deploy.
+
+**Fixed this session:**
+1. ✅ **page.tsx JSX parse error** — line 511 `<span style={{color:'#2a5a7a'}}|</span>` was missing `>` (parser thought a `<div>` was unclosed → whole file failed to compile)
+2. ✅ **@solana/spl-token never installed** — in package.json but absent from node_modules + lockfile → `npm install` fixed
+3. ✅ **@mysten/sui v2.22.1 API changes** — `getFullnodeUrl`/`SuiClient` removed from `@mysten/sui/client` (JSON-RPC deprecated). Removed dead `suiClient` memo from page.tsx, fixed layout + deploy-mainnet.mjs
+4. ✅ **dapp-kit SSR `createContext is not a function`** — layout.tsx (Server Component) imported dapp-kit providers directly; React resolved the `react-server` subset which lacks `createContext`. Fixed by new `app/providers.tsx` client component wrapping QueryClientProvider/SuiClientProvider/WalletProvider
+5. ✅ Added `@tanstack/react-query` as direct dependency
+
+**✅ `npm run build` PASSES** — all routes compile.
+
+**Manual next step (confidential):** commit + push these fixes → Vercel auto-deploys → verify live `/api/session-state` returns the SUI session.
 
 ### Session: 2026-07-26 — Full Mainnet Workflow Audit
 Performed comprehensive audit of all API routes, page.tsx, env vars, Move contract, config.
