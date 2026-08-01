@@ -12,6 +12,24 @@ body {
 ::-webkit-scrollbar-track { background: #010810; }
 ::-webkit-scrollbar-thumb { background: #0a2535; border-radius: 2px; }
 
+/* ─── Light theme (white primary + saffron/green accents) ─── */
+/* Toggled via <html data-theme="light"> set by the app's theme state. */
+html[data-theme='light'] {
+  filter: invert(0.94) hue-rotate(180deg);
+  background: #ffffff;
+  transition: filter 0.3s ease;
+}
+html[data-theme='light'] body {
+  background: linear-gradient(180deg, #ffffff 0%, #f2f6fa 100%);
+  color: #10222e;
+}
+/* Keep images/photos normal in light mode (map etc.) */
+html[data-theme='light'] img {
+  filter: invert(0.94) hue-rotate(180deg);
+}
+html[data-theme='light'] ::-webkit-scrollbar-track { background: #eef2f6; }
+html[data-theme='light'] ::-webkit-scrollbar-thumb { background: #b8c6d4; }
+
 /* Number appear */
 @keyframes numAppear {
   from { transform: translateY(-24px) scale(0.85); opacity: 0; }

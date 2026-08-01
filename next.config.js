@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: { ignoreBuildErrors: true },
+  // TS errors are now fixed (tsc --noEmit passes) — builds typecheck again.
   eslint: { ignoreDuringBuilds: true },
   experimental: {
     // SUI SDK packages (bundled within @mysten/sui, no externals needed)

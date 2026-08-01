@@ -104,10 +104,9 @@ def update_source_code(solana_data):
     
     new_pubkey = solana_data['public_key']
     
-    # Files to update
+    # Files to update (legacy Solana lib files were deleted 2026-08-01 —
+    # only app/page.tsx remains relevant; SUI migration uses env vars)
     files_to_update = [
-        os.path.join(PROJECT_DIR, "lib", "ransome-client.ts"),
-        os.path.join(PROJECT_DIR, "lib", "draw-cron.ts"),
         os.path.join(PROJECT_DIR, "app", "page.tsx"),
     ]
     

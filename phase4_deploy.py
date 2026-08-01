@@ -50,9 +50,9 @@ def main():
     print("Step 3: Update Source Code")
     print("-" * 40)
     print("  # Update PROGRAM_ID in:")
-    print("  #   - lib/ransome-client.ts")
-    print("  #   - lib/draw-cron.ts")
     print("  #   - public/ransome-lib.rs")
+    print("  #   (lib/ransome-client.ts + lib/draw-cron.ts deleted 2026-08-01)")
+    print("  #    legacy Solana pipeline retired; SUI uses env vars)")
     print()
     
     print("Step 4: Push to GitHub")

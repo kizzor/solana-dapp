@@ -74,9 +74,10 @@ At the end of every session, the LLM MUST update the
   ✅ Vercel env vars SET via website dashboard
   ✅ **git commit + push DONE** — SUI migration committed as `530f0fe` on origin/main
   ✅ **BUILD FIXED** (2026-08-01) — was failing, which is why Vercel kept serving OLD Solana code
-  ⏳ **NEXT: commit + push the build fixes** so Vercel finally deploys the SUI code
-  ⏳ Need to finish @mysten/dapp-kit hooks upgrade in page.tsx
-  ⏳ Need to fix TypeScript errors (remove ignoreBuildErrors)
+  ✅ **TS ERRORS FIXED** (2026-08-01) — tsc = 0 errors, `ignoreBuildErrors` removed
+  ✅ **FH progression anti-cheat** added (canClaimFullHouse + getFirstUnclaimedFh)
+  ⏳ **NEXT: commit + push the build fixes + vault-hold redesign** so Vercel finally deploys the SUI code
+  ✅ **@mysten/dapp-kit hooks upgrade DONE** — page.tsx now uses useCurrentAccount/useConnectWallet/useDisconnectWallet/useSignAndExecuteTransaction/useWallets (manual getWallets() pattern removed)
   ⏳ CRON_SECRET rotation
 **This Session:**
   - Found `sui.exe` was 0 bytes (corrupted) — replaced with fresh v1.76.1 binary
@@ -92,7 +93,7 @@ At the end of every session, the LLM MUST update the
   - MTRX vars + CRON_SECRET left blank for now (will update after mainnet testing)
   - Custom domain `ransomematrix.xyz` confirmed working ✅
 **🔴 NEXT — COMMIT + PUSH to git, then Vercel auto-deploys SUI code**
-  **Then:** dApp Kit upgrade in page.tsx, TS error fixes, CRON_SECRET rotation
+  **Then:** CRON_SECRET rotation (last step)
 
 ---
 
@@ -105,7 +106,7 @@ Current: MAINNET DEPLOYED at https://ransomematrix.xyz
 HEIST contract PUBLISHED: 0xdfe2c634a24f0850279dbb321a68d7665331f264c8c596e4fb07773ff9d3b64d
 Session INITIALIZED: 0xd4cfa99e18e57b94f9961c854cf9feecf15f607ca9955e0e1e78c387b31e94f4
 Vercel env vars set via website. Site loads but runs OLD Solana code!
-PENDING: 1) git commit + push (so Vercel picks up SUI code), 2) dApp Kit upgrade, 3) TS fixes, 4) CRON_SECRET.
+PENDING: 1) git commit + push (so Vercel picks up SUI code), 2) CRON_SECRET rotation.
 Start with CONFIDENTIAL ACTION ITEMS.
 ```
 
@@ -241,13 +242,13 @@ Browser (page.tsx)
    - `CRON_SECRET` — blank (draw cron won't auth)
    - `MTRX_CONTRACT_ADDRESS` + `MTRX_DELEGATION_VAULT` — blank (post-mainnet)
 
-**3. 🟡 TypeScript errors SILENCED** — `ignoreBuildErrors: true` in next.config.js
+**3. 🟢 TypeScript errors FIXED (2026-08-01)** — `tsc --noEmit` = 0 errors, `ignoreBuildErrors` removed from next.config.js
 
-**4. 🟡 dApp Kit upgrade pending** — page.tsx still uses manual `getWallets()` pattern
+**4. ✅ dApp Kit upgrade DONE** — page.tsx uses dapp-kit hooks (useCurrentAccount, useConnectWallet, useDisconnectWallet, useSignAndExecuteTransaction, useWallets); manual `getWallets()`/`isWalletWithRequiredFeatureSet` pattern removed
 
 ### MEDIUM
 
-5. Brittle keypair path in claim-sui
+5. ✅ **Dead legacy Solana files DELETED** (2026-08-01) — `lib/draw-cron.ts`, `lib/ransome-client.ts`, `lib/ransome-minimal-client.ts` removed (zero imports, verified by ripgrep). `lib/` now holds only `claim-ledger.ts` + `claim-settle.ts`. tsc + build re-verified clean after deletion.
 6. CRON_SECRET exposed — rotation deferred
 
 ---
@@ -275,14 +276,16 @@ Browser (page.tsx)
 | P0 | **Init session on new contract** | 5 min | ✅ **DONE!** 🎉 |
 | P0 | **Update Vercel env vars + deploy** | 10 min | ⏳ **DONE** (but needs git push) ✅ |
 | P0 | **git commit + push SUI migration** | 2 min | 🔴 **NEXT** |
-| P0 | Upgrade page.tsx wallet to @mysten/dapp-kit hooks | 1-2 hrs | ⏳ NEXT |
+| P0 | Upgrade page.tsx wallet to @mysten/dapp-kit hooks | 1-2 hrs | ✅ **DONE** 🎉 |
 | P0 | Server-enforced claim flicker (anti-cheat) | 1 hr | ✅ **DONE** 🎉 |
 | P0 | Rate limiting on /api/claim-sui | 2 hrs | ✅ **DONE** 🎉 |
 | P0 | Anti-cheat code review fix (rate limit after execution) | 10 min | ✅ **DONE** 🎉 |
+| P0 | FULL HOUSE progression gate (canClaimFullHouse + settlement sweep fix) | 1 hr | ✅ **DONE** 🎉 |
+| P0 | Wallet address normalization in claim ledger | 15 min | ✅ **DONE** 🎉 |
 | P1 | Fix CLAIM_WALLET to SUI | 5 min | ✅ **Already correct (0x01d4a7...)** |
 | P1 | SUI VRF for randomness | 1-2 wks | 📋 Planned |
 | P2 | Remove unused totalCost | 1 min | 📋 Planned |
-| P3 | Fix TypeScript errors (remove ignoreBuildErrors) | 2-4 hrs | ⏳ NEXT |
+| P3 | Fix TypeScript errors (remove ignoreBuildErrors) | 2-4 hrs | ✅ **DONE** 🎉 (tsc = 0 errors) |
 | P3 | Rotate CRON_SECRET (do LAST) | 10 min | 📋 Planned |
 
 ---
@@ -301,7 +304,7 @@ All relative to project root: C:\Users\admin\Desktop\markdowns\solana-dapp
 - `heist-contract/sources/heist.move` — HEIST Move contract ✅ NEW, 99% payout
 - `init_session_sdk.mjs` — Session init script ✅ SDK upgraded, needs heist target update
 - `deploy-mainnet.mjs` — Deploy script ✅ SDK upgraded
-- `next.config.js` — Config (silences TS errors)
+- `next.config.js` — Config (TS errors fixed 2026-08-01 — builds typecheck, ignoreBuildErrors removed)
 - `C:\Users\admin\AppData\Local\sui_data\sui.exe` — SUI CLI (v1.76.0 ✅ working)
 
 ---
@@ -441,7 +444,7 @@ NEW heist.move (ready to publish): FH1=19.5% FH2=19.5% FH3=40% total=99%
 1. ⏳ **FIRST**: Find SUI coin objects via `curl suix_getCoins` RPC
 2. ⏳ Publish with `--gas 0xCOIN_ID` using the found coin
 3. ⏳ Init session + set Vercel env vars + deploy
-4. ⏳ Finish @mysten/dapp-kit upgrade in page.tsx (replace manual getWallets())
+4. ✅ Finish @mysten/dapp-kit upgrade in page.tsx (replace manual getWallets()) — DONE 2026-08-01
 5. ⏳ Set accurate SUI_PRICE_USD before deploy
 
 ### Session: 2026-07-30 — HEIST Published + Anti-Cheat + Vercel Deploy
@@ -464,7 +467,7 @@ NEW heist.move (ready to publish): FH1=19.5% FH2=19.5% FH3=40% total=99%
 **Pending for next session:**
 1. 🔴 **git commit + push** — then Vercel auto-deploys
 2. ⏳ Fix MTRX placeholder vars + CRON_SECRET
-3. ⏳ dApp Kit hooks upgrade in page.tsx (replace manual getWallets())
+3. ✅ dApp Kit hooks upgrade in page.tsx (replace manual getWallets()) — DONE 2026-08-01
 4. ⏳ Fix TS errors (remove ignoreBuildErrors)
 5. ⏳ Rotate CRON_SECRET (last step)
 
@@ -481,6 +484,28 @@ NEW heist.move (ready to publish): FH1=19.5% FH2=19.5% FH3=40% total=99%
 **✅ `npm run build` PASSES** — all routes compile.
 
 **Manual next step (confidential):** commit + push these fixes → Vercel auto-deploys → verify live `/api/session-state` returns the SUI session.
+
+### Session: 2026-08-01 — TS Errors Fixed + FH Progression Anti-Cheat (vault-hold code reviewed)
+**State verified:** `npm run build` PASSES, `npx tsc --noEmit` = **0 errors**, no secrets in the uncommitted vault-hold changes (scanned).
+
+**Fixed this session (code only — no secrets touched):**
+1. ✅ **TypeScript errors eliminated** (was 13, hidden by `ignoreBuildErrors`):
+   - `page.tsx` win-state rehydration missing `bursting` field (line 1885)
+   - `page.tsx` `connectFeature.connect()` on `unknown` — typed the `standard:connect` feature
+   - `tsconfig.json` target `es2015 → es2020` (bigint literals in legacy lib files) — ALSO deleted stale `tsconfig.tsbuildinfo` (was masking the fix)
+   - `lib/ransome-minimal-client.ts` — `new BigInt()` → `BigInt()` (BigInt is not a constructor)
+2. ✅ **Removed `typescript.ignoreBuildErrors` from next.config.js** — builds typecheck again (P3 item done)
+3. ✅ **FULL HOUSE progression anti-cheat** (server-enforced; the contract's `bankrupt_count` is NEVER advanced on-chain, so it can't gate FH tiers):
+   - `canClaimFullHouse()` in `lib/claim-ledger.ts` — a wallet must claim FH tiers IN ORDER (FH1→FH2→FH3), mirroring the frontend's local `bankruptCount`. Prevents skipping straight to the 40% FH3 jackpot. Used by `/api/claim-sui` + `/api/claims`.
+   - `getFirstUnclaimedFh()` — settlement only settles/sweeps the FIRST unclaimed FH tier; future tiers stay in the vault so FH1→FH2→FH3 progress across rounds instead of all three being swept to treasury in round 1 (which would kill the jackpots). Same-round FH1→FH2→FH3 cascade claims still get paid.
+4. ✅ **Wallet address normalization** — ledger keys lowercased at the boundary (`normWallet()`) so `/api/claims` (lowercases) and `/api/claim-sui`/`mint-nft` (don't) can't register/lookup mismatched keys.
+5. ✅ **mint-nft mainnet hardening** — sender match now requires a parsed sender that EQUALS the wallet (removed fuzzy `raw.includes()` fallback that could match a different wallet's address appearing in the tx payload).
+6. ✅ **Settlement `resetRound()` moved AFTER the on-chain loop** — a mid-round manual settle (testnet DEV ⏭ SETTLE) no longer wipes per-round dedupe/rate limits while claims are still possible.
+7. ✅ **`setGasPayment([])` verified valid** v2 SDK API (SDK's own executor uses it = auto-select gas) — not a bug.
+
+**Code reviewed** by deepseek-flash reviewer — all fixes approved, no blockers. Build + typecheck verified after every change.
+
+**Manual next step (confidential):** commit + push everything → Vercel auto-deploys.
 
 ### Session: 2026-07-26 — Full Mainnet Workflow Audit
 Performed comprehensive audit of all API routes, page.tsx, env vars, Move contract, config.
@@ -537,8 +562,6 @@ Check `https://www.ransomematrix.xyz/api/session-state` after deploy — should 
 ```
 
 ### ⏳ AFTER THAT: Finish code pending
-- dApp Kit hooks upgrade in page.tsx
-- Fix TypeScript errors
 - Set CRON_SECRET + MTRX vars
 - Rotate CRON_SECRET (last step)
 
@@ -594,3 +617,49 @@ Check `https://www.ransomematrix.xyz/api/session-state` after deploy — should 
 - **Session INITIALIZED!** 🎉 Session: `0xd4cfa99e18e57b94f9961c854cf9feecf15f607ca9955e0e1e78c387b31e94f4`
 - SUI CLI binary fixed (was corrupted 0 bytes)
 - Vercel env vars + deploy remaining — see CONFIDENTIAL ACTION ITEMS
+
+---
+
+## 🆕 SESSION HANDOFF (2026-08-01) — Vault-hold claim redesign + dev mode
+
+### What changed this session
+- **Winnings now stay in the VAULT** (not auto-sent to wallets). Winners claim
+  anytime before the next round — even from the lobby after the console was
+  trashed. Two claim paths: `VAULT_STATUS` panel button + `⚿` corner key on the
+  RANSOM button.
+- **No contract change** — server-side ledger (`lib/claim-ledger.ts`):
+  - `/api/mint-nft` — registers device grids at mint, verifies the mint digest
+    exists on-chain + is a real `heist::mint_device` tx from the wallet.
+  - `/api/claim-sui` — records a claim ONLY if the wallet's REGISTERED grid
+    genuinely hits the win pattern against the ON-CHAIN drawn numbers
+    (`verifyWin`). One claim per wallet per win type + 60s rate limit.
+  - `/api/claims?wallet=` — claimable/pending status for the vault panel.
+  - `/api/settle-claims` + `/api/draw` — pay pending claimers at the 59-min
+    round boundary via on-chain `claim_win_split`; unclaimed win types are
+    swept to the treasury. `clearPending` only after on-chain success.
+- **Dev mode for faucet-testnet testing** (see below) + dark/light theme toggle
+  (☀️/🌙 in header, light = white primary + saffron/green).
+
+### 🧪 HOW TO TEST ON TESTNET (faucet SUI)
+Set these env vars (Vercel or `.env.local` for `next dev`):
+- `SUI_NETWORK=testnet` (server routes use it: draw/settle/claims/mint-nft)
+- `NEXT_PUBLIC_SUI_NETWORK=testnet` (frontend signs with `sui:testnet`)
+- `NEXT_PUBLIC_DEV_MODE=true` → unlocks DEV controls in the UI
+- ⚠️ Make sure the connected wallet's active network matches `NEXT_PUBLIC_SUI_NETWORK` —
+  `signAndExecute({ chain: SUI_CHAIN })` (dapp-kit) hard-fails if the wallet is on a
+different network than `SUI_CHAIN` resolves to.
+- Publish HEIST on testnet, init a session, set `SUI_PROGRAM_ID` /
+  `SESSION_OBJECT_ID` (and `NEXT_PUBLIC_*` copies) to testnet values.
+
+In the lobby (DEV mode): `🚀 NOW` / `+30M` / `+59M` jump the 59-min clock.
+In the game (DEV mode): `⏩ DRAW` draws the next number instantly,
+`⏭ SETTLE` runs settlement now — verify the split across wallets.
+
+### ⚠️ Known limitations
+- Ledger is **in-memory** — resets on Vercel cold starts / multiple instances.
+  For real mainnet money, migrate `lib/claim-ledger.ts` Maps to Vercel KV /
+  Postgres.
+- Grids minted BEFORE this change are not registered server-side (claims for
+  them will be rejected until re-minted).
+- `CRON_SECRET` is still blank in Vercel → draws/settles 401 on mainnet until
+  set (testnet bypasses auth by design for dev).

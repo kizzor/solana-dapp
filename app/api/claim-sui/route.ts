@@ -3,129 +3,64 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import { SuiGrpcClient } from '@mysten/sui/grpc'
-import { Transaction } from '@mysten/sui/transactions'
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
+import {
+  getRegisteredDevices,
+  verifyWin,
+  canClaimFullHouse,
+  isClaimed,
+  recordClaim,
+  getClaimers,
+} from '../../../lib/claim-ledger'
 
-// ─── Constants + Simple Rate Limiter ───────────────────────────────────────
-// In-memory rate limiter — maps "wallet:winType" → unix timestamp
-// Prevents rapid re-claims within the same round (window = 60s)
-const claimRateMap = new Map<string, number>()
-const RATE_WINDOW_MS = 60_000 // 60s per win type per wallet
-
+// ─── Constants ───────────────────────────────────────────────────────────────
 const SUI_PROGRAM_ID = process.env.SUI_PROGRAM_ID
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
+const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
+const RPC_URL = `https://fullnode.${SUI_NETWORK}.sui.io:443`
 
-// Win type payout basis points (must match contract after redeploy)
-// 99% of vault goes to winners; 1% treasury fee deducted upfront
+// Win type payout basis points (for the estimated-payout response only;
+// actual payouts are computed on-chain by the contract)
 const WIN_PAYOUTS: Record<number, number> = {
-  0: 500,   // EarlyFive:   5%
-  1: 500,   // TopLine:     5%
-  2: 500,   // MiddleLine:  5%
-  3: 500,   // BottomLine:  5%
-  4: 1950,  // FullHouse1: 19.5%
-  5: 1950,  // FullHouse2: 19.5%
-  6: 4000,  // FullHouse3:  40%
-}  // Total: 9900 (99%)
-
-function getAuthorityKeypair(): Ed25519Keypair {
-  // Try SUI_PRIVATE_KEY env var (hex-encoded or Base64)
-  const privKey = process.env.SUI_PRIVATE_KEY
-  if (privKey) {
-    // Hex-encoded (64 bytes = 128 hex chars)
-    if (/^[0-9a-fA-F]{128}$/.test(privKey)) {
-      const bytes = Uint8Array.from(Buffer.from(privKey, 'hex'))
-      return Ed25519Keypair.fromSecretKey(bytes)
-    }
-    // Base64-encoded
-    try {
-      const bytes = Uint8Array.from(Buffer.from(privKey, 'base64'))
-      return Ed25519Keypair.fromSecretKey(bytes)
-    } catch {}
-  }
-
-  // Try reading from SUI keystore file
-  const fs = require('fs')
-  const path = require('path')
-  const os = require('os')
-  const keystorePath = path.join(os.homedir(), '.sui', 'sui_config', 'sui.keystore')
-  if (fs.existsSync(keystorePath)) {
-    const keystore = JSON.parse(fs.readFileSync(keystorePath, 'utf-8'))
-    // Keystore is an array of Base64-encoded keys
-    // Find the one matching our authority address
-    for (const key of keystore) {
-      try {
-        const bytes = Uint8Array.from(Buffer.from(key, 'base64'))
-        // Ed25519 secret key is 32 bytes, but SUI stores 33 bytes (flag + key)
-        const secretKey = bytes.length === 33 ? bytes.slice(1) : bytes
-        const kp = Ed25519Keypair.fromSecretKey(secretKey)
-        // Return first key (or match against authority address)
-        return kp
-      } catch {}
-    }
-  }
-
-  throw new Error('No SUI authority keypair found. Set SUI_PRIVATE_KEY env var or ensure sui.keystore exists.')
+  0: 500, 1: 500, 2: 500, 3: 500, 4: 1950, 5: 1950, 6: 4000,
 }
 
+const WIN_KEYS = ['EARLY_FIVE', 'TOP_LINE', 'MIDDLE_LINE', 'BOTTOM_LINE', 'FULL_HOUSE_1', 'FULL_HOUSE_2', 'FULL_HOUSE_3']
+
+// ─── POST /api/claim-sui ─────────────────────────────────────────────────────
+// Records a server-verified claim. NO immediate on-chain payout — the claim is
+// held in the server ledger and paid out (batched) at round end by
+// /api/settle-claims. This lets winners claim from the vault during the game
+// AND during the 59-min lobby before the next round, even after their console
+// was trashed.
+//
+// Body: { wallet, winType (0-6) }
 export async function POST(req: Request) {
-  // ── Guard: env vars must be set (new HEIST contract) ───────────────
   if (!SUI_PROGRAM_ID || !SESSION_OBJECT_ID) {
     return NextResponse.json({
       ok: false,
-      error: 'SUI_PROGRAM_ID and SESSION_OBJECT_ID must be set in env vars after publishing the HEIST contract',
+      error: 'SUI_PROGRAM_ID and SESSION_OBJECT_ID must be set in env vars',
     }, { status: 500 })
   }
 
-  // ── Auth check — prevent unauthorized claim signing ────────────────
-  const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
-    const { winners, winType } = await req.json()
+    const { wallet, winType } = await req.json()
 
     // Validate inputs
-    if (!Array.isArray(winners) || winners.length === 0) {
-      return NextResponse.json({ ok: false, error: 'winners must be a non-empty array of addresses' }, { status: 400 })
+    if (typeof wallet !== 'string' || !wallet.startsWith('0x') || wallet.length < 20) {
+      return NextResponse.json({ ok: false, error: 'Invalid wallet address' }, { status: 400 })
     }
     if (typeof winType !== 'number' || winType < 0 || winType > 6) {
       return NextResponse.json({ ok: false, error: 'Invalid win type (0-6)' }, { status: 400 })
     }
 
-    // Validate all addresses are valid SUI addresses
-    for (const w of winners) {
-      if (typeof w !== 'string' || !w.startsWith('0x') || w.length < 10) {
-        return NextResponse.json({ ok: false, error: `Invalid address: ${w}` }, { status: 400 })
-      }
+    // ── Anti-cheat: one claim per wallet per win type ─────────────────────
+    if (isClaimed(wallet, winType)) {
+      return NextResponse.json({ ok: false, error: 'Already claimed this round' }, { status: 400 })
     }
 
-    // ── Anti-cheat: rate limit per wallet per win type ─────────────────────
-    for (const w of winners) {
-      const rateKey = `${w}:${winType}`
-      const lastClaim = claimRateMap.get(rateKey)
-      if (lastClaim && Date.now() - lastClaim < RATE_WINDOW_MS) {
-        return NextResponse.json({
-          ok: false,
-          error: `Rate limited: ${w} already claimed winType ${winType} within ${RATE_WINDOW_MS / 1000}s window`,
-        }, { status: 429 })
-      }
-    }
+    const sui = new SuiGrpcClient({ network: SUI_NETWORK, baseUrl: RPC_URL })
 
-    // ── Anti-cheat: cap claimers at 10 to prevent abuse ────────────────────
-    if (winners.length > 10) {
-      return NextResponse.json({ ok: false, error: 'Maximum 10 claimers per win type' }, { status: 400 })
-    }
-
-    // Get authority keypair
-    const keypair = getAuthorityKeypair()
-    const senderAddr = keypair.toSuiAddress()
-
-    // Connect to SUI mainnet via gRPC
-    const sui = new SuiGrpcClient({ network: 'mainnet', baseUrl: 'https://fullnode.mainnet.sui.io:443' })
-
-    // Check session is active
-    // v2.22.x gRPC client: objectId + include.json, response is { object: { json } }
+    // ── Read on-chain session ─────────────────────────────────────────────
     const sessionObj = await sui.getObject({ objectId: SESSION_OBJECT_ID, include: { json: true } })
     if (!sessionObj.object || !sessionObj.object.json) {
       return NextResponse.json({ ok: false, error: 'Session object not found' }, { status: 404 })
@@ -138,72 +73,68 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Session is paused' }, { status: 400 })
     }
 
-    // Check win not already claimed
-    const winsClaimed = fields.wins_claimed
-    if (winsClaimed?.[winType] === true) {
+    // Win type exhausted on-chain → too late (already settled / swept)
+    if (fields.wins_claimed?.[winType] === true) {
       return NextResponse.json({ ok: false, error: 'Win already claimed (exhausted)' }, { status: 400 })
     }
 
-    // Calculate expected payout for info
-    const vaultBalance = parseInt(fields.vault || fields.vault_balance || '0')
-    const payoutBps = WIN_PAYOUTS[winType] || 0
-    const totalPayout = Math.floor(vaultBalance * payoutBps / 10000)
-    const perWinner = Math.floor(totalPayout / winners.length)
+    // ── Anti-cheat core: verify the wallet's REGISTERED grid really hit the
+    //    pattern against the ON-CHAIN drawn numbers ("make sure the ransome
+    //    is hit"). The client cannot submit a fake grid — we use the grid it
+    //    registered at mint time. ──────────────────────────────────────────
+    const drawn: number[] = (Array.isArray(fields.drawn_numbers) ? fields.drawn_numbers : [])
+      .map((n: any) => Number(n))
+    // On-chain wins_claimed — used to enforce FULL HOUSE tier order
+    // (a wallet can only claim FH1 → FH2 → FH3 in sequence).
+    const winsClaimedOnChain: boolean[] = Array.isArray(fields.wins_claimed)
+      ? fields.wins_claimed.map((b: any) => Boolean(b))
+      : Array(7).fill(false)
 
-    // Build PTB: claim_win_split(session, winners, win_type)
-    const txb = new Transaction()
-    txb.setSender(senderAddr)
-
-    txb.moveCall({
-      target: `${SUI_PROGRAM_ID}::heist::claim_win_split`,
-      arguments: [
-        txb.object(SESSION_OBJECT_ID),
-        txb.pure.vector('address', winners),
-        txb.pure.u8(winType),
-      ],
-    })
-
-    // Sign and execute
-    const result = await sui.signAndExecuteTransaction({
-      transaction: txb,
-      signer: keypair,
-      // SuiGrpcClient uses `include` (not `options`)
-      include: { effects: true, objectTypes: true },
-    })
-
-    // Unwrap gRPC response (SuiGrpcClient returns { $kind: "Transaction", Transaction: { ... } })
-    const txResult = result.Transaction ?? result.FailedTransaction;
-    const isSuccess = result.$kind === 'Transaction';
-
-    if (!isSuccess) {
+    const devices = getRegisteredDevices(wallet)
+    if (devices.length === 0) {
       return NextResponse.json({
         ok: false,
-        error: `On-chain error: ${txResult?.effects?.status?.error?.message || 'unknown'}`,
-        digest: txResult?.digest,
-      }, { status: 500 })
+        error: 'No device registered for this wallet — mint a device first',
+      }, { status: 400 })
     }
 
-    // ── Mark rate limit AFTER successful execution ─────────────────────────
-    for (const w of winners) {
-      claimRateMap.set(`${w}:${winType}`, Date.now())
+    // ── Anti-cheat: FULL HOUSE tiers must be claimed in order (FH1→FH2→FH3),
+    //    mirroring the frontend's local bankruptCount. Prevents skipping
+    //    straight to the 40% jackpot without earning the earlier tiers.
+    const fhGate = canClaimFullHouse(wallet, winType, winsClaimedOnChain)
+    if (!fhGate.ok) {
+      return NextResponse.json({ ok: false, error: fhGate.error }, { status: 400 })
     }
-    // Cleanup: evict stale entries when map grows large
-    if (claimRateMap.size > 1000) {
-      const now = Date.now()
-      for (const [k, ts] of claimRateMap) {
-        if (now - ts > RATE_WINDOW_MS * 2) claimRateMap.delete(k)
-      }
+
+    // Any registered device of this wallet must genuinely hit the pattern
+    // against the on-chain drawn numbers ("make sure the ransome is hit").
+    const grid = devices.find((d) => verifyWin(d.grid, drawn, winType))?.grid
+    if (!grid) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Win pattern not verified against on-chain draws — the ransome was not genuinely hit',
+      }, { status: 400 })
     }
+
+    // ── Record the claim (dedupe + rate limit handled inside ledger) ──────
+    const rec = recordClaim(wallet, winType)
+    if (!rec.ok) {
+      return NextResponse.json({ ok: false, error: rec.error }, { status: 429 })
+    }
+
+    const vaultBalance = Number(fields.vault || 0)
+    const totalPayout = Math.floor(vaultBalance * (WIN_PAYOUTS[winType] || 0) / 10000)
+    const claimers = getClaimers(winType).length
+    const perWinner = claimers > 0 ? Math.floor(totalPayout / claimers) : 0
 
     return NextResponse.json({
       ok: true,
-      digest: txResult?.digest,
+      pending: true,
       winType,
-      winners: winners.length,
-      totalPayout,
-      perWinner,
-      vaultBefore: vaultBalance,
-      dust: totalPayout - (perWinner * winners.length),
+      key: WIN_KEYS[winType],
+      claimers,
+      estPayout: perWinner,
+      msg: 'Claim recorded — payout at round end (or from the vault anytime before the next round)',
     })
 
   } catch (e: any) {

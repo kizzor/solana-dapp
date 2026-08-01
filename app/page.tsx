@@ -8,8 +8,8 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adap
 import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 // SUI imports
 import { Transaction } from '@mysten/sui/transactions'
-import { getWallets } from '@wallet-standard/app'
-import { isWalletWithRequiredFeatureSet } from '@mysten/wallet-standard'
+// dapp-kit hooks — wallet state, connect/disconnect, and tx signing
+import { useCurrentAccount, useConnectWallet, useDisconnectWallet, useSignAndExecuteTransaction, useWallets } from '@mysten/dapp-kit'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Cell = { num:number|null; matched:boolean; clicked:boolean; missed:boolean }
@@ -27,7 +27,7 @@ function loadState():any{try{const s=localStorage.getItem(STORAGE_KEY);return s?
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 // ⚠️ DEV MODE — Set to false for production
-const DEV_MODE = false
+const DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === 'true'
 // ──────────────────────────────────────────────────────────────────────────────
 const WIN_LABELS:Record<WinType,string> = {
   EARLY_FIVE:'5 Digit Accounts Hacked', TOP_LINE:'Top Accounts Hacked',
@@ -162,15 +162,16 @@ function useHourCountdown(){
 // 59-minute lobby cycle — resets every 59 minutes from UTC epoch
 // Fill pct rises 0→1 as countdown falls 59min→0
 const LOBBY_CYCLE=59*60
-function useLobbyCountdown(){
+function useLobbyCountdown(devOffset=0){
   const get=()=>{
-    if(DEV_MODE)return 0 // Skip countdown in dev mode
+    if(DEV_MODE&&devOffset===0)return 0 // Skip countdown in dev mode
     const now=new Date()
     const elapsed=now.getUTCHours()*3600+now.getUTCMinutes()*60+now.getUTCSeconds()
-    return LOBBY_CYCLE-(elapsed%LOBBY_CYCLE)
+    // Dev time-travel: shift the UTC cycle so the lobby clock can be jumped
+    return Math.max(0,LOBBY_CYCLE-((elapsed+devOffset)%LOBBY_CYCLE))
   }
   const[s,setS]=useState(get)
-  useEffect(()=>{const t=setInterval(()=>setS(get()),1000);return()=>clearInterval(t)},[])
+  useEffect(()=>{const t=setInterval(()=>setS(get()),1000);return()=>clearInterval(t)},[devOffset])
   return s
 }
 function fmtTime(s:number){const m=Math.floor(s/60),ss=s%60;return`${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`}
@@ -222,7 +223,7 @@ function WorldMapSketch({currentHour,onSelectBank}:{currentHour:number;onSelectB
   const hourCd=useHourCountdown()
   const[hov,setHov]=useState<number|null>(null)
   return(
-    <div style={{position:'relative',width:'100%',background:'#020c18',overflow:'hidden',minHeight:280}}>
+    <div style={{position:'relative',width:'100%',background:'#020c18',overflow:'hidden',minHeight:200}}>
       <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-qpHYdNrYszBgUEZK-XDwmoipoMY4fuwa6ooHcfdmGgOMR5hPsRnliaYv7UJIzsxEbBsoczbGp6nMjFaXT_Rwg2-zWBrnyEkuAKxW9KAc96MFqIKwxhSHGFXRMNEgYKENqjtU0LSdGC7Rj88SfAUFBK0_gcGjXckGkgXuEZySbIs4zWwpI6knvocSlgQdEYGheuw7Zanu5xobKhkWNSKh8okeX4k4QU0KSuxu-CD85KNnOYUlO0lEYScZM-1_wi7E_IAnX1gr460x"
         style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'center',position:'absolute',inset:0,opacity:0.4,filter:'saturate(0.3) brightness(0.6) contrast(1.2)',pointerEvents:'none'}} alt=""/>
       <svg viewBox="0 0 400 210" style={{width:'100%',display:'block',position:'relative',zIndex:2}}>
@@ -598,11 +599,11 @@ function LedProgress({type,ws,devices}:{type:WinType;ws:WinState;devices:Device[
 }
 
 // ─── Hacking Device ───────────────────────────────────────────────────────────
-function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick,onClaim,onActivate,winStates,bankruptCount,timer,totalTimer,liveBank}:{
+function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick,onClaim,onActivate,winStates,bankruptCount,timer,totalTimer,liveBank,onOpenVault}:{
   device:Device;currentNum:number|null;clickWindowOpen:boolean;calledNums:Set<number>;
   onCellClick:(id:number,r:number,c:number)=>void;onClaim:(id:number,w:WinType)=>void;
   onActivate:(id:number)=>void;winStates:Record<WinType,WinState>;bankruptCount:number;
-  timer:number;totalTimer:number;liveBank:number
+  timer:number;totalTimer:number;liveBank:number;onOpenVault?:()=>void
 }){
   const flat=device.grid.flat()
   const nc=flat.filter(c=>c.clicked).length
@@ -758,8 +759,9 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
           <div style={{width:7,height:7,borderRadius:2,background:device.active?'#22c55e':'#0a1628',border:device.active?'none':'1px solid #162438'}}/>
         </div>
         <MiniStopwatch seconds={timer} total={totalTimer}/>
+        <div style={{position:'relative',flex:1,display:'flex',margin:'0 2px'}}>
         <button onClick={doClaim} disabled={!canClaim} style={{
-          flex:1,
+          flex:1,width:'100%',
           background:canClaim?'linear-gradient(180deg,#1a0000,#0d0000)':bestPct>0.5?`linear-gradient(180deg,rgba(${glowR},${glowG},20,0.15),rgba(${glowR},${glowG},20,0.05))`:'linear-gradient(180deg,#080f18,#040a10)',
           border:`2px solid ${canClaim?'#ff2020':bestPct>0.5?proxColor:'#162438'}`,borderRadius:7,
           padding:'8px 4px',cursor:canClaim?'pointer':'default',
@@ -772,6 +774,14 @@ function HackingDevice({device,currentNum,clickWindowOpen,calledNums,onCellClick
             color:canClaim?'#ff4040':bestPct>0.6?proxColor:'#1e3a5f',
             textShadow:canClaim?'0 0 8px #ff2020,0 0 20px #ff202080':bestPct>0.6?`0 0 6px ${proxColor}`:'none'}}>RANSOM</span>
         </button>
+        {onOpenVault&&(
+          <button onClick={(e)=>{e.stopPropagation();onOpenVault()}} title="⚿ CLAIM FROM VAULT — anytime before the next round" style={{
+            position:'absolute',top:1,right:1,width:16,height:16,borderRadius:3,padding:0,zIndex:3,
+            background:'rgba(255,209,102,0.12)',border:'1px solid rgba(255,209,102,0.5)',
+            color:'#ffd166',fontSize:9,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'
+          }}>⚿</button>
+        )}
+        </div>
         <div style={{display:'flex',flexDirection:'column',gap:3}}>
           {[0,1].map(i=><div key={i} style={{width:12,height:12,borderRadius:'50%',background:'radial-gradient(circle at 35% 30%,#2a4a6a,#050d17)',border:'1.5px solid #1e3a5f'}}/>)}
         </div>
@@ -1355,11 +1365,11 @@ function NicknameModal({onConfirm}:{onConfirm:(name:string)=>void}){
 
 // ─── Maximized Device Grid (fullscreen overlay) ───────────────────────────────
 // ─── Maximized Device Grid (fullscreen overlay, 2-col, 6 per page) ──────────
-function MaximizedDevices({devices,currentNum,clickWindowOpen,calledNums,onCellClick,onClaim,onActivate,winStates,bankruptCount,timer,totalTimer,liveBank,onClose}:{
+function MaximizedDevices({devices,currentNum,clickWindowOpen,calledNums,onCellClick,onClaim,onActivate,winStates,bankruptCount,timer,totalTimer,liveBank,onClose,onOpenVault}:{
   devices:Device[];currentNum:number|null;clickWindowOpen:boolean;calledNums:Set<number>;
   onCellClick:(id:number,r:number,c:number)=>void;onClaim:(id:number,w:WinType)=>void;
   onActivate:(id:number)=>void;winStates:Record<WinType,WinState>;bankruptCount:number;
-  timer:number;totalTimer:number;liveBank:number;onClose:()=>void
+  timer:number;totalTimer:number;liveBank:number;onClose:()=>void;onOpenVault?:()=>void
 }){
   const[page,setPage]=useState(0)
   const total=Math.max(1,Math.ceil(devices.length/6))
@@ -1405,13 +1415,74 @@ function MaximizedDevices({devices,currentNum,clickWindowOpen,calledNums,onCellC
           {pageDevs.map(d=>(
             <HackingDevice key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
               calledNums={calledNums} onCellClick={onCellClick} onClaim={onClaim} onActivate={onActivate}
-              winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank}/>
+              winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank} onOpenVault={onOpenVault}/>
           ))}
         </div>
       </div>
       {total>1&&(
         <div style={{textAlign:'center',padding:'5px',fontFamily:'DM Mono,monospace',fontSize:6.5,color:'rgba(30,58,95,0.7)',flexShrink:0}}>
           ← SWIPE OR USE ARROWS TO NAVIGATE ·  6 DEVICES PER PAGE →
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Vault Claim Panel — claim held winnings anytime before the next round ──
+function VaultClaimPanel({wallet,announce}:{wallet:string|null;announce:(m:string)=>void}){
+  const[data,setData]=useState<any>(null)
+  const[busy,setBusy]=useState<number|null>(null)
+  const load=useCallback(async()=>{
+    if(!wallet){setData(null);return}
+    try{
+      const r=await fetch('/api/claims?wallet='+encodeURIComponent(wallet))
+      if(r.ok){const d=await r.json();if(d.ok)setData(d)}
+    }catch{}
+  },[wallet])
+  useEffect(()=>{load();const t=setInterval(load,15000);return()=>clearInterval(t)},[load])
+  const claim=async(winType:number,key:string)=>{
+    if(!wallet)return
+    setBusy(winType)
+    try{
+      const r=await fetch('/api/claim-sui',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({wallet,winType}),
+      })
+      const d=await r.json()
+      if(d.ok){announce(`✅ ${key} CLAIMED — HELD IN VAULT\nPayout at round end`);load()}
+      else{announce(`⚠ ${d.error||'Claim failed'}`)}
+    }catch(e:any){announce('⚠ '+e.message)}finally{setBusy(null)}
+  }
+  const claimable=data?.claimable||[]
+  const claimed=data?.claimed||[]
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:5}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span style={{fontSize:8,color:'#ffd166',fontWeight:700}}>⚿ YOUR VAULT CLAIMS</span>
+        {wallet&&<span style={{fontSize:7,color:'#4a7fa5'}}>{wallet.slice(0,6)}…{wallet.slice(-4)}</span>}
+      </div>
+      {!wallet&&<div style={{fontSize:7,color:'#1e4a6a',textAlign:'center',padding:'6px 0'}}>CONNECT A SUI WALLET TO CLAIM</div>}
+      {wallet&&!data&&<div style={{fontSize:7,color:'#1e4a6a',textAlign:'center',padding:'6px 0'}}>CHECKING CLAIMS…</div>}
+      {wallet&&data&&claimable.length===0&&claimed.length===0&&(
+        <div style={{fontSize:7,color:'#1e4a6a',textAlign:'center',padding:'6px 0'}}>NO CLAIMABLE WINS RIGHT NOW</div>
+      )}
+      {claimable.map((c:any)=>(
+        <div key={c.winType} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,padding:'5px 7px',background:'rgba(255,209,102,0.06)',border:'1px solid rgba(255,209,102,0.25)',borderRadius:5}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:7.5,fontWeight:700,color:'#ffd166',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.label}</div>
+            <div style={{fontSize:6.5,color:'#4a7fa5'}}>≈ {((c.estPayout||0)/1e9).toFixed(4)} SUI</div>
+          </div>
+          <button onClick={()=>claim(c.winType,c.key)} disabled={busy===c.winType} style={{
+            flexShrink:0,padding:'4px 9px',background:busy===c.winType?'#3a3f2a':'linear-gradient(135deg,#f59e0b,#d97706)',
+            color:'#000',border:'none',borderRadius:4,fontSize:7.5,fontWeight:800,cursor:busy===c.winType?'default':'pointer',opacity:busy===c.winType?0.5:1
+          }}>{busy===c.winType?'…':'CLAIM'}</button>
+        </div>
+      ))}
+      {claimed.length>0&&(
+        <div style={{display:'flex',flexWrap:'wrap',gap:3}}>
+          {claimed.map((c:any)=>(
+            <span key={c.winType} style={{fontSize:6,color:'#22c55e',background:'rgba(34,197,94,0.08)',border:'1px solid rgba(34,197,94,0.2)',borderRadius:3,padding:'2px 5px'}}>✓ {c.label}</span>
+          ))}
         </div>
       )}
     </div>
@@ -1705,13 +1776,20 @@ function Ransome(){
   }
   // ─── Chain selection (solana | sui) ─────────────────────────────────────
   const[chain,setChain]=useState<'solana'|'sui'>('sui')
-  // SUI state
-  const[suiAddress,setSuiAddress]=useState<string|null>(null)
-  const[suiConnected,setSuiConnected]=useState(false)
-  const[suiWalletRef,setSuiWalletRef]=useState<any>(null) // stored wallet object for signing
+  // SUI state — reactive via dapp-kit (WalletProvider handles wallet detection,
+  // auto-connect and the connect modal)
+  const currentAccount=useCurrentAccount()
+  const{mutateAsync:connectWallet}=useConnectWallet()
+  const{mutateAsync:disconnectWallet}=useDisconnectWallet()
+  const{mutateAsync:signAndExecute}=useSignAndExecuteTransaction()
+  const registeredWallets=useWallets()
+  const suiAddress=currentAccount?.address??null
+  const suiConnected=!!currentAccount
   // ═══ SET AFTER PUBLISHING HEIST CONTRACT — then set env vars in Vercel ═══
   const SUI_PROGRAM_ID = process.env.NEXT_PUBLIC_SUI_PROGRAM_ID || 'SET_AFTER_PUBLISH'
   const SESSION_OBJECT_ID = process.env.NEXT_PUBLIC_SESSION_OBJECT_ID || 'SET_AFTER_PUBLISH'
+  // Chain for wallet signing — testnet when NEXT_PUBLIC_SUI_NETWORK=testnet (faucet dev testing)
+  const SUI_CHAIN = (process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet') === 'testnet' ? 'sui:testnet' : 'sui:mainnet'
   // DEVICE_PRICE_SUI defined globally above; this is the on-chain payment amount
   // Unified wallet address
   const wallet = chain==='solana' && connected && publicKey ? publicKey.toBase58() : chain==='sui' && suiConnected ? suiAddress : null
@@ -1744,6 +1822,10 @@ function Ransome(){
   const[selectedBank,setSelectedBank]=useState<number|null>(null)
   const[devicesExpanded,setDevicesExpanded]=useState(false)
   const[showTerminate,setShowTerminate]=useState(false)
+  const[showVaultClaim,setShowVaultClaim]=useState(false)
+  // ── Theme: dark (default) / light (white primary + saffron/green accents) ──
+  const[theme,setTheme]=useState<'dark'|'light'>(()=>{try{return (localStorage.getItem('ransome_theme') as 'dark'|'light')||'dark'}catch{return 'dark'}})
+  useEffect(()=>{try{localStorage.setItem('ransome_theme',theme);document.documentElement.setAttribute('data-theme',theme)}catch{}},[theme])
   const[preGameSecs,setPreGameSecs]=useState(0)
   const[bankHacked,setBankHacked]=useState(false)
   const[winRecords,setWinRecords]=useState<WinRecord[]>([])
@@ -1764,7 +1846,8 @@ function Ransome(){
   const currentHour=new Date().getUTCHours()
   const liveBank=getLiveBank(currentHour)
   const[navTab,setNavTab]=useState<'operative'|'missions'|'network'>('operative')
-  const lobbyCountdown=useLobbyCountdown()           // 59-min cycle countdown
+  const[devClock,setDevClock]=useState(0)             // dev: jump the 59-min clock
+  const lobbyCountdown=useLobbyCountdown(devClock)    // 59-min cycle countdown
   const lobbyFill=Math.min(1-(lobbyCountdown/LOBBY_CYCLE),1)  // 0→1 as vault fills
   const onChainSession=useOnChainSession(phase==='game')  // poll on-chain state during game
 
@@ -1811,6 +1894,7 @@ function Ransome(){
           broken:ws[k]?.broken??false,
           expired:ws[k]?.expired??false,
           claimers:ws[k]?.claimers??[],
+          bursting:false,    // never restore burst animation — start clean
         }
       })
       setWinStates(fixed as Record<WinType,WinState>)
@@ -1842,29 +1926,17 @@ function Ransome(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[])
 
-  // Auto-detect SUI wallet on mount — catches Slush when it registers late
+  // Wallet detection is handled by dapp-kit's WalletProvider — just log what's
+  // available for the debug panel; no manual getWallets()/subscribe needed.
   useEffect(()=>{
-    if(chain!=='sui'||suiConnected)return
+    if(chain!=='sui')return
     try{
-      const walletsApi=getWallets()
-      const filterSui=(w:any)=>isWalletWithRequiredFeatureSet(w,['standard:connect','sui:signAndExecuteTransaction'])
-        ||(w.chains?.some((c:string)=>c.startsWith('sui:'))&&w.features?.['standard:connect'])
-      // Check immediately
-      const all=walletsApi.get()
-      const sui=all.filter(filterSui)
-      if(sui.length>0&&!suiConnected){
-        console.log(`[SUI Auto] Found ${sui.length} SUI wallet(s) on mount: ${sui.map((w:any)=>w.name).join(', ')}`)
+      const sui=registeredWallets.filter((w:any)=>w.chains?.some((c:string)=>c.startsWith('sui:')))
+      if(sui.length>0){
+        console.log(`[SUI Auto] ${sui.length} SUI wallet(s) available: ${sui.map((w:any)=>w.name).join(', ')}`)
       }
-      // Subscribe for late-registering wallets
-      const unsubscribe=walletsApi.on('register',()=>{
-        const fresh=walletsApi.get()
-        const suiFresh=fresh.filter(filterSui)
-        console.log(`[SUI Auto] Wallet registered: ${suiFresh.length} SUI wallet(s) now available`)
-        // Don't auto-connect — let user click CONNECT SUI
-      })
-      return()=>unsubscribe()
     }catch{}
-  },[chain,suiConnected])
+  },[chain,registeredWallets])
 
   // Save ALL game state on every meaningful change
   useEffect(()=>{
@@ -2245,22 +2317,23 @@ function Ransome(){
         if(addr)winnerAddresses.push(addr)
       }
 
-      // ── On-chain split claim via server ──────────────────────────────────
+      // ── Server-verified claim — held in vault, paid at round end ─────────
       if(winnerAddresses.length>0){
-        try{
-          const res=await fetch('/api/claim-sui',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({winners:winnerAddresses,winType:WIN_TYPE_INDEX[wt]??0}),
-          })
-          const data=await res.json()
-          if(data.ok){
-            announce(`✅ ON-CHAIN SPLIT!\n${WIN_LABELS[wt]}\nTx: ${(data.digest||'').slice(0,16)}…\n${winnerAddresses.length} winners split equally`)
-          }else{
-            console.error('Claim split error:',data.error)
-          }
-        }catch(e:any){
-          console.error('Claim split fetch error:',e.message)
+        let verified=0,lastEst=0
+        for(const addr of [...new Set(winnerAddresses)]){
+          try{
+            const res=await fetch('/api/claim-sui',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({wallet:addr,winType:WIN_TYPE_INDEX[wt]??0}),
+            })
+            const data=await res.json()
+            if(data.ok){verified++;lastEst=data.estPayout||lastEst}
+            else console.error('Claim rejected:',data.error)
+          }catch(e:any){console.error('Claim fetch error:',e.message)}
+        }
+        if(verified>0){
+          announce(`✅ RANSOM HELD IN VAULT!\n${WIN_LABELS[wt]}\n${verified} wallet${verified>1?'s':''} verified\n≈ ${(lastEst/1e9).toFixed(4)} SUI est. · claim from VAULT before next round`)
         }
       }
 
@@ -2294,21 +2367,44 @@ function Ransome(){
     announce(`⚡ ALL ${devices.length} DEVICES CONNECTED`)
   }
 
-  // ─── SUI wallet connect/disconnect ─────────────────────────────────────
+  // ─── DEV tools (testnet faucet testing) ────────────────────────────────
+  // Draw the next on-chain number immediately + trigger round-end settlement
+  // so the split across wallets can be verified without waiting for the cron.
+  const devDrawNext=async()=>{
+    try{
+      const r=await fetch('/api/draw')
+      const d=await r.json()
+      if(d.ok)announce(`⏩ ON-CHAIN DRAW ${d.number} (${d.drawCount}/90)`)
+      else announce(`⚠ ${d.error||'draw failed'}`)
+    }catch(e:any){announce('⚠ '+e.message)}
+  }
+  const devSettleNow=async()=>{
+    try{
+      const r=await fetch('/api/settle-claims')
+      const d=await r.json()
+      if(d.ok)announce(`⏭ SETTLE OK — ${(d.results||[]).length} win type${(d.results||[]).length===1?'':'s'}`)
+      else announce(`⚠ ${d.error||'settle failed'}`)
+    }catch(e:any){announce('⚠ '+e.message)}
+  }
+  // Jump the 59-min UTC lobby clock so rounds cycle instantly.
+  // mins=0 → launch immediately (countdown can't reach 0 by formula).
+  const devJump=(mins:number)=>{
+    if(mins<=0){enterGame();return}
+    const n=new Date()
+    const e=n.getUTCHours()*3600+n.getUTCMinutes()*60+n.getUTCSeconds()
+    setDevClock((LOBBY_CYCLE-mins*60-(e%LOBBY_CYCLE)+LOBBY_CYCLE)%LOBBY_CYCLE)
+  }
+
+  // ─── SUI wallet connect/disconnect (dapp-kit hooks) ────────────────────
   const connectSui=async()=>{
     const log=(msg:string)=>{console.log(msg);setWalletDebug(p=>[...p.slice(-15),`${new Date().toLocaleTimeString()} ${msg}`])}
     try{
-      const walletsApi=getWallets()
-      const allWallets=walletsApi.get()
-      log(`[SUI] getWallets().get() returned ${allWallets.length} wallet(s)`)
-      allWallets.forEach((w:any)=>{
+      log(`[SUI] dapp-kit sees ${registeredWallets.length} wallet(s)`)
+      registeredWallets.forEach((w:any)=>{
         log(`[SUI]   "${w.name}" chains=${w.chains?.join(',')} features=${Object.keys(w.features||{}).join(',')}`)
       })
 
-      const suiWallets=allWallets.filter((w:any)=>
-        isWalletWithRequiredFeatureSet(w,['standard:connect','sui:signAndExecuteTransaction'])
-        ||(w.chains?.some((c:string)=>c.startsWith('sui:'))&&w.features?.['standard:connect'])
-      )
+      const suiWallets=registeredWallets.filter((w:any)=>w.features?.['sui:signAndExecuteTransaction'])
       log(`[SUI] SUI wallets (after filter): ${suiWallets.length}`)
 
       if(suiWallets.length===0){
@@ -2318,26 +2414,17 @@ function Ransome(){
 
       const wallet=suiWallets[0]
       log(`[SUI] Connecting to "${wallet.name}"...`)
-      const connectFeature=wallet.features['standard:connect']
-      if(!connectFeature){
-        log(`[SUI] "${wallet.name}" has no standard:connect feature`)
-        announce('⚠ Wallet has no connect feature')
-        return
-      }
-      const result=await connectFeature.connect()
+      const result=await connectWallet({ wallet })
       log(`[SUI] connect result: accounts=${result.accounts.length}`)
+      if(!result.accounts?.length){announce('⚠ Connect cancelled — no account returned');return}
       const account=result.accounts[0]
-
-      setSuiAddress(account.address)
-      setSuiConnected(true)
-      setSuiWalletRef(wallet)
       announce(`✅ SUI CONNECTED — ${account.address.slice(0,10)}…`)
     }catch(e:any){
       log(`[SUI] Error: ${e.message}`)
       announce('⚠ SUI connect failed: '+e.message)
     }
   }
-  const disconnectSui=()=>{setSuiAddress(null);setSuiConnected(false);setSuiWalletRef(null);setWalletDebug([]);announce('🔌 SUI DISCONNECTED')}
+  const disconnectSui=async()=>{try{await disconnectWallet()}catch{}setWalletDebug([]);announce('🔌 SUI DISCONNECTED')}
 
   // ─── Mint devices (SUI or Solana) ──────────────────────────────────────
   const mintDevices=async()=>{
@@ -2345,8 +2432,11 @@ function Ransome(){
     const pricePer=mtrxDelegated?DEVICE_PRICE_SUI_DISCOUNTED:DEVICE_PRICE_SUI // 0.5 or 0.25 SUI in MIST
     const totalCost=pricePer*count
 
-    // DEV MODE — allow up to 20 devices locally without wallet
-    if(DEV_MODE){
+    // DEV MODE — local-only mint ONLY when no wallet is connected (pure UI
+    // testing). With a wallet connected, fall through to the real on-chain
+    // mint so grids register server-side and claims verify end-to-end
+    // (faucet testnet testing).
+    if(DEV_MODE&&!(chain==='sui'&&suiConnected&&suiAddress)&&!(chain==='solana'&&connected&&publicKey)){
       const nd=Array.from({length:count},(_,i)=>({...generateDevice(devices.length+i),walletAddr:wallet||'DEV_LOCAL'}))
       setDevices(p=>[...p,...nd])
       announce(`⚡ ${count} DEVICE${count>1?'S':''} MINTED (DEV) — ${devices.length+count} TOTAL`)
@@ -2354,7 +2444,7 @@ function Ransome(){
     }
 
     // If SUI chain selected and wallet connected, build real SUI transaction
-    if(chain==='sui'&&suiConnected&&suiAddress&&suiWalletRef){
+    if(chain==='sui'&&suiConnected&&suiAddress){
       try{
         // Build transaction — split a fresh coin per mint (each gets its own coin object)
         const txb=new Transaction()
@@ -2367,33 +2457,31 @@ function Ransome(){
           })
         }
 
-        // Detect which signing feature the wallet supports
-        const hasCurrent=!!suiWalletRef.features['sui:signAndExecuteTransaction']
-        const hasLegacy=!!suiWalletRef.features['sui:signAndExecuteTransactionBlock']
-        console.log(`[SUI] Signing features: current=${hasCurrent} legacy=${hasLegacy}`)
-
-        let result:any
-        if(hasCurrent){
-          result=await suiWalletRef.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
-            transaction:txb,
-            account:suiWalletRef.accounts[0],
-            chain:'sui:mainnet',
-          })
-        }else if(hasLegacy){
-          result=await suiWalletRef.features['sui:signAndExecuteTransactionBlock'].signAndExecuteTransactionBlock({
-            transactionBlock:txb,
-            account:suiWalletRef.accounts[0],
-            chain:'sui:mainnet',
-          })
-        }else{
-          announce('⚠ Wallet does not support signAndExecuteTransaction')
-          return
-        }
+        // Sign + execute via dapp-kit — automatically uses the connected
+        // wallet/account and the modern sui:signAndExecuteTransaction feature.
+        const result:any=await signAndExecute({ transaction:txb, chain:SUI_CHAIN })
 
         console.log('[SUI] Mint result:',result)
         const nd=Array.from({length:count},(_,i)=>({...generateDevice(devices.length+i),walletAddr:suiAddress}))
         setDevices(p=>[...p,...nd])
         announce(`⚡ ${count} DEVICE${count>1?'S':''} MINTED ON SUI — ${(result?.digest||'tx').slice(0,16)}…`)
+        // ── Register grids server-side so claims can be verified on-chain ──
+        if(result?.digest){
+          try{
+            const regRes=await fetch('/api/mint-nft',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({
+                wallet:suiAddress,
+                mintDigest:result.digest,
+                devices:nd.map(d=>({nftId:d.nftId,grid:d.grid.map(r=>r.map(c=>c.num))})),
+              }),
+            })
+            const regData=await regRes.json()
+            if(regData.ok)console.log('[SUI] Grids registered server-side:',regData.registered)
+            else console.warn('[SUI] Grid registration rejected:',regData.error)
+          }catch(e:any){console.warn('[SUI] Grid registration error:',e.message)}
+        }
       }catch(e:any){
         console.error('[SUI] Mint error:',e)
         announce(`⚠ SUI MINT FAILED: ${e.message}`)
@@ -2439,14 +2527,14 @@ function Ransome(){
   }
 
   if(phase==='setup')return(
-    <div style={{minHeight:'100vh',background:'#010810'}}>
+    <div data-theme={theme} style={{minHeight:'100vh',background:'#010810'}}>
       <NicknameModal onConfirm={name=>{setNickname(name);setPhase('lobby')}}/>
     </div>
   )
 
   // ── LOBBY ─────────────────────────────────────────────────────────────────
   if(phase==='lobby')return(
-    <div style={{minHeight:'100vh',background:'#050f17',color:'#dce6f3',overflow:'hidden'}}>
+    <div data-theme={theme} style={{minHeight:'100vh',background:'#050f17',color:'#dce6f3',overflow:'hidden'}}>
       <div style={{position:'fixed',top:0,left:0,width:'100%',zIndex:50,height:56,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 24px',background:'rgba(5,10,23,0.9)',borderBottom:'1px solid rgba(0,229,160,0.1)',boxSizing:'border-box'}}>
         <div style={{display:'flex',alignItems:'center',gap:20}}>
           <span style={{fontSize:20,fontWeight:800,color:'#00e5a0'}}>RANSOME</span>
@@ -2456,6 +2544,12 @@ function Ransome(){
         </div>
         <div style={{display:'flex',gap:10,alignItems:'center'}}>
           <div style={{background:'rgba(24,39,51,0.5)',padding:'4px 10px',border:'1px solid rgba(47,243,173,0.2)',fontSize:12,color:'#00e5a0',fontWeight:700}}>{fmtTime(lobbyCountdown)}</div>
+          <button onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} title="Light / dark mode" style={{background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:6,padding:'4px 8px',fontSize:10,cursor:'pointer'}}>{theme==='dark'?'☀️':'🌙'}</button>
+          {DEV_MODE&&<div style={{display:'flex',gap:3}}>
+            <button onClick={()=>devJump(0)} title="Launch now" style={{background:'#0a1628',border:'1px solid #f59e0b55',borderRadius:6,padding:'4px 6px',fontSize:8,cursor:'pointer',color:'#f59e0b'}}>🚀 NOW</button>
+            <button onClick={()=>devJump(30)} title="Jump +30 min" style={{background:'#0a1628',border:'1px solid #f59e0b55',borderRadius:6,padding:'4px 6px',fontSize:8,cursor:'pointer',color:'#f59e0b'}}>+30M</button>
+            <button onClick={()=>devJump(59)} title="Jump +59 min (round boundary)" style={{background:'#0a1628',border:'1px solid #f59e0b55',borderRadius:6,padding:'4px 6px',fontSize:8,cursor:'pointer',color:'#f59e0b'}}>+59M</button>
+          </div>}
           <div style={{fontSize:10,color:'#4a7fa5',background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:6,padding:'4px 8px'}}>👤 {nickname}</div>
           {/* Governance button */}
           <a href="/governance" style={{textDecoration:'none'}}>
@@ -2520,13 +2614,17 @@ function Ransome(){
               <div style={{position:'absolute',top:0,right:0,width:12,height:12,borderTop:'2px solid rgba(0,229,160,0.5)',borderRight:'2px solid rgba(0,229,160,0.5)',zIndex:3}}/>
               <div style={{position:'absolute',bottom:0,left:0,width:12,height:12,borderBottom:'2px solid rgba(0,229,160,0.5)',borderLeft:'2px solid rgba(0,229,160,0.5)',zIndex:3}}/>
               <div style={{position:'absolute',bottom:0,right:0,width:12,height:12,borderBottom:'2px solid rgba(0,229,160,0.5)',borderRight:'2px solid rgba(0,229,160,0.5)',zIndex:3}}/>
+              {/* Huge translucent countdown over the map */}
+              <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:4,pointerEvents:'none'}}>
+                <div style={{fontFamily:'Syne,sans-serif',fontSize:74,fontWeight:800,color:lobbyCountdown<=60?'rgba(239,68,68,0.18)':'rgba(0,229,160,0.15)',letterSpacing:'0.02em',textShadow:'0 0 46px rgba(0,229,160,0.18)'}}>{fmtTime(lobbyCountdown)}</div>
+              </div>
               <WorldMapSketch currentHour={currentHour} onSelectBank={setSelectedBank}/>
               {selectedBank!==null&&(<div style={{padding:'8px 12px',display:'flex',justifyContent:'space-between',borderTop:'1px solid #0a2535'}}><div style={{fontSize:10,color:'#00e5a0',fontWeight:700}}>{BANKS[selectedBank].name}</div><div style={{fontSize:9,color:selectedBank===liveBank?'#22c55e':'#1e4a6a'}}>{selectedBank===liveBank?'🟢 LIVE':'SCHEDULED'}</div></div>)}
             </div>
             <div style={{background:'#0e1b25',border:'1px solid rgba(63,73,83,0.2)',padding:16}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
                 <span style={{fontSize:14,fontWeight:700,color:'#dce6f3'}}>💻 MINT_TERMINAL</span>
-                <span style={{fontSize:9,color:chain==='sui'?'#4da6ff':'#00e5a0',fontWeight:700}}>{chain.toUpperCase()} · {mintCount}× ${mtrxDelegated?'0.25':'0.50'} = ${(mintCount*(mtrxDelegated?0.25:0.5)).toFixed(2)} {chain==='sui'?'USDC':'SOL'}</span>
+                <span style={{fontSize:9,color:chain==='sui'?'#4da6ff':'#00e5a0',fontWeight:700}}>{chain==='sui'?`≈ ${(mintCount*(mtrxDelegated?DEVICE_PRICE_SUI_DISCOUNTED:DEVICE_PRICE_SUI)/1e9).toFixed(2)} SUI (${mintCount}× $${(mintCount*(mtrxDelegated?0.25:0.5)).toFixed(2)} USDC)`:`${mintCount}× $${(mintCount*0.5).toFixed(2)} SOL`}</span>
               {mtrxDelegated&&chain==='sui'&&<span style={{fontSize:7,color:'#22c55e',marginLeft:4}}>⚡MTRX 50% OFF</span>}
               </div>
               {/* MTRX Delegation strip */}
@@ -2572,6 +2670,9 @@ function Ransome(){
               <div style={{textAlign:'center'}}><div style={{fontSize:8,color:'#4a6a7a'}}>Success</div><div style={{fontSize:18,fontWeight:700,color:'#00b6fd'}}>92.4%</div></div>
             </div>
             {[{l:'LAST BREACH',v:'+450 SOL',c:'#00e5a0'},{l:'STABILITY',v:'OPTIMAL',c:'#00b6fd'},{l:'THREAT',v:'LOW',c:'#ff6daf'}].map(r=>(<div key={r.l} style={{display:'flex',justifyContent:'space-between',padding:'6px 8px',background:'#13212c',borderLeft:'2px solid '+r.c}}><span style={{fontSize:8,color:'#4a6a7a'}}>{r.l}</span><span style={{fontSize:9,color:r.c,fontWeight:700}}>{r.v}</span></div>))}
+            <div style={{borderTop:'1px solid rgba(255,209,102,0.15)',paddingTop:8,marginTop:4}}>
+              <VaultClaimPanel wallet={wallet} announce={announce}/>
+            </div>
             <div style={{textAlign:'center',padding:'8px',background:'rgba(0,0,0,0.3)',border:'1px solid '+(lobbyCountdown<=60?'rgba(239,68,68,0.4)':'rgba(10,58,90,0.6)'),animation:lobbyCountdown<=60?'ledBlink 0.8s infinite':'none'}}>
               <div style={{fontSize:8,color:lobbyCountdown<=60?'#ef4444':'#2a5a7a',marginBottom:2}}>{lobbyCountdown<=60?'🚀 LAUNCHING':'⏳ NEXT BATCH'}</div>
               <div style={{fontSize:26,fontWeight:800,color:lobbyCountdown<=60?'#ef4444':'#fff'}}>{fmtTime(lobbyCountdown)}</div>
@@ -2596,6 +2697,9 @@ function Ransome(){
           </div>
           <div style={{fontFamily:'DM Mono,monospace',fontSize:9,color:'#2a5a7a',letterSpacing:'0.1em'}}>
             SESSION SUMMARY — RETURNING TO LOBBY
+          </div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#ffd166',letterSpacing:'0.08em'}}>
+            ⚿ WINS HELD IN VAULT — CLAIM BEFORE NEXT ROUND (⚿ key on RANSOM button)
           </div>
           <div style={{width:'100%',maxWidth:480,background:'#020d1a',border:'1px solid #0a3a5a',borderRadius:14,padding:16,display:'flex',flexDirection:'column',gap:8}}>
             {winRecords.length>0?(
@@ -2641,11 +2745,11 @@ function Ransome(){
     <MaximizedDevices devices={devices} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
       calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim} onActivate={handleActivate}
       winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer}
-      liveBank={liveBank} onClose={()=>setDevicesExpanded(false)}/>
+      liveBank={liveBank} onClose={()=>setDevicesExpanded(false)} onOpenVault={()=>setShowVaultClaim(true)}/>
   )
 
   return(
-    <div style={{background:'linear-gradient(180deg,#010810,#020d1a)',color:'#c8d8e8',minHeight:'100vh'}}>
+    <div data-theme={theme} style={{background:'linear-gradient(180deg,#010810,#020d1a)',color:'#c8d8e8',minHeight:'100vh'}}>
       {/* Header */}
       <div style={{padding:'7px 12px',borderBottom:'1px solid #0a1f3a',display:'flex',alignItems:'center',background:'rgba(2,13,26,0.96)',backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',position:'sticky',top:0,zIndex:50}}>
         <div style={{fontFamily:'Syne,sans-serif',fontSize:17,fontWeight:800,color:'#00e5a0',flexShrink:0}}>RANSOME{DEV_MODE&&<span style={{fontSize:9,color:'#f59e0b',marginLeft:6,verticalAlign:'middle'}}>DEV</span>}</div>
@@ -2661,6 +2765,11 @@ function Ransome(){
             {sessionSecs>=(57*60)?'🚨':'⏱'} {String(Math.floor(sessionSecs/60)).padStart(2,'0')}:{String(sessionSecs%60).padStart(2,'0')}
           </div>}
           <div style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#ef4444',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:6,padding:'3px 7px'}}>🔴 {BANKS[liveBank].name}</div>
+          <button onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} title="Light / dark mode" style={{background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:6,padding:'3px 7px',fontSize:10,cursor:'pointer'}}>{theme==='dark'?'☀️':'🌙'}</button>
+          {DEV_MODE&&<>
+            <button onClick={devDrawNext} title="Draw next on-chain number now" style={{background:'#0a1628',border:'1px solid #4da6ff55',borderRadius:6,padding:'3px 7px',fontSize:8,cursor:'pointer',color:'#4da6ff'}}>⏩ DRAW</button>
+            <button onClick={devSettleNow} title="Settle pending claims now (check wallet split)" style={{background:'#0a1628',border:'1px solid #f59e0b55',borderRadius:6,padding:'3px 7px',fontSize:8,cursor:'pointer',color:'#f59e0b'}}>⏭ SETTLE</button>
+          </>}
           <div style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#4a7fa5',background:'#0a1628',borderRadius:6,padding:'3px 7px'}}>👤 {nickname}</div>
           {wallet?(
             <div style={{display:'flex',alignItems:'center',gap:3}}>
@@ -2735,7 +2844,7 @@ function Ransome(){
           {devices.map(d=>(
             <HackingDevice key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
               calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim} onActivate={handleActivate}
-              winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank}/>
+              winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank} onOpenVault={()=>setShowVaultClaim(true)}/>
           ))}
         </div>
       </div>
@@ -2743,6 +2852,20 @@ function Ransome(){
       {announcement&&(
         <div style={{position:'fixed',top:52,left:'50%',transform:'translateX(-50%)',background:'#020d1a',border:'1px solid #00e5a040',borderRadius:10,padding:'9px 16px',fontFamily:'DM Mono,monospace',fontSize:10,color:'#00e5a0',zIndex:999,whiteSpace:'pre',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',animation:'slideDown 0.3s ease',maxWidth:'90vw'}}>
           {announcement}
+        </div>
+      )}
+
+      {/* ── VAULT CLAIM MODAL (from RANSOM corner key) ── */}
+      {showVaultClaim&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(1,8,16,0.92)',zIndex:2100,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={e=>{if(e.target===e.currentTarget)setShowVaultClaim(false)}}>
+          <div style={{background:'#020d1a',border:'1px solid rgba(255,209,102,0.35)',borderRadius:14,padding:16,maxWidth:380,width:'100%',maxHeight:'80vh',overflowY:'auto'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+              <span style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:800,color:'#ffd166'}}>⚿ VAULT CLAIM</span>
+              <button onClick={()=>setShowVaultClaim(false)} style={{background:'#0a1628',border:'1px solid #1e3a5f',color:'#4a7fa5',borderRadius:5,padding:'3px 8px',fontSize:8,cursor:'pointer'}}>✕</button>
+            </div>
+            <div style={{fontSize:7,color:'#4a7fa5',marginBottom:10}}>Wins stay in the vault — claim any time before the next round, even after this console is trashed.</div>
+            <VaultClaimPanel wallet={wallet} announce={announce}/>
+          </div>
         </div>
       )}
 
