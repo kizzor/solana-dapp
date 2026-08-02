@@ -54,6 +54,28 @@ export function getRegisteredDevices(wallet: string) {
   return deviceRegistry.get(normWallet(wallet)) || []
 }
 
+// ─── Grid shape validation (server-side truth) ─────────────────────────────
+// A valid ticket is a 3×9 grid holding exactly 15 numbers, exactly 5 per row,
+// all unique and in 1-90. Enforcing this here (and at /api/mint-nft) closes
+// the empty-row exploit: `[].every(...)` returns true, so a row with zero
+// numbers used to instantly satisfy a LINE win with zero draws.
+export function isValidGrid(grid: CellNum[][]): boolean {
+  if (!Array.isArray(grid) || grid.length !== 3) return false
+  const all: number[] = []
+  for (let r = 0; r < 3; r++) {
+    const row = grid[r]
+    if (!Array.isArray(row) || row.length !== 9) return false
+    const rowNums = row.filter((n): n is number => n !== null)
+    if (rowNums.length !== 5) return false            // exactly 5 per row
+    for (const n of rowNums) {
+      if (!Number.isInteger(n) || n < 1 || n > 90) return false
+      all.push(n)
+    }
+  }
+  if (all.length !== 15) return false
+  return new Set(all).size === 15                     // all unique
+}
+
 // ─── Win pattern verification (server-side truth) ──────────────────────────
 // grid: 3 rows × 9 cols, 15 numbers (null = empty cell)
 // drawn: on-chain drawn numbers (1-90)
@@ -61,10 +83,13 @@ export function getRegisteredDevices(wallet: string) {
 // canClaimFullHouse (the contract's bankrupt_count field is never advanced,
 // so the frontend's per-wallet bankruptCount model is mirrored server-side).
 export function verifyWin(grid: CellNum[][], drawn: number[], winType: number): boolean {
+  if (!isValidGrid(grid)) return false
   const drawnSet = new Set(drawn)
   const nums = grid.flat().filter((n): n is number => n !== null)
-  if (nums.length < 15) return false
-  const rowOk = (r: number) => grid[r].filter((n): n is number => n !== null).every((n) => drawnSet.has(n))
+  const rowOk = (r: number) => {
+    const rowNums = grid[r].filter((n): n is number => n !== null)
+    return rowNums.length === 5 && rowNums.every((n) => drawnSet.has(n))
+  }
   switch (winType) {
     case 0: return nums.filter((n) => drawnSet.has(n)).length >= 5          // EARLY_FIVE
     case 1: return rowOk(0)                                                  // TOP_LINE

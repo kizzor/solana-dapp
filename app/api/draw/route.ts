@@ -48,7 +48,11 @@ export async function GET(req: Request) {
   // so the in-game DEV ⏩ FORWARD button can drive the hack matrix while
   // testing the claim/split flow with faucet SUI.
   const auth = req.headers.get('authorization')
-  if (SUI_NETWORK === 'mainnet' && auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Fail closed: with a blank CRON_SECRET the template becomes the literal
+  // string "Bearer " (trailing space), which passed auth. Require the secret
+  // to actually be set AND to match.
+  const cronSecret = process.env.CRON_SECRET
+  if (SUI_NETWORK === 'mainnet' && (!cronSecret || auth !== `Bearer ${cronSecret}`)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

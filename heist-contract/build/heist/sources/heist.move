@@ -1,8 +1,18 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// HEIST — On-Chain Bingo / Hacking Game
+// HEIST — On-Chain Bingo / Hacking Game  (v2 — grid on-chain + claim authority)
 // ───────────────────────────────────────────────────────────────────────────────
 // 99% of device mint payments go to winners. 1% treasury fee.
 // Payout split: FH3=40%, FH1/FH2=19.5% ea, Lines=5% ea, Early Five=5%
+//
+// v2 changes (2026-08-02):
+//   1. Device.grid  — the 3×9 bingo ticket is GENERATED ON-CHAIN at mint time
+//      from tx digest entropy and stored in the Device object. Neither the
+//      client nor the server can choose the numbers, so a player cannot mint a
+//      device and then register a grid that hits already-drawn numbers.
+//   2. claim_win_split — now AUTHORITY-ONLY. The Session is a shared object; a
+//      public claim function with no sender check let anyone call it directly
+//      on-chain with their own address and drain the vault. Now only the
+//      authority (the settlement server) can pay winners.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 module heist::heist {
@@ -52,6 +62,10 @@ module heist::heist {
     // ───────────────────────────────────────────────────────────────────────────
     //                         Total: 9900 (99%)
 
+    // ─── Grid Constants (bingo ticket shape) ───────────────────────────────────
+    const GRID_ROWS: u64 = 3;
+    const GRID_COLS: u64 = 9;
+
     // ─── Error Codes ───────────────────────────────────────────────────────────
     const ESessionNotActive:    u64 = 1;
     const ESessionPaused:       u64 = 2;
@@ -97,12 +111,16 @@ module heist::heist {
     }
 
     /// An NFT representing a player's hacking device (bingo ticket).
+    /// `grid` is a 3×9 ticket (GRID_ROWS × GRID_COLS) with 15 numbers, 5 per row;
+    /// 0 = empty cell, 1-90 = number. Generated ON-CHAIN at mint — unforgeable.
     public struct Device has key, store {
         id: UID,
         /// The session this device belongs to
         session_id: ID,
         /// Device index within the owner's wallet (0-19)
         device_index: u8,
+        /// 3×9 bingo grid, 0 = empty cell (generated on-chain at mint)
+        grid: vector<vector<u8>>,
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -125,6 +143,8 @@ module heist::heist {
         amount_paid: u64,
         treasury_fee: u64,
         vault_added: u64,
+        /// The on-chain generated grid (flattened 3×9, 0 = empty)
+        grid: vector<u8>,
     }
 
     /// Emitted when a win is claimed
@@ -196,6 +216,8 @@ module heist::heist {
 
     /// Mint a device (bingo ticket) by paying `amount` MIST of SUI.
     /// `amount` should equal $0.50 USDC worth of SUI (varies with SUI price).
+    /// The 3×9 grid is generated ON-CHAIN from tx digest entropy and stored in
+    /// the Device — neither the client nor the server can influence it.
     /// Returns the Device NFT to the sender.
     /// 1% of `amount` goes to treasury, 99% goes to the vault.
     public fun mint_device(
@@ -233,6 +255,10 @@ module heist::heist {
         let sender = tx_context::sender(ctx);
         transfer::public_transfer(payment, sender);
 
+        // Generate the ticket ON-CHAIN (unforgeable) and flatten for the event
+        let grid = generate_grid(ctx);
+        let flat = flatten_grid(&grid);
+
         // Emit event
         event::emit(DeviceMinted {
             session_id: object::id(session),
@@ -241,6 +267,7 @@ module heist::heist {
             amount_paid: amount,
             treasury_fee: fee_amount,
             vault_added: vault_amount,
+            grid: flat,
         });
 
         // Create and return the Device NFT
@@ -248,19 +275,26 @@ module heist::heist {
             id: object::new(ctx),
             session_id: object::id(session),
             device_index,
+            grid,
         }
     }
 
-    // ─── Win Claims ────────────────────────────────────────────────────────────
+    // ─── Win Claims (authority-only — anti-drain) ──────────────────────────────
 
     /// Claim a win for a group of winners, splitting the payout equally.
     /// Dust (remainder from uneven splits) goes to the last winner.
+    /// AUTHORITY-ONLY: only the game authority (settlement server) may pay out.
+    /// Without this check, anyone could call this directly on the shared
+    /// Session and drain the vault to their own address.
     public fun claim_win_split(
         session: &mut Session,
         winners: vector<address>,
         win_type: u8,
         ctx: &mut TxContext,
     ) {
+        // ── Authority check (v2 — CRITICAL anti-drain fix) ─────────────────
+        assert!(tx_context::sender(ctx) == session.authority, ENotAuthorized);
+
         // Validate session state
         assert!(session.active, ESessionNotActive);
         assert!(!session.paused, ESessionPaused);
@@ -337,6 +371,120 @@ module heist::heist {
         } else {
             abort EInvalidWinType
         }
+    }
+
+    // ─── On-Chain Grid Generation (v2 — unforgeable tickets) ─────────────────
+    // Uses tx digest bytes as entropy (same source as draw_number). Produces a
+    // standard 3×9 bingo ticket: 15 numbers, 5 per row, 1-2 numbers per column,
+    // each number within its column's decade range (col 0: 1-10 … col 8: 81-90).
+    // The client cannot predict or choose the ticket, so grids cannot be crafted
+    // to match already-drawn numbers.
+
+    /// Draw the next entropy byte from the tx digest (cycled).
+    /// `digest` is already a &vector<u8> (tx_context::digest returns a reference).
+    fun next_entropy(digest: &vector<u8>, pos: &mut u64): u8 {
+        let dl = vector::length(digest);
+        let b = *vector::borrow(digest, *pos % dl);
+        *pos = *pos + 1;
+        b
+    }
+
+    /// Generate a random 3×9 ticket: vector of 3 rows × 9 cols, 0 = empty cell.
+    fun generate_grid(ctx: &TxContext): vector<vector<u8>> {
+        let digest = tx_context::digest(ctx);
+        let mut pos: u64 = 0;
+
+        // Decide which 6 of the 9 columns carry 2 numbers (rest carry 1) → 15 total.
+        let mut col_two = vector<u8>[0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let mut picked_two: u64 = 0;
+        while (picked_two < 6) {
+            let e = next_entropy(digest, &mut pos);
+            let col = (e as u64) % GRID_COLS;
+            if (*vector::borrow(&col_two, col) == 0) {
+                *vector::borrow_mut(&mut col_two, col) = 1;
+                picked_two = picked_two + 1;
+            };
+        };
+
+        // Empty grid: 3 rows × 9 cols of 0
+        let mut grid = vector<vector<u8>>[];
+        let mut r: u64 = 0;
+        while (r < GRID_ROWS) {
+            let mut row = vector<u8>[];
+            let mut c: u64 = 0;
+            while (c < GRID_COLS) {
+                vector::push_back(&mut row, 0);
+                c = c + 1;
+            };
+            vector::push_back(&mut grid, row);
+            r = r + 1;
+        };
+
+        // Row fill counts — greedy placement keeps rows balanced at 5 each
+        let mut row_fill = vector<u8>[0, 0, 0];
+
+        let mut c: u64 = 0;
+        while (c < GRID_COLS) {
+            let count: u8 = 1 + *vector::borrow(&col_two, c);
+            let lo = (c as u64) * 10 + 1; // column range: [lo, lo+9]
+
+            // Numbers available in this column's decade range
+            let mut avail = vector<u8>[];
+            let mut n: u64 = 0;
+            while (n < 10) {
+                vector::push_back(&mut avail, ((lo + n) as u8));
+                n = n + 1;
+            };
+
+            let mut k: u64 = 0;
+            while (k < (count as u64)) {
+                // Pick a number from the column range
+                let e = next_entropy(digest, &mut pos);
+                let idx = (e as u64) % vector::length(&avail);
+                let num = *vector::borrow(&avail, idx);
+                vector::remove(&mut avail, idx);
+
+                // Place into the least-filled row that has a free cell in this column
+                let mut best: u64 = 0;
+                let mut best_fill: u8 = 255;
+                let mut rr: u64 = 0;
+                while (rr < GRID_ROWS) {
+                    if (*vector::borrow(vector::borrow(&grid, rr), c) == 0) {
+                        let f = *vector::borrow(&row_fill, rr);
+                        if (f < best_fill) {
+                            best_fill = f;
+                            best = rr;
+                        };
+                    };
+                    rr = rr + 1;
+                };
+                *vector::borrow_mut(vector::borrow_mut(&mut grid, best), c) = num;
+                let f = *vector::borrow(&row_fill, best);
+                *vector::borrow_mut(&mut row_fill, best) = f + 1;
+
+                k = k + 1;
+            };
+
+            c = c + 1;
+        };
+
+        grid
+    }
+
+    /// Flatten a 3×9 grid into a 27-length vector for the mint event.
+    fun flatten_grid(grid: &vector<vector<u8>>): vector<u8> {
+        let mut flat = vector<u8>[];
+        let mut r: u64 = 0;
+        while (r < GRID_ROWS) {
+            let row = vector::borrow(grid, r);
+            let mut c: u64 = 0;
+            while (c < GRID_COLS) {
+                vector::push_back(&mut flat, *vector::borrow(row, c));
+                c = c + 1;
+            };
+            r = r + 1;
+        };
+        flat
     }
 
     // ─── Number Drawing ────────────────────────────────────────────────────

@@ -2463,9 +2463,11 @@ function Ransome(){
 
         console.log('[SUI] Mint result:',result)
         const nd=Array.from({length:count},(_,i)=>({...generateDevice(devices.length+i),walletAddr:suiAddress}))
-        setDevices(p=>[...p,...nd])
-        announce(`⚡ ${count} DEVICE${count>1?'S':''} MINTED ON SUI — ${(result?.digest||'tx').slice(0,16)}…`)
         // ── Register grids server-side so claims can be verified on-chain ──
+        // Anti-cheat: the server derives the REAL created heist::Device object IDs
+        // from the mint tx and uses the ON-CHAIN grids as authoritative — the
+        // client's nftId/grid previews are only a display fallback. Registration
+        // must complete for the tickets to be claimable.
         if(result?.digest){
           try{
             const regRes=await fetch('/api/mint-nft',{
@@ -2474,13 +2476,39 @@ function Ransome(){
               body:JSON.stringify({
                 wallet:suiAddress,
                 mintDigest:result.digest,
-                devices:nd.map(d=>({nftId:d.nftId,grid:d.grid.map(r=>r.map(c=>c.num))})),
+                devices:nd.map(d=>({grid:d.grid.map(r=>r.map(c=>c.num))})),
               }),
             })
             const regData=await regRes.json()
-            if(regData.ok)console.log('[SUI] Grids registered server-side:',regData.registered)
-            else console.warn('[SUI] Grid registration rejected:',regData.error)
-          }catch(e:any){console.warn('[SUI] Grid registration error:',e.message)}
+            if(regData.ok){
+              console.log('[SUI] Grids registered server-side:',regData.registered)
+              // Adopt the authoritative on-chain tickets (real object IDs + the
+              // on-chain generated grids) so the displayed ticket = the ticket
+              // claims are verified against.
+              if(Array.isArray(regData.devices)&&regData.devices.length===nd.length){
+                regData.devices.forEach((on:any,i:number)=>{
+                  nd[i]={...nd[i],nftId:on.objectId,grid:on.grid.map((row:any)=>row.map((n:any)=>({num:n,matched:false,clicked:false,missed:false})))}
+                })
+              }
+              setDevices(p=>[...p,...nd])
+              announce(`⚡ ${count} DEVICE${count>1?'S':''} MINTED ON SUI — ${(result?.digest||'tx').slice(0,16)}…`)
+            }else{
+              console.warn('[SUI] Grid registration rejected:',regData.error)
+              setDevices(p=>[...p,...nd])
+              announce(`⚠ MINT OK — REGISTRATION REJECTED: ${regData.error}`)
+            }
+          }catch(e:any){
+            console.warn('[SUI] Grid registration error:',e.message)
+            setDevices(p=>[...p,...nd])
+            announce(`⚠ MINTED BUT REGISTRATION FAILED — ${e.message}`)
+          }
+        }else{
+          // No digest returned (wallet quirk) — show the devices so the mint
+          // isn't silently lost, but flag that they are NOT registered and
+          // therefore cannot be claimed.
+          console.warn('[SUI] Mint succeeded but no digest was returned — grids NOT registered')
+          setDevices(p=>[...p,...nd])
+          announce('⚠ MINTED BUT NO TX DIGEST — GRIDS NOT REGISTERED, NOT CLAIMABLE')
         }
       }catch(e:any){
         console.error('[SUI] Mint error:',e)

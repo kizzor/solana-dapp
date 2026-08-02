@@ -20,7 +20,11 @@ export async function GET(req: Request) {
   // Mainnet: only the cron (CRON_SECRET) may settle. Testnet/devnet: open,
   // so the DEV ⏭ SETTLE button can verify the wallet split during testing.
   const auth = req.headers.get('authorization')
-  if (SUI_NETWORK === 'mainnet' && auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Fail closed: with a blank CRON_SECRET the template becomes the literal
+  // string "Bearer " (trailing space), which passed auth. Require the secret
+  // to actually be set AND to match.
+  const cronSecret = process.env.CRON_SECRET
+  if (SUI_NETWORK === 'mainnet' && (!cronSecret || auth !== `Bearer ${cronSecret}`)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!SUI_PROGRAM_ID || !SESSION_OBJECT_ID) {

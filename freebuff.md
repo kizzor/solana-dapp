@@ -65,7 +65,7 @@ At the end of every session, the LLM MUST update the
 ## Inject this into the LLM on the next session to resume development
 
 **Created:** 2026-07-26
-**Last Updated:** 2026-07-30
+**Last Updated:** 2026-08-02
 **Session Status:** 
   ✅ **HEIST CONTRACT PUBLISHED!** `0xdfe2c634a24f0850279dbb321a68d7665331f264c8c596e4fb07773ff9d3b64d`
   ✅ **SESSION INITIALIZED!** `0xd4cfa99e18e57b94f9961c854cf9feecf15f607ca9955e0e1e78c387b31e94f4`
@@ -76,9 +76,16 @@ At the end of every session, the LLM MUST update the
   ✅ **BUILD FIXED** (2026-08-01) — was failing, which is why Vercel kept serving OLD Solana code
   ✅ **TS ERRORS FIXED** (2026-08-01) — tsc = 0 errors, `ignoreBuildErrors` removed
   ✅ **FH progression anti-cheat** added (canClaimFullHouse + getFirstUnclaimedFh)
-  ⏳ **NEXT: commit + push the build fixes + vault-hold redesign** so Vercel finally deploys the SUI code
+  ✅ **LIVE SITE VERIFIED RUNNING SUI CODE** (2026-08-02) — /api/session-state returns HEIST session on mainnet; commit+push already done (a1be3cd); tsc = 0 errors; browser test: zero console errors
   ✅ **@mysten/dapp-kit hooks upgrade DONE** — page.tsx now uses useCurrentAccount/useConnectWallet/useDisconnectWallet/useSignAndExecuteTransaction/useWallets (manual getWallets() pattern removed)
+  ✅ **GRID SPOOFING FIXED (2026-08-02)** — /api/mint-nft hardened + v2 contract writes grid on-chain (code DONE, needs republish)
+  ✅ **verifyWin empty-row exploit FIXED** (isValidGrid — empty row can no longer win a LINE)
+  ✅ **CRON_SECRET empty-value auth bypass FIXED** (draw + settle-claims fail closed)
+  ✅ **claim_win_split authority check ADDED in contract v2** (was a public fun with NO auth — anyone could drain the vault)
+  ⏳ **CONTRACT v2 REPUBLISH REQUIRED** — new heist.move stores grid on-chain + authority check; NOT yet published
   ⏳ CRON_SECRET rotation
+  🔴 **BLOCKER: CRON_SECRET blank in Vercel → /api/draw + /api/settle-claims 401 → NO draws on mainnet (drawCount stuck at 0)**
+  🔴 **REVIEW FLAGGED (2026-08-02): grid spoofing in /api/mint-nft + in-memory ledger on serverless = NOT safe for real money yet**
 **This Session:**
   - Found `sui.exe` was 0 bytes (corrupted) — replaced with fresh v1.76.1 binary
   - Rebuilt contract bytecode with `draw_number()` type fix
@@ -471,6 +478,57 @@ NEW heist.move (ready to publish): FH1=19.5% FH2=19.5% FH3=40% total=99%
 4. ⏳ Fix TS errors (remove ignoreBuildErrors)
 5. ⏳ Rotate CRON_SECRET (last step)
 
+### Session: 2026-08-02 — GRID SPOOFING FIXED (B2) + v2 Contract (on-chain grid + auth check)
+**Task:** Fix the grid spoofing vulnerability in /api/mint-nft (verify grid + nftId against on-chain Device object, require registration shortly after mint). User chose the FULL fix: server hardening + contract stores grid on-chain, plus a broader audit.
+
+**Key discovery:** The v1 on-chain `Device` struct stores ONLY `id`, `session_id`, `device_index` — **the grid was never stored on-chain** (client-only). So "verify the grid against the on-chain Device" required a contract republish. Also discovered during review: `claim_win_split` was a `public fun` on the shared Session with **NO authority check** — anyone could drain the vault directly on-chain, bypassing all server anti-cheat.
+
+**Fixed (code only — no secrets touched):**
+1. ✅ **`heist-contract/sources/heist.move` (v2)** — rewritten:
+   - `Device` struct now stores `grid: vector<vector<u8>>` — the ticket is generated ON-CHAIN at mint from tx-digest entropy (client can no longer craft grids)
+   - `claim_win_split` now requires `&mut` access + **authority check** (only the session authority can pay out — closes the vault-drain hole)
+   - `sui move build` PASSES (only pre-existing self_transfer lint warning)
+2. ✅ **`app/api/mint-nft/route.ts` (rewritten)** — grid-spoofing fix:
+   - `nftId` must be a REAL created `heist::Device` object ID from the mint tx (`effects.changedObjects` where `idOperation=Created` + type ends `::heist::Device`) — fabricated `HEIST-0001` strings rejected
+   - **Count match**: submitted devices must EXACTLY equal the number of Device objects created by that mint tx (kills "1 mint → 20 fake grids")
+   - **On-chain grid is authoritative** — reads `Device.grid` via `getObjects`; the client's submitted grid is IGNORED. **NO client-grid fallback** — if the on-chain Device has no grid (v1 contract), registration fails closed with "republish required"
+   - **10-min registration window** verified against the ON-CHAIN tx timestamp (`protoJson.timestamp`, not the client clock) — prevents "mint now, wait for draws, register winning grid"
+   - Session-match check (`Device.session_id` must equal `SESSION_OBJECT_ID`)
+   - Per-mint rate limiter keyed `wallet:mintDigest` (legit rapid multi-mints not blocked; dedupes same-digest spam) + 429
+3. ✅ **`lib/claim-ledger.ts`** — `verifyWin` now gates on new `isValidGrid()`: exactly 3×9, 15 numbers, **5 per row**, unique, 1-90. Kills the empty-row LINE exploit (`[].every()` on empty row returned true → instant LINE win with zero draws).
+4. ✅ **`app/api/draw/route.ts` + `app/api/settle-claims/route.ts`** — B4 auth fix: fail closed when `CRON_SECRET` is empty (`!cronSecret || auth !== \`Bearer ${cronSecret}\``) — previously blank env made the expected value literally `"Bearer "` (trailing space) which passed.
+5. ✅ **`app/page.tsx` mint flow** — now sends `devices:[{grid}]` (no fake nftId), adopts the server-returned authoritative on-chain tickets (real object IDs + on-chain grids) so displayed ticket = claim-verified ticket; handles missing `result.digest` by still adding devices + "NOT CLAIMABLE" warning.
+
+**Validation:** `tsc --noEmit` = 0 errors, `npm run build` PASSES, `sui move build` PASSES. 3 review rounds by code-reviewer agent — all approved, commit-ready.
+
+**🔴 Audit findings addressed/remaining:**
+- B2 grid spoofing — ✅ FIXED (this session)
+- B4 empty-CRON_SECRET bypass — ✅ FIXED (this session)
+- B5 vault-drain via unauthenticated `claim_win_split` — ✅ FIXED in contract v2 (pending republish)
+- B3 in-memory ledger — ⏳ still open (Vercel KV/Postgres migration needed before real money)
+- B6 sweep-to-treasury economics — ⏳ decision needed
+
+**🔴 CONFIDENTIAL next step (user):** republish v2 contract + re-init session + update env vars. SEE CONFIDENTIAL ACTION ITEMS — the new mint-nft route REJECTS all mints until v2 is live (deploy-order dependency!).
+
+### Session: 2026-08-02 — Live SUI Verified + Critical Review (vault-hold code)
+**State verified:** `git status` clean, everything pushed to origin/main (3 commits landed since resume file: `2100ab0` build fix, `cbbf3af` gRPC objectId shape, `a1be3cd` dapp-kit hooks). `tsc --noEmit` = 0 errors. No secrets in tracked files (only placeholder in phase1_rotate_secrets.py).
+
+**Completed this session:**
+1. ✅ **LIVE SITE CONFIRMED RUNNING SUI CODE** — `https://www.ransomematrix.xyz/api/session-state` returns the NEW HEIST session `0xd4cfa99e...` with `active:true, drawCount:0`. The vault-hold redesign + SUI migration are deployed.
+2. ✅ **Browser test (real Chrome)** — page title "Ransome | SUI DApp", all panels render (MINT_TERMINAL, VAULT_STATUS, LOBBY CHAT, INITIALIZE_HEIST), CONNECT SUI button present, **zero console errors**.
+3. ✅ **Deep-dive review of vault-hold claim code** by code-reviewer agent — found 2 CRITICAL + 2 HIGH + 2 MEDIUM issues (see below). No code changed this session.
+
+**🔴 Blockers found:**
+- **B1:** `/api/draw` and `/api/settle-claims` return `{"error":"Unauthorized"}` — `CRON_SECRET` is **blank in Vercel**, so the GitHub Actions cron (fires every minute, `.github/workflows/draw.yml`) can't auth → **no numbers drawn on mainnet** (drawCount stuck at 0). Setting CRON_SECRET is a confidential action → user must do it manually (see CONFIDENTIAL ACTION ITEMS).
+- **B2 (review, CRITICAL): Grid spoofing in /api/mint-nft** — server verifies the mint digest exists on-chain + is `heist::mint_device` from the wallet, but **never reads the on-chain Device object's grid**. The grid in the request body is trusted verbatim, `nftId` is never validated, and there's no time window on registration. Exploit: mint one device, wait for ≥5 draws, register a grid containing already-drawn numbers → instantly claim EARLY_FIVE/LINES. One real mint can be submitted with up to 20 fabricated nftIds+grids.
+- **B3 (review, CRITICAL): In-memory ledger on serverless** — `lib/claim-ledger.ts` module-level Maps reset on Vercel cold starts / are per-instance: claims recorded on instance A are invisible to settlement on instance B (winners never paid, win type swept to treasury), and dedupe/rate-limit bypass across instances.
+- **B4 (review, HIGH): Empty CRON_SECRET auth bypass** — the check is `auth !== \`Bearer ${process.env.CRON_SECRET}\``; with blank CRON_SECRET the expected value is literally `"Bearer "` (trailing space) → passes auth. Must fail closed when env var empty.
+- **B5 (review, HIGH): Concurrent settlement double-pay risk** — two crons/manual settle + boundary auto-settle can run `executeSettlement` concurrently; both read wins_claimed before either lands → double `claim_win_split` unless the Move contract aborts on already-claimed win type (must verify heist.move).
+- **B6 (review, MEDIUM): Sweep-to-treasury defeats "99% payout"** — unclaimed win types (esp. FH1/FH2, rarely hit early) are swept to treasury every round; house keeps far more than 1%. Consider rollover instead of sweep.
+- **B7 (review, MEDIUM): freebuff.md vs code mismatch** — claims "Auth on /api/claim-sui ✅" (actual code has NO auth — defensible since server-verification based, but doc wrong) and "Claimer cap at max 10 per request" (no such cap in code).
+
+**Manual next steps (confidential):** 1) Rotate + set CRON_SECRET in Vercel (Production) AND GitHub Actions secrets; 2) verify drawCount increments; 3) fix B2/B3 before funding vault with real money.
+
 ### Session: 2026-08-01 — Build Fixed (Vercel deploy unblocked)
 **Root cause found:** Live site ran old Solana code because `npm run build` FAILED → Vercel auto-deploy failed → kept serving last good (old) deploy.
 
@@ -532,38 +590,80 @@ Tag: CRON_SECRET_ROTATION_PENDING
 These are actions the LLM cannot do automatically. YOU must execute them manually.
 Follow the step-by-step instructions below.
 
-## 🔴 CURRENT SESSION — Deploy HEIST + Anti-Cheat Fixes
+## 🔴 CURRENT SESSION (2026-08-02) — Grid spoofing fixed + v2 CONTRACT REPUBLISH REQUIRED
 
-### ✅ DONE THIS SESSION
-1. ✅ **SUI CLI fixed** — Replaced 0-byte corrupted binary with fresh v1.76.1
-2. ✅ **Contract rebuilt** — `sui move build` with `draw_number()` type fix
-3. ✅ **HEIST contract PUBLISHED** — `0xdfe2c634a24f0850279dbb321a68d7665331f264c8c596e4fb07773ff9d3b64d`
-4. ✅ **Session INITIALIZED** — `0xd4cfa99e18e57b94f9961c854cf9feecf15f607ca9955e0e1e78c387b31e94f4`
-5. ✅ **Anti-cheat** — Added rate limiting (60s per wallet:winType), claimer cap (max 10), stale entry cleanup
+### 🚨 STEP 0 (NEW — do this FIRST, before STEP 1): Republish the v2 HEIST contract
+**Why:** The code is done but the deployed contract is still v1 (no on-chain grid, no `claim_win_split` auth). Until v2 is live:
+- The new `/api/mint-nft` **REJECTS every mint** with "no on-chain grid — republish required" (fails closed by design)
+- The old vault-drain hole (`claim_win_split` with no authority check) is still live on mainnet
 
-### ✅ DONE THIS SESSION
-1. ✅ **Vercel env vars SET** via website dashboard (all 13 vars)
-2. ✅ **Deployed to Vercel** — ransomematrix.xyz loads
-3. ✅ **SUI code NOT reflected on live site** — need `git push` for Vercel to pick it up
+```cmd
+cd C:\Users\admin\Desktop\markdowns\solana-dapp\heist-contract
+"C:\Users\admin\AppData\Local\sui_data\sui.exe" client publish --gas-budget 50000000 --skip-dependency-verification
+```
+Then (names only — do not paste values into LLM):
+1. Copy the NEW Package ID → Vercel env `SUI_PROGRAM_ID` (+ `NEXT_PUBLIC_SUI_PROGRAM_ID` if used)
+2. Re-init the session: run `node init_session_sdk.mjs` (verify it targets `::heist::initialize_session` with the treasury address)
+3. Copy the NEW Session Object ID → Vercel env `SESSION_OBJECT_ID` (+ `NEXT_PUBLIC_SESSION_OBJECT_ID` if used)
+4. Redeploy Vercel (commit + push first — see STEP 4)
+5. ⚠️ Old on-chain session `0xd4cfa99e...` is orphaned once the new session is created
 
-### 🔴 NEXT SESSION STEP 1: Commit + push SUI migration
+### 🔴 CURRENT SESSION (2026-08-02) — Deploy verified + CRON_SECRET + review fixes
+
+### ✅ VERIFIED DONE THIS SESSION (no action needed)
+1. ✅ **Commit + push DONE** — all build fixes + vault-hold redesign + dapp-kit upgrade are on origin/main (commits `2100ab0`, `cbbf3af`, `a1be3cd`)
+2. ✅ **LIVE SITE RUNS SUI CODE** — `ransomematrix.xyz/api/session-state` returns HEIST session `0xd4cfa99e...` on mainnet
+3. ✅ **Browser test passed** — UI renders, zero console errors
+4. ✅ **tsc = 0 errors**, no secrets in git (scanned)
+
+### 🔴 STEP 1 (BLOCKER — do first): Rotate + set CRON_SECRET
+Until this is done, **no numbers are being drawn on mainnet** (draw cron 401s every minute).
+
+```cmd
+:: 1) Generate a new secret locally
+openssl rand -hex 32
+```
+2) **Vercel** → Project `solana-dapp` → Settings → Environment Variables → add/edit `CRON_SECRET` (Production) with the new value → Save → Redeploy
+3) **GitHub** → repo `solana-dapp` → Settings → Secrets and variables → Actions → add `CRON_SECRET` with the SAME value (used by `.github/workflows/draw.yml`)
+4) ⚠️ The old CRON_SECRET was exposed earlier — this rotation replaces it. Do NOT reuse the old value.
+
+### 🔴 STEP 4: Commit + push this anti-cheat change set (confidential gate — then Vercel deploys)
 ```cmd
 cd C:\Users\admin\Desktop\markdowns\solana-dapp
 git add .
-git commit -m "feat: migrate to SUI mainnet with HEIST contract"
+git commit -m "fix: grid spoofing - on-chain grids in contract v2, hardened mint-nft, verifyWin isValidGrid, fail-closed auth"
 git push
 ```
-Then Vercel auto-deploys from the repo.
+⚠️ Remember: Vercel will deploy this code BEFORE/regardless of the contract republish. Until STEP 0 (republish) is done, mints will fail registration (fails closed) — that is the intended safe behavior, but do STEP 0 + STEP 1 in the same window to avoid a broken mint UX.
 
-### 🔴 NEXT SESSION STEP 2: Verify the site
-Check `https://www.ransomematrix.xyz/api/session-state` after deploy — should return:
-```json
-{"ok":true,"active":true,"drawCount":0,"lastNumber":0,...}
+### 🔴 STEP 2: Verify draws start flowing
+```cmd
+curl "https://www.ransomematrix.xyz/api/session-state"
+:: drawCount should now increase every minute (was stuck at 0)
+:: also check GitHub Actions → draw workflow → recent runs are green
 ```
 
-### ⏳ AFTER THAT: Finish code pending
-- Set CRON_SECRET + MTRX vars
-- Rotate CRON_SECRET (last step)
+### 🔴 STEP 3 (before funding vault with real money): Review fixes pending
+- B2 **grid spoofing** — ✅ **FIXED 2026-08-02** (server + contract v2; needs republish per STEP 0)
+- B4 **empty-CRON_SECRET auth bypass** — ✅ **FIXED 2026-08-02** (draw + settle-claims fail closed)
+- B5 **vault-drain via public claim_win_split** — ✅ **FIXED in contract v2** (authority check; needs republish per STEP 0)
+- B3 **in-memory ledger** → migrate to Vercel KV / Postgres before real mainnet money (still open)
+- B6 sweep-to-treasury vs 99% payout economics (decision needed)
+- 🔍 Contract grid invariants — recommend a Move unit test / testnet dry-run mint asserting 5-per-row + uniqueness of the on-chain-generated grid before republishing
+
+### ✅ DONE EARLIER SESSIONS (for reference)
+1. ✅ SUI CLI fixed — replaced 0-byte corrupted binary with v1.76.1
+2. ✅ HEIST contract PUBLISHED — `0xdfe2c634a24f0850279dbb321a68d7665331f264c8c596e4fb07773ff9d3b64d`
+3. ✅ Session INITIALIZED — `0xd4cfa99e18e57b94f9961c854cf9feecf15f607ca9955e0e1e78c387b31e94f4`
+4. ✅ Anti-cheat — rate limiting, claimer cap, stale entry cleanup
+5. ✅ Vercel env vars SET (all 13)
+6. ✅ Deployed + custom domain `ransomematrix.xyz` confirmed working
+
+### 🔴 NEXT SESSION STEP 2 (was): Verify the site
+✅ **DONE 2026-08-02** — `https://www.ransomematrix.xyz/api/session-state` returns:
+```json
+{"ok":true,"active":true,"session":"0xd4cfa99e...","drawCount":0,"lastNumber":0,...}
+```
 
 ---
 
