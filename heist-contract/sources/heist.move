@@ -1,39 +1,57 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// HEIST — On-Chain Bingo / Hacking Game  (v2 — grid on-chain + claim authority)
-// ───────────────────────────────────────────────────────────────────────────────
+// ============================================================================
+// HEIST - On-Chain Bingo / Hacking Game  (v4 - REAL HEIST token economy)
+// ----------------------------------------------------------------------------
 // 99% of device mint payments go to winners. 1% treasury fee.
 // Payout split: FH3=40%, FH1/FH2=19.5% ea, Lines=5% ea, Early Five=5%
 //
-// v2 changes (2026-08-02):
-//   1. Device.grid  — the 3×9 bingo ticket is GENERATED ON-CHAIN at mint time
-//      from tx digest entropy and stored in the Device object. Neither the
-//      client nor the server can choose the numbers, so a player cannot mint a
-//      device and then register a grid that hits already-drawn numbers.
-//   2. claim_win_split — now AUTHORITY-ONLY. The Session is a shared object; a
-//      public claim function with no sender check let anyone call it directly
-//      on-chain with their own address and drain the vault. Now only the
-//      authority (the settlement server) can pay winners.
-// ═══════════════════════════════════════════════════════════════════════════════
+// v2 (2026-08-02): on-chain grids + authority-only claim_win_split.
+// v3 (2026-08-04): HEIST becomes a REAL coin (create_currency) + MAX_SUPPLY.
+// v4 (2026-08-04): FULL HEIST economy -
+//     * Session vault now holds Balance<HEIST> (mints + payouts in HEIST)
+//     * mint_device(Coin<HEIST>, amount) - 500 HEIST = $0.50
+//       or 250 HEIST = $0.25 for MTRX holders (verified server-side)
+//     * MAX_SUPPLY = 2,000,000,000 HEIST hard cap (2e9 coins x 9 decimals)
+//     * Airdrop pool (500M) + Vesting (500M linear release) + 1B circulating
+//     * mint_heist/burn_heist - TreasuryCap holder (authority) only
+// v5 (2026-08-04): ANY-COIN mint, HEIST-only vault -
+//     * HeistAdmin shared object holds the TreasuryCap + a per-coin price table
+//       (coin type -> exact raw units accepted for a $0.50 mint payment)
+//     * mint_device<T> accepts Coin<T> for any registered coin (SUI/USDC/USDT/
+//       HEIST), validates the payment against the on-chain price table, sends
+//       the 1% treasury fee in the paid coin, and MINTS HEIST into the vault
+//       (99%) / treasury (1%) from the cap. Vault stays Balance<HEIST>.
+//     * set_price<T> lets the authority update prices (SUI price refreshed by
+//       the cron from a live feed) WITHOUT republishing.
+// ============================================================================
 
 module heist::heist {
 
-    // ─── Imports ───────────────────────────────────────────────────────────────
+    // --- Imports --------------------------------------------------------------
     use sui::balance::{Self, Balance};
-    use sui::coin::{Self, Coin};
+    use sui::coin::{Self, Coin, TreasuryCap};
     use sui::object::{Self, UID};
+    use sui::table::{Self, Table};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::sui::SUI;
     use sui::event;
+    use sui::url::Url;
+    use std::option;
+    use std::string::{Self, String};
+    use std::type_name::{Self, TypeName};
     use std::vector;
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ==========================================================================
     // CONSTANTS
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ==========================================================================
 
-    // ─── Token Economics ───────────────────────────────────────────────────────
-    // DEVICE_PRICE removed — amount is passed dynamically from frontend
-    // based on $0.50 USDC/USDT worth of SUI at current market price
+    // --- HEIST Token ----------------------------------------------------------
+    const HEIST_DECIMALS: u8 = 9;
+    /// Hard cap: 2,000,000,000 HEIST (raw = 2e9 coins * 1e9 decimals)
+    const MAX_SUPPLY: u64 = 2_000_000_000_000_000_000;
+    // v5 (floatable HEIST price): the per-coin payment amounts are NO LONGER
+    // hardcoded — they live in the HeistAdmin price table (one entry per coin,
+    // including HEIST itself). The authority refreshes them (e.g. the draw
+    // cron from live feeds) so the $0.50/$0.25 mint price follows the market.
 
     /// Treasury fee: 1% in basis points
     const TREASURY_FEE_BPS: u64 = 100;
@@ -41,7 +59,7 @@ module heist::heist {
     /// Max devices per wallet per session
     const MAX_DEVICES: u8 = 20;
 
-    // ─── Win Type Indices ──────────────────────────────────────────────────────
+    // --- Win Type Indices -----------------------------------------------------
     const WT_EARLY_FIVE:    u8 = 0;
     const WT_TOP_LINE:      u8 = 1;
     const WT_MIDDLE_LINE:   u8 = 2;
@@ -51,7 +69,7 @@ module heist::heist {
     const WT_FULL_HOUSE_3:  u8 = 6;
     const NUM_WIN_TYPES:    u8 = 7;
 
-    // ─── Payout Basis Points (99% total to winners) ────────────────────────────
+    // --- Payout Basis Points (99% total to winners) ---------------------------
     const EARLY_FIVE_BPS:    u64 = 500;   //  5%
     const TOP_LINE_BPS:      u64 = 500;   //  5%
     const MIDDLE_LINE_BPS:   u64 = 500;   //  5%
@@ -59,14 +77,13 @@ module heist::heist {
     const FULL_HOUSE_1_BPS:  u64 = 1950;  // 19.5%
     const FULL_HOUSE_2_BPS:  u64 = 1950;  // 19.5%
     const FULL_HOUSE_3_BPS:  u64 = 4000;  // 40%
-    // ───────────────────────────────────────────────────────────────────────────
-    //                         Total: 9900 (99%)
+    //                              Total: 9900 (99%)
 
-    // ─── Grid Constants (bingo ticket shape) ───────────────────────────────────
+    // --- Grid Constants (bingo ticket shape) ----------------------------------
     const GRID_ROWS: u64 = 3;
     const GRID_COLS: u64 = 9;
 
-    // ─── Error Codes ───────────────────────────────────────────────────────────
+    // --- Error Codes ----------------------------------------------------------
     const ESessionNotActive:    u64 = 1;
     const ESessionPaused:       u64 = 2;
     const EWinAlreadyClaimed:   u64 = 3;
@@ -78,12 +95,21 @@ module heist::heist {
     const ENotAuthorized:       u64 = 9;
     const ETooManyWinners:      u64 = 10;
     const EAllNumbersDrawn:     u64 = 11;
+    const EMaxSupplyExceeded:   u64 = 12;
+    const EInvalidPrice:        u64 = 13;
+    const ENotVested:           u64 = 14;
+    const EAirdropExhausted:    u64 = 15;
+    const EUnsupportedCoin:     u64 = 16;
+    const EPriceNotSet:         u64 = 17;
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ==========================================================================
     // STRUCTS
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ==========================================================================
 
-    /// The game session — a shared object holding all game state.
+    /// One-time witness for the HEIST coin (create_currency).
+    public struct HEIST has drop {}
+
+    /// The game session - a shared object holding all game state.
     public struct Session has key, store {
         id: UID,
         /// Whether the game is active and accepting claims
@@ -92,8 +118,8 @@ module heist::heist {
         paused: bool,
         /// Which win types have already been claimed (7 bools)
         wins_claimed: vector<bool>,
-        /// SUI vault — accumulates mint payments, pays out winners
-        vault: Balance<SUI>,
+        /// HEIST vault - accumulates mint payments, pays out winners
+        vault: Balance<HEIST>,
         /// Treasury address receiving the 1% fee
         treasury: address,
         /// Game authority who can pause/resume/end the game
@@ -111,21 +137,67 @@ module heist::heist {
     }
 
     /// An NFT representing a player's hacking device (bingo ticket).
-    /// `grid` is a 3×9 ticket (GRID_ROWS × GRID_COLS) with 15 numbers, 5 per row;
-    /// 0 = empty cell, 1-90 = number. Generated ON-CHAIN at mint — unforgeable.
+    /// `grid` is a 3x9 ticket (GRID_ROWS x GRID_COLS) with 15 numbers, 5 per row;
+    /// 0 = empty cell, 1-90 = number. Generated ON-CHAIN at mint - unforgeable.
     public struct Device has key, store {
         id: UID,
         /// The session this device belongs to
         session_id: ID,
         /// Device index within the owner's wallet (0-19)
         device_index: u8,
-        /// 3×9 bingo grid, 0 = empty cell (generated on-chain at mint)
+        /// 3x9 bingo grid, 0 = empty cell (generated on-chain at mint)
         grid: vector<vector<u8>>,
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    /// Locked HEIST supply - releases linearly to `beneficiary` over time.
+    /// Created by the authority at launch (500M HEIST), claimed gradually.
+    public struct Vesting has key, store {
+        id: UID,
+        /// Address that receives released HEIST (the treasury/authority wallet)
+        beneficiary: address,
+        /// Total locked HEIST (raw units)
+        total_locked: u64,
+        /// HEIST already claimed/released (raw units)
+        claimed: u64,
+        /// Vesting start (unix milliseconds)
+        start_ms: u64,
+        /// Vesting duration in milliseconds (e.g. 24 months)
+        duration_ms: u64,
+        /// Locked balance being released
+        vault: Balance<HEIST>,
+    }
+
+    /// HEIST airdrop pool - 500M HEIST reserved for MTRX holders.
+    /// Claims are authority-gated: the server verifies the wallet's Solana
+    /// MTRX holdings (snapshot) BEFORE calling claim_airdrop, so the SUI
+    /// contract itself cannot be drained by non-holders.
+    public struct AirdropPool has key, store {
+        id: UID,
+        /// Authority who may release airdrops
+        authority: address,
+        /// Remaining airdrop HEIST (raw units)
+        remaining: u64,
+        /// Pool balance
+        vault: Balance<HEIST>,
+    }
+
+    /// Shared admin (v5): holds the HEIST TreasuryCap + the per-coin price
+    /// table used by mint_device to validate any-coin payments. Authority can
+    /// update prices (e.g. SUI price from a live feed) WITHOUT republishing.
+    public struct HeistAdmin has key, store {
+        id: UID,
+        /// Authority who manages the cap + prices
+        authority: address,
+        /// HEIST TreasuryCap (mints vault emissions + airdrops/vesting)
+        treasury_cap: TreasuryCap<HEIST>,
+        /// Coin type -> exact raw units accepted as a FULL-price ($0.50) mint
+        /// payment in that coin (discount = half for MTRX holders)
+        prices: Table<TypeName, u64>,
+    }
+
+    // ==========================================================================
     // EVENTS
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ==========================================================================
 
     /// Emitted when a new session is created
     public struct SessionCreated has copy, drop {
@@ -140,10 +212,18 @@ module heist::heist {
         session_id: ID,
         device_index: u8,
         owner: address,
+        /// HEIST tier paid in raw units (from the price table: $0.50 worth,
+        /// or half for MTRX-discounted mints)
         amount_paid: u64,
+        /// Raw units actually required in the payment coin (from the price table)
+        payment_value: u64,
+        /// Whether this was a discounted (MTRX-holder) mint
+        discounted: bool,
+        /// The coin type used for payment (e.g. 0x2::sui::SUI)
+        coin: String,
         treasury_fee: u64,
         vault_added: u64,
-        /// The on-chain generated grid (flattened 3×9, 0 = empty)
+        /// The on-chain generated grid (flattened 3x9, 0 = empty)
         grid: vector<u8>,
     }
 
@@ -164,11 +244,195 @@ module heist::heist {
         remaining: u8,
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // PUBLIC FUNCTIONS
-    // ═══════════════════════════════════════════════════════════════════════════
+    /// Emitted when HEIST tokens are minted (rewards/airdrop)
+    public struct HeistMinted has copy, drop {
+        amount: u64,
+        to: address,
+    }
 
-    // ─── Session Management ────────────────────────────────────────────────────
+    /// Emitted when HEIST tokens are burned
+    public struct HeistBurned has copy, drop {
+        amount: u64,
+    }
+
+    /// Emitted when HEIST is released from vesting
+    public struct VestedReleased has copy, drop {
+        amount: u64,
+        to: address,
+    }
+
+    /// Emitted when HEIST is airdropped to an MTRX holder
+    public struct AirdropClaimed has copy, drop {
+        amount: u64,
+        to: address,
+        remaining: u64,
+    }
+    // ==========================================================================
+    // PUBLIC FUNCTIONS
+    // ==========================================================================
+
+    // --- One-time init: create the HEIST coin ---------------------------------
+
+    /// Runs automatically at publish. Creates the HEIST coin (create_currency)
+    /// and transfers the TreasuryCap to the publisher (the authority) - only
+    /// it can mint/burn HEIST. CoinMetadata is frozen (immutable).
+    fun init(witness: HEIST, ctx: &mut TxContext) {
+        let (treasury_cap, metadata) = coin::create_currency<HEIST>(
+            witness,
+            HEIST_DECIMALS,
+            b"HEIST",
+            b"HEIST",
+            b"HEIST - RANSOME gaming token",
+            option::none<Url>(),
+            ctx,
+        );
+        transfer::public_freeze_object(metadata);
+        transfer::public_transfer(treasury_cap, tx_context::sender(ctx));
+    }
+
+    // --- HEIST Token (v3/v4) --------------------------------------------------
+
+    /// Mint HEIST as rewards/airdrops. HARD MAX_SUPPLY CAP enforced here:
+    /// aborts (EMaxSupplyExceeded) if total supply would exceed MAX_SUPPLY.
+    /// v5: the TreasuryCap lives in the shared HeistAdmin - authority only.
+    public fun mint_heist(
+        admin: &mut HeistAdmin,
+        amount: u64,
+        to: address,
+        ctx: &mut TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == admin.authority, ENotAuthorized);
+        assert!(coin::total_supply(&admin.treasury_cap) + amount <= MAX_SUPPLY, EMaxSupplyExceeded);
+        let coin = coin::mint(&mut admin.treasury_cap, amount, ctx);
+        transfer::public_transfer(coin, to);
+        event::emit(HeistMinted { amount, to });
+    }
+
+    /// Burn HEIST (deflation). Only the TreasuryCap holder can call this.
+    public fun burn_heist(cap: &mut TreasuryCap<HEIST>, coin: Coin<HEIST>) {
+        let amount = coin::burn(cap, coin);
+        event::emit(HeistBurned { amount });
+    }
+
+    // --- Vesting (500M locked HEIST) ------------------------------------------
+
+    /// Create a locked HEIST balance that releases linearly to `beneficiary`
+    /// over `duration_ms`. Authority-only (needs the TreasuryCap to mint).
+    /// The locked amount is minted from the cap and sealed in a shared Vesting
+    /// object - it CANNOT be touched until claim_vested releases it.
+    public fun create_vesting(
+        admin: &mut HeistAdmin,
+        beneficiary: address,
+        amount: u64,
+        duration_ms: u64,
+        ctx: &mut TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == admin.authority, ENotAuthorized);
+        assert!(coin::total_supply(&admin.treasury_cap) + amount <= MAX_SUPPLY, EMaxSupplyExceeded);
+        let balance = coin::into_balance(coin::mint(&mut admin.treasury_cap, amount, ctx));
+        let vesting = Vesting {
+            id: object::new(ctx),
+            beneficiary,
+            total_locked: amount,
+            claimed: 0,
+            start_ms: tx_context::epoch_timestamp_ms(ctx),
+            duration_ms,
+            vault: balance,
+        };
+        transfer::share_object(vesting);
+    }
+
+    /// Claim any HEIST that has vested so far. Linear release:
+    ///   released = total_locked * elapsed / duration_ms
+    /// Anyone may call this, but tokens always go to `beneficiary`.
+    /// Math is done in u128 to avoid u64 overflow (total_locked up to 5e17
+    /// times an epoch-ms elapsed ~1e12 far exceeds u64 max).
+    public fun claim_vested(vesting: &mut Vesting, ctx: &mut TxContext) {
+        let now = tx_context::epoch_timestamp_ms(ctx);
+        let elapsed = if (now > vesting.start_ms) { now - vesting.start_ms } else { 0 };
+        let vested = if (elapsed >= vesting.duration_ms) {
+            vesting.total_locked
+        } else {
+            ((vesting.total_locked as u128) * (elapsed as u128) / (vesting.duration_ms as u128)) as u64
+        };
+        let release = vested - vesting.claimed;
+        assert!(release > 0, ENotVested);
+        vesting.claimed = vested;
+        let coin = coin::take(&mut vesting.vault, release, ctx);
+        transfer::public_transfer(coin, vesting.beneficiary);
+        event::emit(VestedReleased { amount: release, to: vesting.beneficiary });
+    }
+
+
+    // --- Airdrop pool (500M for MTRX holders) ---------------------------------
+
+    /// Create the 500M airdrop pool. Authority-only (needs the TreasuryCap).
+    public fun create_airdrop_pool(
+        admin: &mut HeistAdmin,
+        amount: u64,
+        ctx: &mut TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == admin.authority, ENotAuthorized);
+        assert!(coin::total_supply(&admin.treasury_cap) + amount <= MAX_SUPPLY, EMaxSupplyExceeded);
+        let balance = coin::into_balance(coin::mint(&mut admin.treasury_cap, amount, ctx));
+        let pool = AirdropPool {
+            id: object::new(ctx),
+            authority: tx_context::sender(ctx),
+            remaining: amount,
+            vault: balance,
+        };
+        transfer::share_object(pool);
+    }
+
+    /// Release an airdrop to a verified MTRX holder. AUTHORITY-ONLY: the server
+    /// must verify the wallet's Solana MTRX holdings (snapshot) before calling
+    /// this - the SUI contract cannot read Solana, so the authority is the gate.
+    public fun claim_airdrop(
+        pool: &mut AirdropPool,
+        amount: u64,
+        to: address,
+        ctx: &mut TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == pool.authority, ENotAuthorized);
+        assert!(amount <= pool.remaining, EAirdropExhausted);
+        let coin = coin::take(&mut pool.vault, amount, ctx);
+        pool.remaining = pool.remaining - amount;
+        transfer::public_transfer(coin, to);
+        event::emit(AirdropClaimed { amount, to, remaining: pool.remaining });
+    }
+
+    // --- HeistAdmin: treasury cap + per-coin prices (v5) -----------------------
+
+    /// Create the shared HeistAdmin. Called ONCE at setup (right after
+    /// publish): the TreasuryCap handed to the publisher in `init` is moved
+    /// into the admin, so mint_device can mint vault emissions from it.
+    /// The sender becomes the admin authority (use the SAME key as the
+    /// session authority).
+    public fun create_admin(cap: TreasuryCap<HEIST>, ctx: &mut TxContext) {
+        let admin = HeistAdmin {
+            id: object::new(ctx),
+            authority: tx_context::sender(ctx),
+            treasury_cap: cap,
+            prices: table::new(ctx),
+        };
+        transfer::share_object(admin);
+    }
+
+    /// Register or update the exact raw units of coin T accepted as a
+    /// FULL-price ($0.50) mint payment. Authority only - e.g. the cron
+    /// refreshes the SUI price from a live feed without republishing.
+    public fun set_price<T>(admin: &mut HeistAdmin, price: u64, ctx: &TxContext) {
+        assert!(tx_context::sender(ctx) == admin.authority, ENotAuthorized);
+        assert!(price > 0, EInvalidPrice);
+        let key = type_name::with_original_ids<T>();
+        if (table::contains(&admin.prices, key)) {
+            *table::borrow_mut(&mut admin.prices, key) = price;
+        } else {
+            table::add(&mut admin.prices, key, price);
+        };
+    }
+
+    // --- Session Management ---------------------------------------------------
 
     /// Initialize a new game session.
     /// The sender becomes the authority.
@@ -191,7 +455,7 @@ module heist::heist {
             active: true,
             paused: false,
             wins_claimed,
-            vault: balance::zero<SUI>(),
+            vault: balance::zero<HEIST>(),
             treasury,
             authority: sender,
             treasury_fee_bps: TREASURY_FEE_BPS,
@@ -212,18 +476,28 @@ module heist::heist {
         });
     }
 
-    // ─── Device Minting ────────────────────────────────────────────────────────
+    // --- Device Minting -------------------------------------------------------
 
-    /// Mint a device (bingo ticket) by paying `amount` MIST of SUI.
-    /// `amount` should equal $0.50 USDC worth of SUI (varies with SUI price).
-    /// The 3×9 grid is generated ON-CHAIN from tx digest entropy and stored in
-    /// the Device — neither the client nor the server can influence it.
+    /// Mint a device (bingo ticket) by paying $0.50 worth of ANY registered
+    /// coin, or $0.25 for MTRX holders (discounted = true). v5:
+    ///   * The exact raw payment for coin T comes from the on-chain price table
+    ///     (set at setup + refreshed by the authority via set_price). HEIST has
+    ///     a FLOATABLE price: the table entry for HEIST itself defines how many
+    ///     HEIST a $0.50 mint costs (e.g. 250 HEIST when 1 HEIST = $0.002).
+    ///   * The 1% treasury fee + 99% conversion proceeds are captured in the
+    ///     PAID COIN and sent to treasury (excess over `required` returned as
+    ///     change).
+    ///   * HEIST is minted from the HeistAdmin TreasuryCap (the table's HEIST
+    ///     tier, 99% -> vault / 1% -> treasury). The vault ALWAYS holds only
+    ///     HEIST.
+    /// The 3x9 grid is generated ON-CHAIN from tx digest entropy and stored in
+    /// the Device - neither the client nor the server can influence it.
     /// Returns the Device NFT to the sender.
-    /// 1% of `amount` goes to treasury, 99% goes to the vault.
-    public fun mint_device(
-        mut payment: Coin<SUI>,
+    public fun mint_device<T>(
+        mut payment: Coin<T>,
         session: &mut Session,
-        amount: u64,
+        admin: &mut HeistAdmin,
+        discounted: bool,
         device_index: u8,
         ctx: &mut TxContext,
     ): Device {
@@ -232,28 +506,64 @@ module heist::heist {
         assert!(!session.paused, ESessionPaused);
         assert!(device_index < MAX_DEVICES, EDeviceLimitExceeded);
 
-        // Validate payment amount
+        // HEIST tier = $0.50 (or $0.25) worth of HEIST, from the price table.
+        // This is the vault HEIST minted for ANY payment coin, so the vault
+        // always holds exactly the USD equivalent of what was paid.
+        let heist_tname = type_name::with_original_ids<HEIST>();
+        assert!(table::contains(&admin.prices, heist_tname), EPriceNotSet);
+        let heist_full = *table::borrow(&admin.prices, heist_tname);
+        // Defense-in-depth: a sane HEIST tier must be set (set_price already
+        // rejects 0, but a corrupted entry must never allow free vault minting).
+        assert!(heist_full > 0, EPriceNotSet);
+        let heist_tier = if (discounted) { heist_full / 2 } else { heist_full };
+
+        // Required raw payment in THIS coin for a full-price mint (price table)
+        let tname = type_name::with_original_ids<T>();
+        assert!(table::contains(&admin.prices, tname), EUnsupportedCoin);
+        let full = *table::borrow(&admin.prices, tname);
+        let required = if (discounted) { full / 2 } else { full };
+
+        // Validate payment amount (>= required; excess is returned as change)
         let payment_value = coin::value(&payment);
-        assert!(payment_value >= amount, EInsufficientPayment);
+        assert!(payment_value >= required, EInsufficientPayment);
 
-        // Calculate splits using provided amount (variable — based on SUI price feed)
-        let fee_amount = amount * session.treasury_fee_bps / 10000;
-        let vault_amount = amount - fee_amount;
-
-        // Split payment into treasury fee + vault deposit + change
-        let fee_coin = coin::split(&mut payment, fee_amount, ctx);
-        let vault_coin = coin::split(&mut payment, vault_amount, ctx);
-        // Remaining `payment` coin is the change (overpayment)
-
-        // Send treasury fee to treasury address
+        // Capture the exact required payment: 1% treasury fee + the remaining
+        // 99% as the conversion proceeds. The $0.50 worth of the paid coin is
+        // "converted" into HEIST in the vault below (minted from the cap); the
+        // treasury collects the paid coin + the HEIST fee. Excess over
+        // `required` (e.g. the client's SUI buffer) is returned as change.
+        let mut required_coin = coin::split(&mut payment, required, ctx);
+        let fee_amount = required / 100;
+        let fee_coin = coin::split(&mut required_coin, fee_amount, ctx);
         transfer::public_transfer(fee_coin, session.treasury);
+        transfer::public_transfer(required_coin, session.treasury);
 
-        // Add vault deposit to the session's balance
-        balance::join(&mut session.vault, coin::into_balance(vault_coin));
-
-        // Return change to the sender
+        // Return change (overpayment) to the sender. When the payment was
+        // EXACTLY `required` (e.g. stablecoin mints with no buffer), the
+        // leftover coin has zero value — destroy it instead of dusting the
+        // payer's wallet with a 0-balance coin.
         let sender = tx_context::sender(ctx);
-        transfer::public_transfer(payment, sender);
+        if (coin::value(&payment) == 0) {
+            coin::destroy_zero(payment);
+        } else {
+            transfer::public_transfer(payment, sender);
+        };
+
+        // Mint HEIST from the cap (checked once for the tier): 99% vault,
+        // 1% treasury. Vault stays Balance<HEIST>.
+        // u128 math: the table's heist_tier has NO upper bound (set_price only
+        // rejects 0), so `heist_tier * 99` could overflow u64 for a corrupt or
+        // absurd table entry — compute in u128 before casting back (M1 fix).
+        assert!(
+            (coin::total_supply(&admin.treasury_cap) as u128) + (heist_tier as u128) <= (MAX_SUPPLY as u128),
+            EMaxSupplyExceeded
+        );
+        let vault_amount = ((heist_tier as u128) * 99 / 100) as u64;
+        let treasury_amount = (heist_tier / 100);
+        let vault_coin = coin::mint(&mut admin.treasury_cap, vault_amount, ctx);
+        balance::join(&mut session.vault, coin::into_balance(vault_coin));
+        let treasury_coin = coin::mint(&mut admin.treasury_cap, treasury_amount, ctx);
+        transfer::public_transfer(treasury_coin, session.treasury);
 
         // Generate the ticket ON-CHAIN (unforgeable) and flatten for the event
         let grid = generate_grid(ctx);
@@ -264,7 +574,15 @@ module heist::heist {
             session_id: object::id(session),
             device_index,
             owner: sender,
-            amount_paid: amount,
+            amount_paid: heist_tier,
+            payment_value,
+            discounted,
+            // with_defining_ids (formerly get; NOT with_original_ids) so the
+            // emitted coin type carries the real published package address — the
+            // server matches it against ${SUI_PROGRAM_ID}::heist::HEIST / known
+            // types exactly. The table lookups above keep using
+            // with_original_ids (internally consistent).
+            coin: string::from_ascii(type_name::into_string(type_name::with_defining_ids<T>())),
             treasury_fee: fee_amount,
             vault_added: vault_amount,
             grid: flat,
@@ -279,20 +597,18 @@ module heist::heist {
         }
     }
 
-    // ─── Win Claims (authority-only — anti-drain) ──────────────────────────────
+    // --- Win Claims (authority-only - anti-drain) -----------------------------
 
     /// Claim a win for a group of winners, splitting the payout equally.
     /// Dust (remainder from uneven splits) goes to the last winner.
     /// AUTHORITY-ONLY: only the game authority (settlement server) may pay out.
-    /// Without this check, anyone could call this directly on the shared
-    /// Session and drain the vault to their own address.
     public fun claim_win_split(
         session: &mut Session,
         winners: vector<address>,
         win_type: u8,
         ctx: &mut TxContext,
     ) {
-        // ── Authority check (v2 — CRITICAL anti-drain fix) ─────────────────
+        // Authority check (v2 - CRITICAL anti-drain fix)
         assert!(tx_context::sender(ctx) == session.authority, ENotAuthorized);
 
         // Validate session state
@@ -348,9 +664,9 @@ module heist::heist {
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ==========================================================================
     // PRIVATE / INTERNAL HELPERS
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ==========================================================================
 
     /// Get the payout basis points for a win type.
     fun get_win_bps(win_type: u8): u64 {
@@ -373,15 +689,9 @@ module heist::heist {
         }
     }
 
-    // ─── On-Chain Grid Generation (v2 — unforgeable tickets) ─────────────────
-    // Uses tx digest bytes as entropy (same source as draw_number). Produces a
-    // standard 3×9 bingo ticket: 15 numbers, 5 per row, 1-2 numbers per column,
-    // each number within its column's decade range (col 0: 1-10 … col 8: 81-90).
-    // The client cannot predict or choose the ticket, so grids cannot be crafted
-    // to match already-drawn numbers.
+    // --- On-Chain Grid Generation (v2 - unforgeable tickets) ------------------
 
     /// Draw the next entropy byte from the tx digest (cycled).
-    /// `digest` is already a &vector<u8> (tx_context::digest returns a reference).
     fun next_entropy(digest: &vector<u8>, pos: &mut u64): u8 {
         let dl = vector::length(digest);
         let b = *vector::borrow(digest, *pos % dl);
@@ -389,12 +699,12 @@ module heist::heist {
         b
     }
 
-    /// Generate a random 3×9 ticket: vector of 3 rows × 9 cols, 0 = empty cell.
+    /// Generate a random 3x9 ticket: vector of 3 rows x 9 cols, 0 = empty cell.
     fun generate_grid(ctx: &TxContext): vector<vector<u8>> {
         let digest = tx_context::digest(ctx);
         let mut pos: u64 = 0;
 
-        // Decide which 6 of the 9 columns carry 2 numbers (rest carry 1) → 15 total.
+        // Decide which 6 of the 9 columns carry 2 numbers (rest carry 1) -> 15 total.
         let mut col_two = vector<u8>[0, 0, 0, 0, 0, 0, 0, 0, 0];
         let mut picked_two: u64 = 0;
         while (picked_two < 6) {
@@ -406,7 +716,7 @@ module heist::heist {
             };
         };
 
-        // Empty grid: 3 rows × 9 cols of 0
+        // Empty grid: 3 rows x 9 cols of 0
         let mut grid = vector<vector<u8>>[];
         let mut r: u64 = 0;
         while (r < GRID_ROWS) {
@@ -420,7 +730,7 @@ module heist::heist {
             r = r + 1;
         };
 
-        // Row fill counts — greedy placement keeps rows balanced at 5 each
+        // Row fill counts - greedy placement keeps rows balanced at 5 each
         let mut row_fill = vector<u8>[0, 0, 0];
 
         let mut c: u64 = 0;
@@ -471,7 +781,7 @@ module heist::heist {
         grid
     }
 
-    /// Flatten a 3×9 grid into a 27-length vector for the mint event.
+    /// Flatten a 3x9 grid into a 27-length vector for the mint event.
     fun flatten_grid(grid: &vector<vector<u8>>): vector<u8> {
         let mut flat = vector<u8>[];
         let mut r: u64 = 0;
@@ -487,7 +797,7 @@ module heist::heist {
         flat
     }
 
-    // ─── Number Drawing ────────────────────────────────────────────────────
+    // --- Number Drawing -------------------------------------------------------
 
     /// Draw the next number using on-chain entropy (tx digest).
     /// Authority-only. Picks an unused number from 1-90.
@@ -544,9 +854,9 @@ module heist::heist {
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ==========================================================================
     // ADMIN FUNCTIONS (authority-only)
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ==========================================================================
 
     /// Pause the session (no mints, no claims).
     public fun pause_session(session: &mut Session, ctx: &TxContext) {
@@ -560,7 +870,7 @@ module heist::heist {
         session.paused = false;
     }
 
-    /// End the session — disables mints and claims.
+    /// End the session - disables mints and claims.
     /// Unclaimed vault balance stays in the session object.
     public fun end_session(session: &mut Session, ctx: &TxContext) {
         assert!(tx_context::sender(ctx) == session.authority, ENotAuthorized);

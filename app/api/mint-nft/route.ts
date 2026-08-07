@@ -7,13 +7,33 @@ import {
   registerDevices,
   isValidGrid,
 } from '../../../lib/claim-ledger'
+import {
+  coinKeyOf,
+  fetchSuiPriceUsd,
+  fetchHeistPriceUsd,
+  fetchHeistPriceUsdLive,
+  fullRawForCoin,
+  mtrxRawForCoin,
+} from '../../../lib/heist-prices'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
+const SUI_PROGRAM_ID = process.env.SUI_PROGRAM_ID || ''
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
 const RPC_URL = `https://fullnode.${SUI_NETWORK}.sui.io:443`
 
 const MAX_DEVICES = 20
+// v5: the mint is $0.50 USD in ANY registered coin (SUI/USDC/USDT/HEIST);
+// $0.25 with MTRX delegation. HEIST has a FLOATABLE price — the mint cost in
+// HEIST follows HEIST_PRICE_USD (e.g. 250 HEIST at $0.002). The contract
+// validates against the on-chain price table (HeistAdmin); THIS route
+// re-validates against the same economics (live SUI price + configured HEIST
+// price) and enforces the MTRX discount (the contract cannot read Solana
+// MTRX) — fails closed on any mismatch.
+const MTRX_THRESHOLD = 1000
+const MTRX_CONTRACT_ADDRESS = process.env.MTRX_CONTRACT_ADDRESS || 'MTRX_PLACEHOLDER_ADDRESS'
+const MTRX_DECIMALS = 9
+const SOLANA_RPC = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com'
 // Anti-cheat: registration must happen shortly after the mint tx. A grid can
 // only be crafted against numbers drawn BEFORE the mint — the window prevents
 // "mint now, wait for future draws, then register a winning grid".
@@ -36,6 +56,51 @@ setInterval(() => {
 
 function isHex(s: string) { return /^0x[0-9a-fA-F]{64}$/.test(s) }
 function normAddr(s: string) { return (s || '').toLowerCase() }
+
+// v4: verify a wallet holds >= MTRX_THRESHOLD MTRX on Solana. If MTRX env
+// vars are unset (placeholders), verification FAILS CLOSED so nobody can
+// claim the discount against a non-existent token.
+async function hasMtrx(solAddress: string): Promise<boolean> {
+  if (!solAddress || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solAddress)) return false
+  if (MTRX_CONTRACT_ADDRESS.startsWith('MTRX_PLACEHOLDER')) return false
+  try {
+    const { Connection, PublicKey } = await import('@solana/web3.js')
+    const { getAssociatedTokenAddress } = await import('@solana/spl-token')
+    const conn = new Connection(SOLANA_RPC, 'confirmed')
+    const ata = await getAssociatedTokenAddress(new PublicKey(MTRX_CONTRACT_ADDRESS), new PublicKey(solAddress))
+    const bal = await conn.getTokenAccountBalance(ata)
+    return Number(bal.value.amount) / Math.pow(10, MTRX_DECIMALS) >= MTRX_THRESHOLD
+  } catch (e) {
+    console.error('[mint-nft] MTRX check failed:', e?.message)
+    return false
+  }
+}
+
+// Extract payment details from the mint tx events (DeviceMinted).
+// v5 event carries: amount_paid (HEIST tier), payment_value (raw units of the
+// paid coin), discounted (MTRX tier flag), coin (the coin type string used).
+function extractPaymentDetails(tr: any, proto: any): {
+  amountPaid: number | null
+  paymentValue: number | null
+  discounted: boolean
+  coin: string
+} {
+  const events = tr?.events ?? proto?.effects?.events ?? []
+  for (const ev of events) {
+    const t = String(ev?.type || ev?.typeName || '')
+    if (!t.endsWith('::heist::DeviceMinted')) continue
+    const f = ev?.parsedJson ?? ev?.parsed ?? {}
+    const amountPaid = Number(f?.amount_paid)
+    const paymentValue = Number(f?.payment_value)
+    return {
+      amountPaid: Number.isFinite(amountPaid) && amountPaid > 0 ? amountPaid : null,
+      paymentValue: Number.isFinite(paymentValue) && paymentValue > 0 ? paymentValue : null,
+      discounted: f?.discounted === true,
+      coin: String(f?.coin || ''),
+    }
+  }
+  return { amountPaid: null, paymentValue: null, discounted: false, coin: '' }
+}
 
 // Convert an on-chain grid (3×9 of u8, 0 = empty) to the ledger's (number|null)[][].
 // Accepts numbers or numeric strings (u8/u64 may serialize either way).
@@ -95,6 +160,7 @@ export async function POST(req: Request) {
     const body = await req.json()
     const walletRaw: string = body.wallet || ''
     const wallet = normAddr(walletRaw)
+    const solAddress: string = body.solAddress || ''
     const mintDigest: string = body.mintDigest || ''
     const devices: { grid: unknown }[] = Array.isArray(body.devices) ? body.devices : []
 
@@ -152,6 +218,68 @@ export async function POST(req: Request) {
     }
     if (!sender || sender !== wallet) {
       return NextResponse.json({ ok: false, error: `Mint sender ${sender.slice(0, 10)}… does not match wallet` }, { status: 400 })
+    }
+
+    // ── v5 anti-cheat: enforce the $0.50/$0.25 USD payment in ANY coin ──
+    const { amountPaid, paymentValue, discounted, coin } = extractPaymentDetails(tr, proto)
+    if (amountPaid === null || amountPaid <= 0) {
+      return NextResponse.json({ ok: false, error: 'Could not read mint payment amount — retry' }, { status: 400 })
+    }
+
+    // The payment coin must be one we accept (SUI/USDC/USDT/HEIST).
+    const key = coinKeyOf(coin, SUI_PROGRAM_ID)
+    if (!key) {
+      return NextResponse.json({ ok: false, error: `Payment coin not accepted: ${coin || 'unknown'}` }, { status: 400 })
+    }
+
+    // Expected raw payment in that coin ($0.50, or $0.25 for discounted mints).
+    // RULES: HEIST price resolves live-feed → env → placeholder ($0.0001), so
+    // it always has a price; real market data flows in automatically once the
+    // live feed is configured. Only the SUI entry needs the live SUI price —
+    // stables (fixed $1) and HEIST (its own price) stay mintable even if the
+    // CoinGecko feed is down.
+    let requiredRaw: bigint
+    try {
+      const heistUsd = (await fetchHeistPriceUsdLive()) ?? fetchHeistPriceUsd()
+      if (key === 'SUI') {
+        requiredRaw = fullRawForCoin('SUI', await fetchSuiPriceUsd(), heistUsd)
+      } else {
+        requiredRaw = fullRawForCoin(key, 0, heistUsd)
+      }
+    } catch {
+      const coinName = key === 'SUI' ? 'SUI' : 'HEIST'
+      return NextResponse.json({ ok: false, error: `Could not fetch ${coinName} price — retry in a moment` }, { status: 503 })
+    }
+    const required = discounted ? mtrxRawForCoin(requiredRaw) : requiredRaw
+    const pv = BigInt(paymentValue ?? 0)
+    // SUI + HEIST payments get a ±3% tolerance (the client pads ~0.5% for SUI
+    // and the prices are cron-synced, so a tiny lag after a price change
+    // shouldn't reject a valid mint); stables get a small ±0.5% so a rounding
+    // overpay (e.g. an exact 500_000 USDC payment that the client split into
+    // a slightly larger coin) can't fail registration of an already-accepted
+    // on-chain mint.
+    // NOTE: the event's amount_paid (on-chain HEIST vault credit) is NOT
+    // cross-checked against the server's current HEIST price — it is a
+    // point-in-time credit from the on-chain table, so a >3% HEIST price move
+    // between cron syncs would permanently block registration of an otherwise
+    // valid mint (the credit never retroactively changes). The payment check
+    // above + the authority-only price table already cover the money path.
+    const tolerant = key === 'SUI' || key === 'HEIST'
+    const maxAllowed = tolerant ? (required * 103n) / 100n : (required * 1005n) / 1000n
+    if (pv < required || pv > maxAllowed) {
+      return NextResponse.json({
+        ok: false,
+        error: `Payment mismatch: paid ${pv} ${key} raw, expected ${required}${tolerant ? ' (±3%)' : ' (±0.5%)'}`,
+      }, { status: 400 })
+    }
+
+    // MTRX discount gate — the contract can't read Solana MTRX, so this route
+    // is the gate. Fails closed.
+    if (discounted) {
+      const okMtrx = await hasMtrx(solAddress)
+      if (!okMtrx) {
+        return NextResponse.json({ ok: false, error: 'Discounted mint requires 1000+ MTRX — send your Solana MTRX address' }, { status: 403 })
+      }
     }
 
     // ── 2) Anti-cheat: extract the REAL created Device object IDs ──────────

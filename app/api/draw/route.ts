@@ -6,10 +6,27 @@ import { SuiGrpcClient } from '@mysten/sui/grpc'
 import { Transaction } from '@mysten/sui/transactions'
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
 import { executeSettlement } from '../../../lib/claim-settle'
+import {
+  fetchSuiPriceUsd,
+  fetchHeistPriceUsdLive,
+  isValidHeistPriceUsd,
+  fullRawForCoin,
+  SUI_COIN_TYPE,
+  heistCoinTypeOf,
+} from '../../../lib/heist-prices'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SUI_PROGRAM_ID = process.env.SUI_PROGRAM_ID
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
+// v5: shared HeistAdmin (price table). When set, the draw cron keeps the SUI
+// entry in sync with the live price so users' exact payments always pass the
+// contract's on-chain check.
+const HEIST_ADMIN_ID = process.env.HEIST_ADMIN_ID || ''
+// Last prices (raw $0.50 amounts) written on-chain this process — only re-write
+// when they moved (in-memory: resets on cold start, so the first cron run after
+// a cold start just re-writes the same value — harmless).
+let lastSuiRawWritten = 0n
+let lastHeistRawWritten = 0n
 // Network-aware: testnet/devnet for local dev testing with faucet SUI
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
 const RPC_URL = `https://fullnode.${SUI_NETWORK}.sui.io:443`
@@ -110,7 +127,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: 'All 90 numbers already drawn' }, { status: 400 })
     }
 
-    // Build PTB: draw_number(session, ctx)
+    // Build PTB: draw_number(session, ctx) [+ live SUI price sync (v5)]
     const txb = new Transaction()
     txb.setSender(senderAddr)
 
@@ -120,6 +137,59 @@ export async function GET(req: Request) {
         txb.object(SESSION_OBJECT_ID),
       ],
     })
+
+    // Live prices → on-chain price table (only when they moved materially).
+    // The frontend pays the session-state prices; keeping the table in sync
+    // guarantees the exact payment passes the contract's >= check. SUI comes
+    // from CoinGecko; HEIST is floatable (operator-set HEIST_PRICE_USD).
+    let suiSyncedTx = false
+    let heistSyncedTx = false
+    if (HEIST_ADMIN_ID) {
+      try {
+        const suiUsd = await fetchSuiPriceUsd()
+        const raw = fullRawForCoin('SUI', suiUsd, 0)
+        const drift = lastSuiRawWritten === 0n ? 1n : (raw > lastSuiRawWritten ? raw - lastSuiRawWritten : lastSuiRawWritten - raw)
+        // Rewrite when the SUI price moved >0.25% from the last written value —
+        // keeps the on-chain table close enough to the live feed that the
+        // frontend's small payment buffer always clears the >= check.
+        if (drift * 400n > (lastSuiRawWritten || 1n)) {
+          txb.moveCall({
+            target: `${SUI_PROGRAM_ID}::heist::set_price`,
+            typeArguments: [SUI_COIN_TYPE],
+            arguments: [txb.object(HEIST_ADMIN_ID), txb.pure.u64(raw)],
+          })
+          suiSyncedTx = true
+          lastSuiRawWritten = raw
+        }
+        // HEIST entry — RULES: resolves live-feed → env → placeholder ($0.0001).
+        // M2 review fix: only a REAL price source (live feed or HEIST_PRICE_USD
+        // env) is pushed on-chain. The bare $0.0001 placeholder is already
+        // seeded by setup-heist.mjs — re-writing it would silently OVERWRITE a
+        // previously-synced real price if a configured feed ever goes down
+        // (the vault credit would flip 20× without any UI change). When no
+        // real source is available we simply skip the sync and keep the last
+        // written value.
+        const heistLive = await fetchHeistPriceUsdLive()
+        const heistEnv = Number(process.env.HEIST_PRICE_USD)
+        const heistUsd = heistLive !== null ? heistLive : (isValidHeistPriceUsd(heistEnv) ? heistEnv : null)
+        if (heistUsd !== null) {
+          const heistRaw = fullRawForCoin('HEIST', suiUsd, heistUsd)
+          if (heistRaw !== lastHeistRawWritten) {
+            txb.moveCall({
+              target: `${SUI_PROGRAM_ID}::heist::set_price`,
+              typeArguments: [heistCoinTypeOf(SUI_PROGRAM_ID || '')],
+              arguments: [txb.object(HEIST_ADMIN_ID), txb.pure.u64(heistRaw)],
+            })
+            heistSyncedTx = true
+            lastHeistRawWritten = heistRaw
+          }
+        } else {
+          console.warn('Draw: HEIST price has no real source (feed down + no env) — on-chain HEIST price NOT updated')
+        }
+      } catch (e: any) {
+        console.error('Draw: price sync skipped:', e?.message)
+      }
+    }
 
     txb.setGasBudget(10_000_000)
     txb.setGasPayment([]) // use address-balance accumulator for gas
@@ -136,6 +206,10 @@ export async function GET(req: Request) {
     const isSuccess = result.$kind === 'Transaction'
 
     if (!isSuccess) {
+      // roll back the cached prices so we retry the sync next tick — track the
+      // SUI and HEIST writes independently so a failed HEIST-only sync retries.
+      if (suiSyncedTx) lastSuiRawWritten = 0n
+      if (heistSyncedTx) lastHeistRawWritten = 0n
       return NextResponse.json({
         ok: false,
         error: `On-chain error: ${txResult?.effects?.status?.error?.message || 'unknown'}`,
@@ -158,6 +232,7 @@ export async function GET(req: Request) {
       drawnCount: (updatedFields.drawn_numbers || []).length,
       remaining: 90 - (updatedFields.drawn_numbers || []).length,
       settled,
+      suiPriceSynced: suiSyncedTx || heistSyncedTx,
       ts: Date.now(),
     })
 

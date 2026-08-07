@@ -9,7 +9,7 @@ import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-r
 // SUI imports
 import { Transaction } from '@mysten/sui/transactions'
 // dapp-kit hooks — wallet state, connect/disconnect, and tx signing
-import { useCurrentAccount, useConnectWallet, useDisconnectWallet, useSignAndExecuteTransaction, useWallets } from '@mysten/dapp-kit'
+import { useCurrentAccount, useConnectWallet, useDisconnectWallet, useSignAndExecuteTransaction, useWallets, useSuiClient } from '@mysten/dapp-kit'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Cell = { num:number|null; matched:boolean; clicked:boolean; missed:boolean }
@@ -50,19 +50,26 @@ const WIN_BPS:Record<WinType,number> = {
 // Unclaimed positions at game end → treasury. No other distribution.
 
 // ─── HEIST Token Economics ──────────────────────────────────────────────────
-// Device price: 0.5 USDC worth of HEIST tokens
-// 1 HEIST = $0.001 USDC (i.e. 1/10th of a cent per HEIST)
-// 0.5 USDC ÷ $0.001/HEIST = 500 HEIST per device
-const HEIST_PRICE_USDC = 0.001  // 1 HEIST = $0.001 USDC
+// ╔══ HEIST PRICING RULES (placeholder until a real market exists) ═══════════╗
+// ║ 1. Price resolution: live feed → HEIST_PRICE_USD env → placeholder        ║
+// ║    $0.0001. The placeholder keeps HEIST mintable out of the box; once     ║
+// ║    HEIST_COINGECKO_ID / HEIST_PRICE_API_URL is configured, the real       ║
+// ║    market price flows in automatically (draw cron syncs it on-chain).     ║
+// ║ 2. Mint cost in HEIST = $0.50 / price (e.g. 250 HEIST at $0.002, or       ║
+// ║    5,000 HEIST at the $0.0001 placeholder), shown live in the             ║
+// ║    MINT_TERMINAL from /api/session-state (`prices` + `rates`).            ║
+// ║ 3. Any coin (SUI/USDC/USDT/HEIST) pays $0.50 ($0.25 MTRX); the vault       ║
+// ║    ALWAYS holds HEIST only (99% of payment → vault, 1% treasury).         ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
 const DEVICE_PRICE_USDC = 0.5   // Device price in USDC
-const DEVICE_PRICE_HEIST = Math.floor(DEVICE_PRICE_USDC / HEIST_PRICE_USDC) // = 500 HEIST
-// SUI exchange rate (hardcoded for MVP, add oracle in production)
-// ⚠️ UPDATE SUI_PRICE_USD to the current market price before deploying
-// The mint always charges $0.50 USDC/USDT worth of SUI, variable with SUI price
-const SUI_PRICE_USD = 0.68  // 1 SUI ≈ $0.68 USD (as of 2026-07-30) — UPDATE when SUI price changes
-// On-chain mint amount per device: $0.50 USDC worth of SUI, in MIST (1 SUI = 1e9 MIST)
-// Guard: minimum 0.001 SUI (1_000_000 MIST) to prevent near-zero tx if SUI_PRICE_USD is misconfigured
-const DEVICE_PRICE_SUI = Math.max(1_000_000, Math.floor(DEVICE_PRICE_USDC / SUI_PRICE_USD * 1_000_000_000))
+
+// v5: ANY-COIN mint — the console costs $0.50 USD in any registered coin
+// ($0.25 with MTRX delegation). Exact raw amounts come from the server's
+// /api/session-state `prices` map (live SUI price). Coin types:
+const SUI_COIN_TYPE='0x2::sui::SUI'
+const USDC_COIN_TYPE='0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC' // Circle native
+const USDT_COIN_TYPE=(process.env.NEXT_PUBLIC_USDT_COIN_TYPE||'').trim() // enabled once confirmed
+const HEIST_ADMIN_ID=process.env.NEXT_PUBLIC_HEIST_ADMIN_ID||'SET_AFTER_SETUP'
 
 // ─── MTRX Governance Token (Solana) ───────────────────────────────────────
 // Placeholder addresses — user provides actual after deployment
@@ -71,10 +78,7 @@ const MTRX_DELEGATION_VAULT = process.env.NEXT_PUBLIC_MTRX_DELEGATION_VAULT || '
 const MTRX_DECIMALS = 9
 const MTRX_DELEGATION_THRESHOLD = 1000
 
-// Full price = $0.50 USD worth of SUI (variable based on SUI_PRICE_USD)
-// Discounted price (MTRX holders) = $0.25 USD worth of SUI
-// DEVICE_PRICE_SUI is the same value — used for clarity where full price is explicit
-const DEVICE_PRICE_SUI_DISCOUNTED = Math.max(500_000, Math.floor(DEVICE_PRICE_USDC / 2 / SUI_PRICE_USD * 1_000_000_000))   // $0.25 USD worth
+// v5: MTRX holders pay 50% off ($0.25) — applied via the prices map + `discounted` flag
 
 // Fallback vault estimate when session-state isn't available
 const VAULT_ESTIMATE = 0
@@ -184,6 +188,8 @@ function useOnChainSession(active:boolean){
     lastNumber:number;drawCount:number;drawn:number[];
     active:boolean;bankruptCount:number;winsClaimed:boolean[];
     vaultTotal:number;
+    prices?:Record<string,{full:string;mtrx:string}>;
+    rates?:Record<string,string>;
   }|null>(null)
   useEffect(()=>{
     if(!active)return
@@ -505,16 +511,16 @@ function MintPanel({wallet,devices,mintCount,mintToken,setMintCount,setMintToken
               <div style={{background:'linear-gradient(90deg,rgba(0,229,160,0.06),transparent)',border:'1px solid rgba(0,229,160,0.12)',borderRadius:6,padding:'7px 10px',marginBottom:10}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
                   <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#1e4a6a'}}>PRICE PER DEVICE</span>
-                  <span style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:800,color:'#00e5a0',textShadow:'0 0 8px rgba(0,229,160,0.4)'}}>{DEVICE_PRICE_HEIST.toLocaleString()}<span style={{fontSize:9,fontWeight:400,color:'#4a7fa5',marginLeft:3}}>HEIST</span></span>
+                  <span style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:800,color:'#00e5a0',textShadow:'0 0 8px rgba(0,229,160,0.4)'}}>${DEVICE_PRICE_USDC.toFixed(2)}<span style={{fontSize:9,fontWeight:400,color:'#4a7fa5',marginLeft:3}}>USD</span></span>
                 </div>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:'#1e4a6a'}}>≈ ${DEVICE_PRICE_USDC.toFixed(2)} USDC <span style={{color:'#2a5a7a'}}>|</span> ${(DEVICE_PRICE_SUI / 1e9).toFixed(4)} SUI</span>
-                  <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:'#2a5a7a'}}>1 SUI = $${SUI_PRICE_USD.toFixed(2)}</span>
+                  <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:'#1e4a6a'}}>ANY COIN: SUI · USDC · USDT · HEIST<span style={{color:'#2a5a7a'}}> | </span>MTRX 50% OFF</span>
+                  <span style={{fontFamily:'DM Mono,monospace',fontSize:6.5,color:'#f59e0b'}}>1 HEIST = live from /api/session-state</span>
                 </div>
               </div>
               <div style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#2a5a7a',marginBottom:6}}>SELECT TOKEN</div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6,marginBottom:12}}>
-                {['USDT','USDC','SOL','HEIST'].map(t=>(
+                {['SUI','USDC','USDT','HEIST'].filter(t=>t!=='USDT'||USDT_COIN_TYPE).map(t=>(
                   <button key={t} onClick={()=>setMintToken(t)} style={{...btnBase,padding:'10px 6px',fontSize:10,
                     background:mintToken===t?'#0a3a5a':'transparent',
                     color:mintToken===t?'#00e5a0':'#2a5a7a',
@@ -962,8 +968,8 @@ function WinnersTerminal({winRecords}:{winRecords:WinRecord[]}){
 }
 
 // ─── Hack Matrix Display (bisected vertically) ────────────────────────────────
-function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords,liveBank,contractAddr,timer,totalTimer,deviceCount,vaultTotal}:{
-  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[];liveBank:number;contractAddr:string;timer:number;totalTimer:number;deviceCount:number;vaultTotal:number
+function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,winRecords,liveBank,contractAddr,timer,totalTimer,deviceCount,vaultTotal,heistRateUsd}:{
+  calledNums:Set<number>;calledOrder:number[];clickWindowOpen:boolean;preGameSecs:number;winRecords:WinRecord[];liveBank:number;contractAddr:string;timer:number;totalTimer:number;deviceCount:number;vaultTotal:number;heistRateUsd?:number
 }){
   const[glitching,setGlitching]=useState(false)
   const[bgCmds,setBgCmds]=useState<{cmd:string;x:number;y:number;op:number;st:string;col:string}[]>([])
@@ -980,7 +986,7 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
   const trend=prices[prices.length-1]>=prices[0]
   // HEIST calculations
   // Convert vault MIST → SUI → USD → HEIST
-  const vaultHeist=Math.max(0,Math.floor(vaultTotal*SUI_PRICE_USD/(HEIST_PRICE_USDC*1e9)))
+  const vaultHeist=Math.max(0,Math.floor(vaultTotal/1e9)) // vault holds raw HEIST (v4)
   const totalPaidHeist=paid
 
   useEffect(()=>{
@@ -1210,7 +1216,7 @@ function HackMatrixDisplay({calledNums,calledOrder,clickWindowOpen,preGameSecs,w
         <div style={{display:'flex',alignItems:'center',gap:6}}>
           <div style={{width:6,height:6,borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 6px #f59e0b'}}/>
           <span style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#1e4a6a',letterSpacing:'0.05em'}}>VALUE</span>
-          <span style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#f59e0b',fontWeight:700}}>${(Math.max(0,vaultHeist-totalPaidHeist)*HEIST_PRICE_USDC).toFixed(2)}</span>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#f59e0b',fontWeight:700}}>${heistRateUsd!=null?(Math.max(0,vaultHeist-totalPaidHeist)*heistRateUsd).toFixed(2):'—'}</span>
         </div>
       </div>
     </div>
@@ -1783,6 +1789,7 @@ function Ransome(){
   const{mutateAsync:disconnectWallet}=useDisconnectWallet()
   const{mutateAsync:signAndExecute}=useSignAndExecuteTransaction()
   const registeredWallets=useWallets()
+  const suiClient=useSuiClient()
   const suiAddress=currentAccount?.address??null
   const suiConnected=!!currentAccount
   // ═══ SET AFTER PUBLISHING HEIST CONTRACT — then set env vars in Vercel ═══
@@ -1790,7 +1797,7 @@ function Ransome(){
   const SESSION_OBJECT_ID = process.env.NEXT_PUBLIC_SESSION_OBJECT_ID || 'SET_AFTER_PUBLISH'
   // Chain for wallet signing — testnet when NEXT_PUBLIC_SUI_NETWORK=testnet (faucet dev testing)
   const SUI_CHAIN = (process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet') === 'testnet' ? 'sui:testnet' : 'sui:mainnet'
-  // DEVICE_PRICE_SUI defined globally above; this is the on-chain payment amount
+  // HEIST price rules defined at top (see HEIST PRICING RULES) — this is the on-chain HEIST payment amount
   // Unified wallet address
   const wallet = chain==='solana' && connected && publicKey ? publicKey.toBase58() : chain==='sui' && suiConnected ? suiAddress : null
   // ── Check MTRX delegation status ───────────────────────────────────
@@ -1814,7 +1821,7 @@ function Ransome(){
   const[announcement,setAnnouncement]=useState<string|null>(null)
   const[bankruptCount,setBankruptCount]=useState(0)
   const[mintCount,setMintCount]=useState(1)
-  const[mintToken,setMintToken]=useState('USDC')
+  const[mintToken,setMintToken]=useState('SUI')
   const[mtrxDelegated,setMtrxDelegated]=useState(false)
   const[mtrxBalance,setMtrxBalance]=useState(0)
   const[solAddress,setSolAddress]=useState('')
@@ -1850,6 +1857,42 @@ function Ransome(){
   const lobbyCountdown=useLobbyCountdown(devClock)    // 59-min cycle countdown
   const lobbyFill=Math.min(1-(lobbyCountdown/LOBBY_CYCLE),1)  // 0→1 as vault fills
   const onChainSession=useOnChainSession(phase==='game')  // poll on-chain state during game
+
+  // ── v5 mint prices/rates for the LOBBY ──────────────────────────────────────
+  // The 2s game-poll only runs in-game; minting happens from the lobby, so we
+  // keep prices+rates fresh here (every 30s while not in-game) — both for the
+  // "1 HEIST = $X" display AND the exact mint payment amount.
+  const[lobbyPrices,setLobbyPrices]=useState<Record<string,{full:string;mtrx:string}>|null>(null)
+  const[lobbyRates,setLobbyRates]=useState<Record<string,string>|null>(null)
+  useEffect(()=>{
+    if(phase==='game')return
+    let alive=true
+    const load=async()=>{
+      try{
+        const r=await fetch('/api/session-state')
+        if(r.ok){const d=await r.json();if(d.ok&&alive){setLobbyPrices(d.prices||null);setLobbyRates(d.rates||null)}}
+      }catch{}
+    }
+    load()
+    const t=setInterval(load,30000)
+    return ()=>{alive=false;clearInterval(t)}
+  },[phase])
+  const mintPrices=onChainSession?.prices ?? lobbyPrices
+  const mintRates=onChainSession?.rates ?? lobbyRates
+
+  // ── v5 mint cost display: per-device cost in the SELECTED token + live rates ──
+  const mintCostLabel=useMemo(()=>{
+    if(chain!=='sui')return `${mintCount}× $${(mintCount*0.5).toFixed(2)} SOL`
+    const e=mintPrices?.[mintToken]
+    if(!e)return `${mintCount}× $${(mintCount*(mtrxDelegated?0.25:0.5)).toFixed(2)} USD`
+    const raw=mtrxDelegated?e.mtrx:e.full
+    const dec=mintToken==='USDC'||mintToken==='USDT'?6:9
+    const per=Number(raw)/Math.pow(10,dec)
+    const total=per*mintCount
+    const usd=mintCount*(mtrxDelegated?0.25:0.5)
+    const rate=mintToken==='HEIST'?` 1 HEIST=$${mintRates?.HEIST??'—'}`:mintToken==='SUI'?` 1 SUI=$${mintRates?.SUI??'—'}`:''
+    return `${total.toLocaleString(undefined,{maximumFractionDigits:dec===6?2:1})} ${mintToken} · $${usd.toFixed(2)}${rate?' · '+rate:''}`
+  },[chain,mintCount,mintToken,mtrxDelegated,mintPrices,mintRates])
 
   // ── Persist & restore state ──────────────────────────────────────────────
   const resumeRef=useRef(false)
@@ -2333,7 +2376,7 @@ function Ransome(){
           }catch(e:any){console.error('Claim fetch error:',e.message)}
         }
         if(verified>0){
-          announce(`✅ RANSOM HELD IN VAULT!\n${WIN_LABELS[wt]}\n${verified} wallet${verified>1?'s':''} verified\n≈ ${(lastEst/1e9).toFixed(4)} SUI est. · claim from VAULT before next round`)
+          announce(`✅ RANSOM HELD IN VAULT!\n${WIN_LABELS[wt]}\n${verified} wallet${verified>1?'s':''} verified\n≈ ${(lastEst/1e9).toFixed(0)} HEIST est. · claim from VAULT before next round`)
         }
       }
 
@@ -2341,7 +2384,7 @@ function Ransome(){
       // Vault holds SUI/USDC — convert to HEIST at market rate
       const vaultUsdc=onChainSession?.vaultTotal??0
       // Convert vault MIST → SUI → USD → HEIST
-      const vaultHeist=Math.max(0,Math.floor(vaultUsdc*SUI_PRICE_USD/(HEIST_PRICE_USDC*1e9)))
+      const vaultHeist=Math.max(0,Math.floor(vaultUsdc/1e9)) // vault holds raw HEIST (v4)
       const bps=WIN_BPS[wt]
       const totalPayoutHeist=Math.floor(vaultHeist*bps/10_000)
       const splitHeist=Math.floor(totalPayoutHeist/Math.max(final.length,1))
@@ -2429,8 +2472,6 @@ function Ransome(){
   // ─── Mint devices (SUI or Solana) ──────────────────────────────────────
   const mintDevices=async()=>{
     const count=mintCount
-    const pricePer=mtrxDelegated?DEVICE_PRICE_SUI_DISCOUNTED:DEVICE_PRICE_SUI // 0.5 or 0.25 SUI in MIST
-    const totalCost=pricePer*count
 
     // DEV MODE — local-only mint ONLY when no wallet is connected (pure UI
     // testing). With a wallet connected, fall through to the real on-chain
@@ -2446,14 +2487,67 @@ function Ransome(){
     // If SUI chain selected and wallet connected, build real SUI transaction
     if(chain==='sui'&&suiConnected&&suiAddress){
       try{
-        // Build transaction — split a fresh coin per mint (each gets its own coin object)
+        // ── v5: ANY-COIN mint ($0.50 / $0.25 MTRX) — pay in the SELECTED token ──
+        // Prices come from /api/session-state. Minting happens from the lobby
+        // (phase !== 'game'), where the 2s game-poll isn't running — fetch the
+        // price map on demand if we don't have it yet.
+        let prices=mintPrices
+        let rates=mintRates
+        if(!prices){
+          try{
+            const pr=await fetch('/api/session-state')
+            if(pr.ok){const pd=await pr.json();if(pd.ok&&pd.prices){prices=pd.prices;rates=pd.rates}}
+          }catch{}
+        }
+        const priceEntry=prices?.[mintToken]
+        let required=0n
+        if(priceEntry){
+          required=BigInt(mtrxDelegated?priceEntry.mtrx:priceEntry.full)
+        }else if(mintToken==='HEIST'&&rates?.HEIST){
+          // fallback: $0.50 / current HEIST price (floatable)
+          const full=BigInt(Math.floor(0.5/Number(rates.HEIST)*1e9))
+          required=mtrxDelegated?full/2n:full
+        }else if(mintToken==='USDC'||mintToken==='USDT'){
+          required=mtrxDelegated?250000n:500000n
+        }else{
+          announce('⚠ PRICE FEED UNAVAILABLE — retry in a moment')
+          return
+        }
+        // SUI/HEIST: pay a small buffer so the exact amount clears the on-chain
+        // price table even if the cron-synced price moved since session-state
+        // (the contract returns change; the server allows up to +3%).
+        const payAmount=(mintToken==='SUI'||mintToken==='HEIST')?required+required/100n:required
+        const total=payAmount*BigInt(count)
+        const coinType=mintToken==='SUI'?SUI_COIN_TYPE:mintToken==='USDC'?USDC_COIN_TYPE:mintToken==='USDT'?USDT_COIN_TYPE:`${SUI_PROGRAM_ID}::heist::HEIST`
+        if(!coinType){announce(`⚠ ${mintToken} payments not configured yet`);return}
+        if(HEIST_ADMIN_ID==='SET_AFTER_SETUP'){announce('⚠ HEIST admin not set — run setup-heist first');return}
+
+        // Find a coin covering the total cost (paginated 50/page)
+        let payCoin:any=null
+        let held=0n
+        let cursor:string|null=null
+        do{
+          const page=await suiClient.getCoins({owner:suiAddress,coinType,cursor:cursor??undefined,limit:50})
+          for(const c of page.data){
+            held+=BigInt(c.balance)
+            if(!payCoin&&BigInt(c.balance)>=total)payCoin=c
+          }
+          cursor=page.hasNextPage?page.nextCursor:null
+        }while(cursor&&!payCoin)
+        if(!payCoin){
+          const dec=mintToken==='USDC'||mintToken==='USDT'?1e6:1e9
+          announce(`⚠ INSUFFICIENT ${mintToken} — need ${(Number(total)/dec).toFixed(2)} ${mintToken}, you have ${(Number(held)/dec).toFixed(2)}`)
+          return
+        }
+        // One multi-split of the payment coin → one payment coin per mint
         const txb=new Transaction()
         txb.setSender(suiAddress)
+        const paymentCoins=txb.splitCoins(txb.object(payCoin.coinObjectId),Array.from({length:count},()=>payAmount))
         for(let i=0;i<count;i++){
-          const[paymentCoin]=txb.splitCoins(txb.gas,[BigInt(pricePer)])
           txb.moveCall({
             target:`${SUI_PROGRAM_ID}::heist::mint_device`,
-            arguments:[paymentCoin,txb.object(SESSION_OBJECT_ID),txb.pure.u64(pricePer),txb.pure.u8(devices.length+i)],
+            typeArguments:[coinType],
+            arguments:[paymentCoins[i],txb.object(SESSION_OBJECT_ID),txb.object(HEIST_ADMIN_ID),txb.pure.bool(mtrxDelegated),txb.pure.u8(devices.length+i)],
           })
         }
 
@@ -2476,6 +2570,8 @@ function Ransome(){
               body:JSON.stringify({
                 wallet:suiAddress,
                 mintDigest:result.digest,
+                solAddress, // server verifies MTRX discount (250-HEIST tier) against this
+                coinType,   // v5: server cross-checks the paid coin + amount
                 devices:nd.map(d=>({grid:d.grid.map(r=>r.map(c=>c.num))})),
               }),
             })
@@ -2652,7 +2748,7 @@ function Ransome(){
             <div style={{background:'#0e1b25',border:'1px solid rgba(63,73,83,0.2)',padding:16}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
                 <span style={{fontSize:14,fontWeight:700,color:'#dce6f3'}}>💻 MINT_TERMINAL</span>
-                <span style={{fontSize:9,color:chain==='sui'?'#4da6ff':'#00e5a0',fontWeight:700}}>{chain==='sui'?`≈ ${(mintCount*(mtrxDelegated?DEVICE_PRICE_SUI_DISCOUNTED:DEVICE_PRICE_SUI)/1e9).toFixed(2)} SUI (${mintCount}× $${(mintCount*(mtrxDelegated?0.25:0.5)).toFixed(2)} USDC)`:`${mintCount}× $${(mintCount*0.5).toFixed(2)} SOL`}</span>
+                <span style={{fontSize:9,color:chain==='sui'?'#4da6ff':'#00e5a0',fontWeight:700}}>{mintCostLabel}</span>
               {mtrxDelegated&&chain==='sui'&&<span style={{fontSize:7,color:'#22c55e',marginLeft:4}}>⚡MTRX 50% OFF</span>}
               </div>
               {/* MTRX Delegation strip */}
@@ -2675,7 +2771,7 @@ function Ransome(){
               )}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,alignItems:'end'}}>
                 <div><div style={{fontSize:9,color:'#4a6a7a',marginBottom:4}}>QTY{DEV_MODE&&<span style={{color:'#f59e0b',marginLeft:4}}>DEV</span>}</div><div style={{display:'flex',gap:3}}>{(DEV_MODE?[1,3,5,10,20]:[1,3,5,10]).map(n=>(<button key={n} onClick={()=>setMintCount(n)} style={{flex:1,padding:'7px 0',background:mintCount===n?(chain==='sui'?'rgba(77,166,255,0.15)':'rgba(0,229,160,0.15)'):'rgba(0,0,0,0.3)',border:'1px solid '+(mintCount===n?(chain==='sui'?'rgba(77,166,255,0.5)':'rgba(0,229,160,0.5)'):'rgba(63,73,83,0.3)'),color:mintCount===n?(chain==='sui'?'#4da6ff':'#00e5a0'):'#4a6a7a',fontSize:10,fontWeight:700,cursor:'pointer'}}>{n}</button>))}</div></div>
-                <div><div style={{fontSize:9,color:'#4a6a7a',marginBottom:4}}>TOKEN</div><div style={{display:'flex',gap:3}}>{(chain==='sui'?['USDC','USDT','HEIST']:['SOL','USDT','HEIST']).map(t=>(<button key={t} onClick={()=>setMintToken(t)} style={{flex:1,padding:'7px 3px',background:mintToken===t?'rgba(0,229,160,0.15)':'rgba(0,0,0,0.3)',border:'1px solid '+(mintToken===t?'rgba(0,229,160,0.5)':'rgba(63,73,83,0.3)'),color:mintToken===t?'#00e5a0':'#4a6a7a',fontSize:9,fontWeight:700,cursor:'pointer'}}>{t}</button>))}</div></div>
+                <div><div style={{fontSize:9,color:'#4a6a7a',marginBottom:4}}>TOKEN</div><div style={{display:'flex',gap:3}}>{(chain==='sui'?['SUI','USDC','USDT','HEIST'].filter(t=>t!=='USDT'||USDT_COIN_TYPE):['SOL','USDT','HEIST']).map(t=>(<button key={t} onClick={()=>setMintToken(t)} style={{flex:1,padding:'7px 3px',background:mintToken===t?'rgba(0,229,160,0.15)':'rgba(0,0,0,0.3)',border:'1px solid '+(mintToken===t?'rgba(0,229,160,0.5)':'rgba(63,73,83,0.3)'),color:mintToken===t?'#00e5a0':'#4a6a7a',fontSize:9,fontWeight:700,cursor:'pointer'}}>{t}</button>))}</div></div>
                 <div>{wallet?(<button onClick={mintDevices} style={{width:'100%',padding:'9px 0',background:chain==='sui'?'linear-gradient(135deg,#4da6ff,#2563eb)':'linear-gradient(135deg,#00e5a0,#00b8ff)',color:'#000',border:'none',fontSize:11,fontWeight:700,cursor:'pointer'}}>MINT →</button>):(
                   chain==='sui'?(
                     <button onClick={connectSui} style={{width:'100%',padding:'9px 0',background:'linear-gradient(135deg,#4da6ff,#2563eb)',color:'#000',border:'none',fontSize:10,fontWeight:700,cursor:'pointer'}}>CONNECT SUI →</button>
@@ -2820,7 +2916,7 @@ function Ransome(){
         gap:10,alignItems:'start'}}
         className="game-grid">
         <div style={{gridArea:'matrix',minWidth:0}}>
-          <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr} timer={timer} totalTimer={totalTimer} deviceCount={devices.filter(d=>d.active).length} vaultTotal={onChainSession?.vaultTotal??VAULT_ESTIMATE}/>
+          <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr} timer={timer} totalTimer={totalTimer} deviceCount={devices.filter(d=>d.active).length} vaultTotal={onChainSession?.vaultTotal??VAULT_ESTIMATE} heistRateUsd={onChainSession?.rates?.HEIST!=null?Number(onChainSession.rates.HEIST):undefined}/>
         </div>
         <div style={{gridArea:'stats',minWidth:0}}>
           <GameStats devices={devices} calledNums={calledNums} bankruptCount={bankruptCount} liveBank={liveBank} nickname={nickname} winStates={winStates} contractAddr={contractAddr} setContractAddr={setContractAddr}/>

@@ -3,6 +3,13 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import { SuiGrpcClient } from '@mysten/sui/grpc'
+import {
+  fetchSuiPriceUsd,
+  fetchHeistPriceUsd,
+  fetchHeistPriceUsdLive,
+  fullRawForCoin,
+  mtrxRawForCoin,
+} from '../../../lib/heist-prices'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ⚠️ AFTER PUBLISHING the new HEIST contract, set env vars in Vercel:
@@ -10,7 +17,9 @@ import { SuiGrpcClient } from '@mysten/sui/grpc'
 // ═══════════════════════════════════════════════════════════════════════════
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
+const SUI_PROGRAM_ID = process.env.SUI_PROGRAM_ID || ''
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
+const USDT_COIN_TYPE_UNCONFIGURED = !(process.env.USDT_COIN_TYPE || '').trim()
 // gRPC endpoint derived from network (mainnet only in production, but supports testnet/devnet for dev)
 const RPC_URL = `https://fullnode.${SUI_NETWORK}.sui.io:443`
 
@@ -50,7 +59,7 @@ export async function GET() {
       ? fields.wins_claimed.map((b: any) => Boolean(b))
       : Array(7).fill(false)
 
-    // vault: Balance<SUI> (comes as string from SUI SDK via `vault` field)
+    // vault: Balance<HEIST> (v4 - comes as string via `vault` field)
     const vaultTotal = Number(fields.vault || fields.vault_balance || 0)
 
     // ── Fields with snake_case/camelCase fallback ────────────────────────────
@@ -67,6 +76,39 @@ export async function GET() {
         : []
     ).map((n: any) => Number(n))
 
+    // ── v5: exact raw payment per accepted coin ($0.50 / $0.25 MTRX) ───────
+    // Computed server-side so the frontend pays EXACTLY what the server (and
+    // the on-chain price table) will accept. SUI is live-fetched (cached 60s);
+    // HEIST resolves live-feed → env → placeholder ($0.0001) so it ALWAYS has
+    // a price — mintable out of the box, auto-updating once a real feed is
+    // configured. Stables are fixed. If the SUI feed fails we omit prices (the
+    // frontend shows an error on mint).
+    const prices: Record<string, { full: string; mtrx: string }> = {}
+    let rates: Record<string, string> = {}
+    let heistPriceSet = false
+    // Stables (fixed $1) + HEIST (live-feed → env → placeholder, always priced)
+    // never depend on the SUI feed — emit them even if CoinGecko is down. Only
+    // the SUI entry needs the live price and is omitted when the feed fails.
+    const heistUsd = (await fetchHeistPriceUsdLive()) ?? fetchHeistPriceUsd()
+    for (const key of ['USDC', 'USDT', 'HEIST'] as const) {
+      const full = fullRawForCoin(key, 0, heistUsd)
+      prices[key] = { full: full.toString(), mtrx: mtrxRawForCoin(full).toString() }
+    }
+    // Only include coins that are actually accepted server-side
+    if (USDT_COIN_TYPE_UNCONFIGURED) delete prices.USDT
+    // Current USD price for the mint UI (1 HEIST = $X). More decimals for HEIST
+    // so sub-$0.0001 prices don't display as "0.0000".
+    rates = { HEIST: heistUsd < 0.001 ? heistUsd.toPrecision(4) : heistUsd.toFixed(4) }
+    heistPriceSet = true
+    try {
+      const suiUsd = await fetchSuiPriceUsd()
+      const suiFull = fullRawForCoin('SUI', suiUsd, heistUsd)
+      prices.SUI = { full: suiFull.toString(), mtrx: mtrxRawForCoin(suiFull).toString() }
+      rates.SUI = suiUsd.toFixed(4)
+    } catch {
+      // SUI feed down — omit only the SUI entry (stables + HEIST stay mintable)
+    }
+
     return NextResponse.json({
       ok: true,
       session: SESSION_OBJECT_ID,
@@ -77,6 +119,9 @@ export async function GET() {
       vaultTotal,
       bankruptCount,
       winsClaimed,
+      prices,
+      rates,
+      heistPriceSet,
       ts: Date.now(),
     })
 
