@@ -121,10 +121,13 @@ export async function fetchHeistPriceUsdLive(): Promise<number | null> {
 // Accepted coins (verified on mainnet 2026-08-04 via getCoinMetadata):
 export const SUI_COIN_TYPE = '0x2::sui::SUI'
 export const USDC_COIN_TYPE = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC' // Circle native
-// USDT is NOT defaulted — the address needs final confirmation at deploy.
-// Set USDT_COIN_TYPE (server + NEXT_PUBLIC_USDT_COIN_TYPE) once confirmed;
-// setup-heist.mjs validates every configured coin against real metadata.
-export const USDT_COIN_TYPE = (process.env.USDT_COIN_TYPE || '').trim()
+// USDT — mainnet type CONFIRMED 2026-08-15 (getCoinMetadata on
+// fullnode.mainnet.sui.io): Wormhole-bridged "Tether USD", 6 decimals.
+// Env USDT_COIN_TYPE still overrides (e.g. a different bridge).
+export const USDT_COIN_TYPE = (
+  process.env.USDT_COIN_TYPE ||
+  '0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN'
+).trim()
 
 export function heistCoinTypeOf(pkg: string): string {
   return `${pkg}::heist::HEIST`

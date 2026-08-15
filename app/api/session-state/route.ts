@@ -9,6 +9,7 @@ import {
   fetchHeistPriceUsdLive,
   fullRawForCoin,
   mtrxRawForCoin,
+  USDT_COIN_TYPE,
 } from '../../../lib/heist-prices'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -19,7 +20,9 @@ import {
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
 const SUI_PROGRAM_ID = process.env.SUI_PROGRAM_ID || ''
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
-const USDT_COIN_TYPE_UNCONFIGURED = !(process.env.USDT_COIN_TYPE || '').trim()
+// USDT defaults to the confirmed Wormhole mainnet type (see lib/heist-prices.ts);
+// env override still wins. Kept as a guard so a future blank can hide the entry.
+const USDT_COIN_TYPE_UNCONFIGURED = !USDT_COIN_TYPE
 // gRPC endpoint derived from network (mainnet only in production, but supports testnet/devnet for dev)
 const RPC_URL = `https://fullnode.${SUI_NETWORK}.sui.io:443`
 

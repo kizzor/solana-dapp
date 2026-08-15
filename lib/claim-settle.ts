@@ -12,11 +12,18 @@
 import { SuiGrpcClient } from '@mysten/sui/grpc'
 import { Transaction } from '@mysten/sui/transactions'
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography'
 import { getAllPendingClaims, clearPending, resetRound, getFirstUnclaimedFh } from './claim-ledger'
 
 export function getAuthorityKeypair(): Ed25519Keypair {
   const privKey = process.env.SUI_PRIVATE_KEY
   if (privKey) {
+    // Prefer decodeSuiPrivateKey — accepts the `suiprivkey` bech32 format (same
+    // parser as the confidential scripts) AND legacy 128-hex / base64.
+    try {
+      const { secretKey } = decodeSuiPrivateKey(privKey)
+      return Ed25519Keypair.fromSecretKey(secretKey)
+    } catch {}
     if (/^[0-9a-fA-F]{128}$/.test(privKey)) {
       return Ed25519Keypair.fromSecretKey(Uint8Array.from(Buffer.from(privKey, 'hex')))
     }

@@ -68,7 +68,7 @@ const DEVICE_PRICE_USDC = 0.5   // Device price in USDC
 // /api/session-state `prices` map (live SUI price). Coin types:
 const SUI_COIN_TYPE='0x2::sui::SUI'
 const USDC_COIN_TYPE='0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC' // Circle native
-const USDT_COIN_TYPE=(process.env.NEXT_PUBLIC_USDT_COIN_TYPE||'').trim() // enabled once confirmed
+const USDT_COIN_TYPE=(process.env.NEXT_PUBLIC_USDT_COIN_TYPE||'0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN').trim() // Wormhole USDT, confirmed 2026-08-15
 const HEIST_ADMIN_ID=process.env.NEXT_PUBLIC_HEIST_ADMIN_ID||'SET_AFTER_SETUP'
 
 // ─── MTRX Governance Token (Solana) ───────────────────────────────────────

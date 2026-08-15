@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { SuiGrpcClient } from '@mysten/sui/grpc'
 import { Transaction } from '@mysten/sui/transactions'
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography'
 import { executeSettlement } from '../../../lib/claim-settle'
 import {
   fetchSuiPriceUsd,
@@ -36,6 +37,15 @@ const LOBBY_CYCLE = 59 * 60
 function getAuthorityKeypair(): Ed25519Keypair {
   const privKey = process.env.SUI_PRIVATE_KEY
   if (privKey) {
+    // Prefer decodeSuiPrivateKey — accepts the `suiprivkey` bech32 format (same
+    // parser as the confidential scripts setup-heist.mjs / set-usdt-price.mjs)
+    // AND legacy 128-hex / base64. The old parser rejected `suiprivkey1...`
+    // values, so a correctly-set Vercel key still threw "No SUI authority
+    // keypair found".
+    try {
+      const { secretKey } = decodeSuiPrivateKey(privKey)
+      return Ed25519Keypair.fromSecretKey(secretKey)
+    } catch {}
     if (/^[0-9a-fA-F]{128}$/.test(privKey)) {
       const bytes = Uint8Array.from(Buffer.from(privKey, 'hex'))
       return Ed25519Keypair.fromSecretKey(bytes)
