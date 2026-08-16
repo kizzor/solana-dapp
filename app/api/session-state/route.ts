@@ -24,7 +24,9 @@ const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testn
 // env override still wins. Kept as a guard so a future blank can hide the entry.
 const USDT_COIN_TYPE_UNCONFIGURED = !USDT_COIN_TYPE
 // gRPC endpoint derived from network (mainnet only in production, but supports testnet/devnet for dev)
-const RPC_URL = `https://fullnode.${SUI_NETWORK}.sui.io:443`
+// Public fullnode by default; SUI_RPC_URL env overrides (dedicated provider
+// avoids stale-read issues on the shared public endpoint from Vercel egress).
+const RPC_URL = process.env.SUI_RPC_URL || `https://fullnode.${SUI_NETWORK}.sui.io:443`
 
 // ─── GET /api/session-state ──────────────────────────────────────────────────
 // Reads the SUI on-chain session object and returns game state.
@@ -71,13 +73,21 @@ export async function GET() {
     const lastNumber = Number(fields.last_number ?? fields.lastNumber ?? 0)
     const bankruptCount = Number(fields.bankrupt_count ?? fields.bankruptCount ?? 0)
 
-    // drawn_numbers: vector<u8>
-    const drawn: number[] = (Array.isArray(fields.drawn_numbers)
-      ? fields.drawn_numbers
-      : Array.isArray(fields.drawn)
-        ? fields.drawn
-        : []
-    ).map((n: any) => Number(n))
+    // drawn_numbers: vector<u8>. ⚠️ The gRPC client returns vector<u8> as a
+    // base64 BCS string (e.g. "BA==" = [4]), NOT a JS array — decode it.
+    // Plain arrays (JSON-RPC path) are handled too.
+    let drawn: number[] = []
+    if (Array.isArray(fields.drawn_numbers)) {
+      drawn = fields.drawn_numbers.map((n: any) => Number(n))
+    } else if (typeof fields.drawn_numbers === 'string' && fields.drawn_numbers.length > 0) {
+      try {
+        drawn = Array.from(Buffer.from(fields.drawn_numbers, 'base64'))
+      } catch {
+        drawn = []
+      }
+    } else if (Array.isArray(fields.drawn)) {
+      drawn = fields.drawn.map((n: any) => Number(n))
+    }
 
     // ── v5: exact raw payment per accepted coin ($0.50 / $0.25 MTRX) ───────
     // Computed server-side so the frontend pays EXACTLY what the server (and

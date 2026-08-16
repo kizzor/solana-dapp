@@ -13,7 +13,9 @@ import {
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
-const RPC_URL = `https://fullnode.${SUI_NETWORK}.sui.io:443`
+// Public fullnode by default; SUI_RPC_URL env overrides (dedicated provider
+// avoids stale-read issues on the shared public endpoint from Vercel egress).
+const RPC_URL = process.env.SUI_RPC_URL || `https://fullnode.${SUI_NETWORK}.sui.io:443`
 
 const WIN_KEYS = ['EARLY_FIVE', 'TOP_LINE', 'MIDDLE_LINE', 'BOTTOM_LINE', 'FULL_HOUSE_1', 'FULL_HOUSE_2', 'FULL_HOUSE_3']
 const WIN_LABELS = ['EARLY FIVE', 'TOP LINE', 'MIDDLE LINE', 'BOTTOM LINE', 'FULL HOUSE 1', 'FULL HOUSE 2', 'FULL HOUSE 3']

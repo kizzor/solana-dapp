@@ -30,7 +30,9 @@ let lastSuiRawWritten = 0n
 let lastHeistRawWritten = 0n
 // Network-aware: testnet/devnet for local dev testing with faucet SUI
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
-const RPC_URL = `https://fullnode.${SUI_NETWORK}.sui.io:443`
+// Public fullnode by default; SUI_RPC_URL env overrides (dedicated provider
+// avoids stale-read issues on the shared public endpoint from Vercel egress).
+const RPC_URL = process.env.SUI_RPC_URL || `https://fullnode.${SUI_NETWORK}.sui.io:443`
 // 59-minute lobby cycle — same formula as the frontend (useLobbyCountdown)
 const LOBBY_CYCLE = 59 * 60
 

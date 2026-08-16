@@ -16,7 +16,9 @@ import {
 const SUI_PROGRAM_ID = process.env.SUI_PROGRAM_ID
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
-const RPC_URL = `https://fullnode.${SUI_NETWORK}.sui.io:443`
+// Public fullnode by default; SUI_RPC_URL env overrides (dedicated provider
+// avoids stale-read issues on the shared public endpoint from Vercel egress).
+const RPC_URL = process.env.SUI_RPC_URL || `https://fullnode.${SUI_NETWORK}.sui.io:443`
 
 // Win type payout basis points (for the estimated-payout response only;
 // actual payouts are computed on-chain by the contract)
