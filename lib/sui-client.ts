@@ -21,7 +21,9 @@ export type SuiNetwork = 'mainnet' | 'testnet' | 'devnet'
 // `meta` — hence the custom transport below.
 export function createSuiClient(network: SuiNetwork): SuiGrpcClient {
   const baseUrl = process.env.SUI_RPC_URL || `https://fullnode.${network}.sui.io:443`
-  const token = process.env.SUI_RPC_TOKEN
+  // Trim defensively — trailing newlines/spaces in pasted env values (a recurring
+  // gotcha in this project) would otherwise make the provider reject the key.
+  const token = (process.env.SUI_RPC_TOKEN || '').trim()
   if (token) {
     const headerName = (process.env.SUI_RPC_TOKEN_HEADER || 'x-api-key').trim()
     const transport = new GrpcWebFetchTransport({
