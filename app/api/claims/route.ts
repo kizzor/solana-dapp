@@ -2,7 +2,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
-import { SuiGrpcClient } from '@mysten/sui/grpc'
+import { createSuiClient } from '../../../lib/sui-client'
 import {
   getRegisteredDevices,
   verifyWin,
@@ -13,10 +13,6 @@ import {
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
-// Public fullnode by default; SUI_RPC_URL env overrides (dedicated provider
-// avoids stale-read issues on the shared public endpoint from Vercel egress).
-const RPC_URL = process.env.SUI_RPC_URL || `https://fullnode.${SUI_NETWORK}.sui.io:443`
-
 const WIN_KEYS = ['EARLY_FIVE', 'TOP_LINE', 'MIDDLE_LINE', 'BOTTOM_LINE', 'FULL_HOUSE_1', 'FULL_HOUSE_2', 'FULL_HOUSE_3']
 const WIN_LABELS = ['EARLY FIVE', 'TOP LINE', 'MIDDLE LINE', 'BOTTOM LINE', 'FULL HOUSE 1', 'FULL HOUSE 2', 'FULL HOUSE 3']
 const WIN_PAYOUTS: Record<number, number> = { 0: 500, 1: 500, 2: 500, 3: 500, 4: 1950, 5: 1950, 6: 4000 }
@@ -38,7 +34,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: 'Invalid wallet address' }, { status: 400 })
     }
 
-    const sui = new SuiGrpcClient({ network: SUI_NETWORK, baseUrl: RPC_URL })
+    const sui = createSuiClient(SUI_NETWORK)
     const sessionObj = await sui.getObject({ objectId: SESSION_OBJECT_ID, include: { json: true } })
     const fields = (sessionObj.object?.json as any) || {}
 

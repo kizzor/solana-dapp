@@ -2,7 +2,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
-import { SuiGrpcClient } from '@mysten/sui/grpc'
+import { createSuiClient } from '../../../lib/sui-client'
 import {
   fetchSuiPriceUsd,
   fetchHeistPriceUsd,
@@ -23,11 +23,6 @@ const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testn
 // USDT defaults to the confirmed Wormhole mainnet type (see lib/heist-prices.ts);
 // env override still wins. Kept as a guard so a future blank can hide the entry.
 const USDT_COIN_TYPE_UNCONFIGURED = !USDT_COIN_TYPE
-// gRPC endpoint derived from network (mainnet only in production, but supports testnet/devnet for dev)
-// Public fullnode by default; SUI_RPC_URL env overrides (dedicated provider
-// avoids stale-read issues on the shared public endpoint from Vercel egress).
-const RPC_URL = process.env.SUI_RPC_URL || `https://fullnode.${SUI_NETWORK}.sui.io:443`
-
 // ─── GET /api/session-state ──────────────────────────────────────────────────
 // Reads the SUI on-chain session object and returns game state.
 // Called by the frontend every ~2s during gameplay.
@@ -38,7 +33,7 @@ export async function GET() {
   }
 
   try {
-    const sui = new SuiGrpcClient({ network: SUI_NETWORK, baseUrl: RPC_URL })
+    const sui = createSuiClient(SUI_NETWORK)
 
     // v2.22.x gRPC client: objectId + include.json, response is { object: { json } }
     const sessionObj = await sui.getObject({

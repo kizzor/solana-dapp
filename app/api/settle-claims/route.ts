@@ -2,17 +2,13 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
-import { SuiGrpcClient } from '@mysten/sui/grpc'
+import { createSuiClient } from '../../../lib/sui-client'
 import { executeSettlement } from '../../../lib/claim-settle'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SUI_PROGRAM_ID = process.env.SUI_PROGRAM_ID
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
-// Public fullnode by default; SUI_RPC_URL env overrides (dedicated provider
-// avoids stale-read issues on the shared public endpoint from Vercel egress).
-const RPC_URL = process.env.SUI_RPC_URL || `https://fullnode.${SUI_NETWORK}.sui.io:443`
-
 // ─── GET /api/settle-claims (cron) ──────────────────────────────────────────
 // Settles every win type that has pending claimers by executing the existing
 // on-chain claim_win_split(session, claimers, winType). Win types with NO
@@ -34,7 +30,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const sui = new SuiGrpcClient({ network: SUI_NETWORK, baseUrl: RPC_URL })
+    const sui = createSuiClient(SUI_NETWORK)
     const out = await executeSettlement(sui, SUI_PROGRAM_ID, SESSION_OBJECT_ID)
     return NextResponse.json(out)
   } catch (e: any) {

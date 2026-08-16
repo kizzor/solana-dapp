@@ -2,7 +2,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
-import { SuiGrpcClient } from '@mysten/sui/grpc'
+import { createSuiClient } from '../../../lib/sui-client'
 import { Transaction } from '@mysten/sui/transactions'
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography'
@@ -30,9 +30,6 @@ let lastSuiRawWritten = 0n
 let lastHeistRawWritten = 0n
 // Network-aware: testnet/devnet for local dev testing with faucet SUI
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
-// Public fullnode by default; SUI_RPC_URL env overrides (dedicated provider
-// avoids stale-read issues on the shared public endpoint from Vercel egress).
-const RPC_URL = process.env.SUI_RPC_URL || `https://fullnode.${SUI_NETWORK}.sui.io:443`
 // 59-minute lobby cycle — same formula as the frontend (useLobbyCountdown)
 const LOBBY_CYCLE = 59 * 60
 
@@ -97,10 +94,7 @@ export async function GET(req: Request) {
     const keypair = getAuthorityKeypair()
     const senderAddr = keypair.toSuiAddress()
 
-    const sui = new SuiGrpcClient({
-      network: SUI_NETWORK,
-      baseUrl: RPC_URL,
-    })
+    const sui = createSuiClient(SUI_NETWORK)
 
     // Check session is active
     // v2.22.x gRPC client: objectId + include.json, response is { object: { json } }
