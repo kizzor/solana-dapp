@@ -66,11 +66,13 @@ At the end of every session, the LLM MUST update the
 ## Inject this into the LLM on the next session to resume development
 
 **Created:** 2026-07-26
-**Last Updated:** 2026-08-15
+**Last Updated:** 2026-08-16
 **Session Status:** 
+  🔴 **drawCount STILL 0 (2026-08-16)** — but the on-chain draw path is PROVEN GOOD: the exact `draw_number` tx dry-runs SUCCESS on mainnet (`simulateTransaction`, authority sender) → contract + endpoint + gas all fine. New finding: the GitHub backup cron was **silently dead** — it curls the apex `ransomematrix.xyz` which 307→www, and curl REFUSES to follow a cross-host redirect when an explicit `Authorization` header is set (verified locally: stops at the 307; `--location-trusted` follows + forwards) → the request never reached the endpoint authorized (no `--fail` either, so runs looked green). **FIXED locally in `.github/workflows/draw.yml`** (www URL + `--location-trusted` + `--fail`) — **PENDING PUSH**. Remaining suspects are operational: Vercel Production `SUI_PRIVATE_KEY` (suiprivkey now accepted — check no whitespace/0x, Production env, redeploy Ready), cron-job.org job paused or stopped, CRON_SECRET mismatch. See 🔑 ACTION ITEMS "🔴 DRAW — VERIFY END-TO-END".
   ✅ **USDT ENABLED (2026-08-15)!** — mainnet type CONFIRMED on-chain via getCoinMetadata (Wormhole `Tether USD`, 6 dec): `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN`. Hardcoded as the default in `lib/heist-prices.ts` + `app/page.tsx` + `app/api/session-state` (env still overrides) → USDT shows in the mint UI + server accepts it. ⚠️ The ON-CHAIN USDT price entry is NOT seeded yet — run `set-usdt-price.mjs` (ACTION ITEMS) or USDT mints fail `EUnsupportedCoin` on-chain.
   ✅ **CRON-JOB.ORG JOB CREATED + FIRING (2026-08-15)!** — `GET https://www.ransomematrix.xyz/api/draw` every minute with `Authorization: Bearer <CRON_SECRET>`. ⚠️ URL MUST be the `www.` form — apex `ransomematrix.xyz` 307-redirects to `www` and cron-job.org does NOT follow redirects. Auth passes (no more 401s); executions reach the draw logic. GitHub cron stays as backup.
-  🔴 **BLOCKER (2026-08-15): draw 500s — `No SUI authority keypair found. Set SUI_PRIVATE_KEY env var.`** `SUI_PRIVATE_KEY` is missing/blank in Vercel **Production** (or malformed — a wrong format throws the SAME error; must be 128-char hex WITHOUT `0x`, or base64). On-chain diagnostics all green otherwise: authority `0xc93cc3...` has 11.65 SUI gas (address-balance accumulator), session active, SDK v2.22.1 methods present. Set it → redeploy Ready → drawCount ticks (ACTION ITEMS).
+  ✅ **KEY-FORMAT BUG FOUND + FIXED + DEPLOYED (2026-08-15, commit `f92fede`)** — the server's key parser only accepted 128-hex/base64 while the scripts use `suiprivkey1...` bech32 → a correctly-set `suiprivkey` value still 500'd "No SUI authority keypair found". Fixed: `app/api/draw/route.ts` + `lib/claim-settle.ts` now call `decodeSuiPrivateKey` first (same as the scripts). Verified: the suiprivkey **parses OK and derives the authority `0xc93cc3...9ed354`**. The push also shipped the USDT code — `USDT` now visible in `/api/session-state` `prices` (keys: USDC, USDT, HEIST, SUI) → new build IS live. tsc = 0, `npm run build` ✅.
+  🔴 **BLOCKER (2026-08-16): `drawCount` STILL 0** — 2026-08-16 verified the on-chain draw path is FINE (dry-run success) and found the GitHub backup cron silently dead (curl won't follow the apex→www 307 with an explicit Authorization header; workflow fixed locally, pending push). Remaining suspects are operational (Vercel `SUI_PRIVATE_KEY` / cron-job.org job / CRON_SECRET) — see 🔑 ACTION ITEMS "🔴 DRAW — VERIFY END-TO-END".
   ⏳ **CRON_SECRET: rotation UNCONFIRMED (2026-08-15)** — job + Vercel are CONSISTENT (auth passes). If the current value is still the one exposed 08-07, rotate it in Vercel + GitHub + cron-job.org (all three must match).
   ✅ **v5 DEPLOYED + LIVE (2026-08-07)!** 🎉 Step 4 (Vercel env) + Step 5 (push) DONE — commit `ca8edb2` on origin/main. Verified live: `/api/session-state` returns `prices` (USDC 500,000 / HEIST 5e12 / SUI 742,891,273 raw) + `rates` (SUI $0.6730, HEIST $0.0001) + `heistPriceSet:true`. Mints work end-to-end: $0.50/$0.25 in ANY coin (SUI/USDC/USDT/HEIST), vault holds HEIST.
   ✅ **CRON_SECRET SET (2026-08-07)** in Vercel + GitHub — fail-closed auth verified (no-token `/api/draw` → 401).
@@ -135,7 +137,7 @@ SECURITY: This file contains NO secrets. Never share private keys or tokens.
 Current: v5 DEPLOYED + LIVE (commit ca8edb2, 2026-08-07) — mint = $0.50/$0.25 in any coin; prices/rates live; vault holds ONLY HEIST.
 v5 deploy order: ✅ DONE (publish-heist-v4 → setup-heist → init_session_sdk → Vercel env → push ca8edb2).
 Live: https://ransomematrix.xyz (v5.1)
-PENDING: 1) 🔴 SET `SUI_PRIVATE_KEY` in Vercel **Production** (draw currently 500s without it — the ONLY blocker to ticking; see ACTION ITEMS), 2) ⏳ Confirm `drawCount` ticks +1/min, 3) ⏳ Commit + push the USDT code changes (UNCOMMITTED: lib/heist-prices.ts, app/api/session-state/route.ts, app/page.tsx + set-usdt-price.mjs) → then seed on-chain USDT via `set-usdt-price.mjs`, 4) ⏳ Confirm CRON_SECRET was rotated (job + Vercel consistent — verify it's not the 08-07 exposed value), 5) tokenomics rebalance when airdrop discussed.
+PENDING: 1) 🔴 PROVE the draw end-to-end — 2026-08-16 verified code+contract are FINE (exact draw tx dry-runs success on mainnet; GitHub backup cron was silently dead (curl won't follow the apex→www 307 with an explicit Authorization header — verified locally; workflow fixed locally, PENDING PUSH)): check cron-job.org Executions (job enabled? still firing? response body?) + confirm Vercel Production SUI_PRIVATE_KEY is set (suiprivkey format accepted) + Vercel api/draw log timestamp — ACTION ITEMS "🔴 DRAW — VERIFY END-TO-END", 2) ⏳ Seed on-chain USDT via `set-usdt-price.mjs` (code shipped + live — USDT shows in /api/session-state prices; on-chain price entry NOT seeded yet), 3) ⏳ Confirm CRON_SECRET was rotated (job + Vercel consistent — verify it's not the 08-07 exposed value), 4) tokenomics rebalance when airdrop discussed.
 Start with CONFIDENTIAL ACTION ITEMS.
 ```
 
@@ -379,6 +381,27 @@ NEW heist.move v2 (PUBLISHED 2026-08-02): FH1=19.5% FH2=19.5% FH3=40% total=99%
 ---
 
 ## SESSION LOG
+
+### Session: 2026-08-16 — drawCount STILL 0 · on-chain draw path PROVEN FINE (dry-run success) · GitHub backup cron found silently DEAD (curl won't follow apex→www 307 with an Authorization header) — workflow FIXED locally, pending push
+**Task:** Resume per solanamark.md + freebuff.md; first thing: verify the draw end-to-end.
+
+**Findings (all read-only, no secrets touched):**
+1. ✅ **Live state:** `GET https://www.ransomematrix.xyz/api/session-state` → `ok:true`, session `0x7ecd560b...` active, **drawCount 0**, prices include USDT (f92fede build live). Git HEAD = `f92fede`, tree clean (freebuff.md only).
+2. ✅ **On-chain draw path PROVEN GOOD:** dry-ran the EXACT draw PTB the route builds (`heist::draw_number` on the v5.1 session, authority sender `0xc93cc3...`, 10M gas budget, empty gas payment) against `fullnode.mainnet.sui.io` via `SuiGrpcClient.simulateTransaction` → **`status: success`**. So with a valid `SUI_PRIVATE_KEY` + matching `CRON_SECRET`, the endpoint WILL draw. Remaining cause of drawCount 0 is operational, not code.
+3. 🔴 **GitHub backup cron was silently DEAD (root-caused + locally verified):** run history (public GitHub API) shows it still fires ~hourly (throttled — e.g. 03:28Z → 02:34Z → 01:12Z) with conclusion "success" — BUT the workflow curls the APEX `https://ransomematrix.xyz/api/draw`, which 307-redirects to `www`. **Local test proved: curl REFUSES to follow a cross-host redirect when an explicit `Authorization` header is set** (default curl stopped at the 307, `http=307`; with `--location-trusted` it followed to the target and forwarded `Bearer secret123`) → the GitHub cron's request NEVER reached the endpoint with auth → no draw ever. Still reports "success" because the workflow has no `--fail`. Apex 307 (confirmed live) + the workflow's curl behavior (confirmed locally) = backup cron dead since inception.
+4. ✅ **Workflow FIXED locally:** `.github/workflows/draw.yml` now uses the `www.` URL directly + `--location-trusted` + `--fail -sS` (visible failures = canary). **PENDING: user commits + pushes** (push = confidential op). Note: GitHub schedule is STILL throttled (~hourly) — it's a canary only; cron-job.org remains the per-minute driver.
+5. ⏳ **Still the user's to verify (confidential):** cron-job.org job enabled/firing + latest execution response; Vercel Production `SUI_PRIVATE_KEY` actually set (suiprivkey OK — no trailing whitespace/0x, Production env, redeploy Ready); Vercel api/draw log timestamps; CRON_SECRET rotation; USDT on-chain seed (`set-usdt-price.mjs`). See 🔑 ACTION ITEMS.
+
+### Session: 2026-08-15 (3rd) — KEY-FORMAT BUG FOUND + FIXED + DEPLOYED (f92fede) · drawCount still 0 at session end
+**Task:** Get drawCount ticking — diagnose the 500 after the cron-job.org URL fix + env cleanup.
+
+**Done / findings:**
+1. 🔴 **Root cause #1: `SUI_PRIVATE_KEY` was missing in Vercel Production** (Vercel log: `No SUI authority keypair found. Set SUI_PRIVATE_KEY env var.`). On-chain diagnostics all green: authority `0xc93cc39962b557cfa33b2b835c6d122f69365720bb8796bf339bc3d35d9ed354` has **11.65 SUI** (address-balance accumulator), session `active:true, paused:false, draw_count:0`, SDK v2.22.1 methods present.
+2. 🔴 **Root cause #2 (the real bug): server key parser rejected the `suiprivkey` format.** The user set `SUI_PRIVATE_KEY` to a `suiprivkey1...` bech32 value (the format the confidential scripts use via `decodeSuiPrivateKey`), but `app/api/draw/route.ts` + `lib/claim-settle.ts` only accepted 128-char hex / base64 → same "No SUI authority keypair found" error even with the key correctly set.
+3. ✅ **Fix deployed (commit `f92fede`):** both `getAuthorityKeypair()` implementations now try `decodeSuiPrivateKey` first (accepts `suiprivkey` bech32 + legacy hex/base64), fall back to the old paths. tsc = 0, `npm run build` ✅. Push also shipped the pending USDT code (heist-prices.ts / session-state / page.tsx).
+4. ✅ **Key verified valid:** `decodeSuiPrivateKey` on the user's key → `PARSED OK`, address `0xc93cc39962b557cfa33b2b835c6d122f69365720bb8796bf339bc3d35d9ed354` (matches the session authority).
+5. ✅ **New build confirmed live:** `/api/session-state` `prices` keys now include `USDT` (USDC, USDT, HEIST, SUI) — the f92fede deployment is serving requests.
+6. 🔴 **STILL OPEN at session end:** `drawCount` remained 0 through 13:58 UTC despite the valid key + deployed fix. Manual draw test + cron-job.org Executions check were NOT completed — the cron job may have stopped firing (job paused/disabled?) or the draw hits a NEW (on-chain) error. See 🔑 ACTION ITEMS "🔴 DRAW — VERIFY END-TO-END" (first thing next session).
 
 ### Session: 2026-08-15 (2nd) — cron-job.org LIVE · draw 500 ROOT-CAUSED (SUI_PRIVATE_KEY missing in Vercel)
 **Task:** Execute the confidential steps — cron-job.org job, Vercel env cleanup, get drawCount ticking.
@@ -981,11 +1004,25 @@ curl "https://www.ransomematrix.xyz/api/session-state"
 
 ## 🔑 ACTION ITEMS FOR YOU (Confidential)
 
-### 🔴 SUI_PRIVATE_KEY — SET IN VERCEL PRODUCTION (DO FIRST — the draw is 500ing without it)
-- Vercel log: `Draw error: No SUI authority keypair found. Set SUI_PRIVATE_KEY env var.` — the cron job fires and auth passes, but the draw dies at keypair creation.
-- vercel.com → Settings → Environment Variables → `SUI_PRIVATE_KEY` → paste the **authority suiprivkey** (matches `0xc93cc39962b557cfa33b2b835c6d122f69365720bb8796bf339bc3d35d9ed354`) → **Production** toggle ON → Save → wait for redeploy **Ready**.
-- ⚠️ **Format matters:** raw 64-byte secret as **128-char hex WITHOUT `0x`** or **base64**. A malformed value (0x-prefix, wrong length, trailing space/newline) throws the SAME "No SUI authority keypair found" error.
-- Verify: `https://www.ransomematrix.xyz/api/session-state` twice a minute apart → `drawCount` should climb (+1/min).
+### 🔴 DRAW — VERIFY END-TO-END (drawCount STILL 0 — 2026-08-16: code + contract PROVEN GOOD, remaining causes are operational)
+- ✅ **PROVEN GOOD (2026-08-16):** the exact draw tx dry-runs **success** on mainnet (`SuiGrpcClient.simulateTransaction` on `heist::draw_number`, authority sender, 10M budget) → contract + endpoint + gas fine. Git HEAD `f92fede` deployed; session active; prices/USDT live.
+- 🔴 **GitHub backup cron fixed locally (pending push):** it was silently dead — curl refuses to follow the apex 307→www when an explicit `Authorization` header is set (verified locally: stops at the 307; `--location-trusted` follows + forwards), and the workflow had no `--fail` so runs showed "success" anyway. `.github/workflows/draw.yml` now uses `https://www.ransomematrix.xyz/api/draw` + `--location-trusted` + `--fail`. **Push it + freebuff.md:** `git add .github/workflows/draw.yml freebuff.md && git commit && git push`. GitHub schedule stays throttled (~hourly) → canary only; cron-job.org is the per-minute driver.
+- **Test 1 — manual draw (PowerShell, isolates endpoint+key+on-chain from the cron):**
+  ```
+  $secret = "<CRON_SECRET>"
+  Invoke-RestMethod -Uri "https://www.ransomematrix.xyz/api/draw" -Headers @{ Authorization = "Bearer $secret" } | ConvertTo-Json
+  ```
+  - `ok:true` → endpoint + key + on-chain all work → the problem is cron-job.org (job paused/disabled? stopped firing?) → check job Enabled + latest execution time.
+  - 500 JSON → paste the fresh error (will now be the REAL failure — e.g. on-chain authority/gas abort — not the key error).
+  - 401 → `$secret` ≠ current Vercel value.
+- **Test 2 — Vercel log timestamps:** vercel.com → Logs → filter `api/draw` — are there NEW entries in the last 10 min? No new entries + manual test ok → cron-job.org stopped firing → re-enable the job.
+- **Test 3 — cron-job.org Executions:** latest status/response for URL `https://www.ransomematrix.xyz/api/draw` (MUST be the www. form — apex 307-redirects and cron-job.org doesn't follow).
+- **Test 4 — Vercel Production env:** confirm `SUI_PRIVATE_KEY` is set to the suiprivkey value (no leading/trailing whitespace, no 0x prefix; Production environment toggle ON) and `CRON_SECRET` matches the cron-job.org header → redeploy and wait for **Ready** before re-testing.
+
+### ✅ SUI_PRIVATE_KEY — VALID + CODE FIX DEPLOYED (f92fede)
+- **DONE:** the suiprivkey parses OK locally (`decodeSuiPrivateKey`) and derives the authority `0xc93cc39962b557cfa33b2b835c6d122f69365720bb8796bf339bc3d35d9ed354` (session authority) — key is correct.
+- **DONE:** server accepts the `suiprivkey1...` format now — `app/api/draw/route.ts` + `lib/claim-settle.ts` use `decodeSuiPrivateKey` first (fallback 128-hex/base64). Commit `f92fede` pushed + live (USDT visible in `/api/session-state` prices proves the new build serves requests).
+- ⚠️ Format gotcha (fixed in code): a `suiprivkey` value used to be rejected → "No SUI authority keypair found" even when set correctly. Malformed values (bad prefix, trailing whitespace, wrong env) still throw the same error.
 
 ### ⏳ CRON_SECRET — ROTATION STATUS UNCONFIRMED (job + Vercel are CONSISTENT)
 - The cron-job.org job passes auth → its header value == current Vercel `CRON_SECRET` (consistent). If the current value is STILL the one exposed on 2026-08-07, rotate it.

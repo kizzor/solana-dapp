@@ -9,6 +9,12 @@ jobs:
     steps:
       - name: Trigger draw endpoint
         run: |
-          curl -s -X GET \
+          # Use the www. form + --location-trusted: the apex ransomematrix.xyz
+          # 307-redirects to www and curl strips the Authorization header on
+          # cross-host redirects unless --location-trusted is given — the old
+          # apex URL made every run 401 silently (and without --fail the run
+          # still showed "success"). --fail makes a 401/500 fail the run
+          # visibly so this backup cron acts as a canary for the endpoint.
+          curl -sS --fail --location-trusted -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            https://ransomematrix.xyz/api/draw
+            https://www.ransomematrix.xyz/api/draw
