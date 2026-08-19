@@ -1,5 +1,5 @@
 // ============================================================================
-// HEIST - On-Chain Bingo / Hacking Game  (v4 - REAL HEIST token economy)
+// HEIST - On-Chain Bingo / Hacking Game  (v6 - AUTO SESSION ROTATION)
 // ----------------------------------------------------------------------------
 // 99% of device mint payments go to winners. 1% treasury fee.
 // Payout split: FH3=40%, FH1/FH2=19.5% ea, Lines=5% ea, Early Five=5%
@@ -69,6 +69,11 @@ module heist::heist {
     const WT_FULL_HOUSE_3:  u8 = 6;
     const NUM_WIN_TYPES:    u8 = 7;
 
+    // --- Game Parameters (v6) ------------------------------------------------
+    /// Maximum numbers drawn per session. At ~1 draw/min, a session runs
+    /// for ~59 minutes before auto-advancing to the next one.
+    const MAX_DRAWS: u8 = 59;
+
     // --- Payout Basis Points (99% total to winners) ---------------------------
     const EARLY_FIVE_BPS:    u64 = 500;   //  5%
     const TOP_LINE_BPS:      u64 = 500;   //  5%
@@ -101,6 +106,7 @@ module heist::heist {
     const EAirdropExhausted:    u64 = 15;
     const EUnsupportedCoin:     u64 = 16;
     const EPriceNotSet:         u64 = 17;
+    const ERegistryNotSet:      u64 = 18;
 
     // ==========================================================================
     // STRUCTS
@@ -179,6 +185,27 @@ module heist::heist {
         remaining: u64,
         /// Pool balance
         vault: Balance<HEIST>,
+    }
+
+    // --- Session Registry (v6) ------------------------------------------------
+
+    /// The game registry — a single shared object that holds the pointer to
+    /// the CURRENT active session, the treasury address, and admin controls
+    /// (pause/resume). The draw cron reads current_session_id to know which
+    /// session to draw from, and calls advance_session() when it exhausts.
+    /// This eliminates the need for manual env-var updates between sessions.
+    public struct SessionRegistry has key, store {
+        id: UID,
+        /// Authority who can draw, settle, advance sessions, pause, etc.
+        authority: address,
+        /// Treasury address receiving unclaimed funds and fees
+        treasury: address,
+        /// Pointer to the current active Session object
+        current_session_id: ID,
+        /// Whether the game is paused (no draws, no mints, no claims)
+        paused: bool,
+        /// When the pause ends (unix ms). 0 = indefinite pause.
+        pause_end_ms: u64,
     }
 
     /// Shared admin (v5): holds the HEIST TreasuryCap + the per-coin price
@@ -801,6 +828,7 @@ module heist::heist {
 
     /// Draw the next number using on-chain entropy (tx digest).
     /// Authority-only. Picks an unused number from 1-90.
+    /// v6: limit is MAX_DRAWS (59) per session, not 90.
     public fun draw_number(
         session: &mut Session,
         ctx: &TxContext,
@@ -810,7 +838,7 @@ module heist::heist {
         assert!(!session.paused, ESessionPaused);
 
         let drawn_len = vector::length(&session.drawn_numbers);
-        assert!(drawn_len < 90, EAllNumbersDrawn);
+        assert!(drawn_len < (MAX_DRAWS as u64), EAllNumbersDrawn);
 
         // Use tx digest bytes as entropy source
         let digest = tx_context::digest(ctx);
@@ -875,5 +903,138 @@ module heist::heist {
     public fun end_session(session: &mut Session, ctx: &TxContext) {
         assert!(tx_context::sender(ctx) == session.authority, ENotAuthorized);
         session.active = false;
+    }
+
+    // ==========================================================================
+    // SESSION REGISTRY (v6) — Auto-rotation, pause, treasury management
+    // ==========================================================================
+
+    /// Create the session registry. Called ONCE at setup (right after publish).
+    /// The authority becomes the game operator. The first session should be
+    /// created separately via initialize_session, then registered via
+    /// register_initial_session.
+    public fun create_registry(ctx: &mut TxContext) {
+        let registry = SessionRegistry {
+            id: object::new(ctx),
+            authority: tx_context::sender(ctx),
+            treasury: tx_context::sender(ctx), // default: authority is treasury
+            current_session_id: object::id_from_address(@0x0), // placeholder
+            paused: false,
+            pause_end_ms: 0,
+        };
+        transfer::share_object(registry);
+    }
+
+    /// Register the initial (or any) session in the registry.
+    /// Authority-only. Use this after initialize_session to set the first
+    /// current_session_id, or to manually point at an existing session.
+    public fun register_initial_session(
+        registry: &mut SessionRegistry,
+        session_id: ID,
+        ctx: &TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == registry.authority, ENotAuthorized);
+        registry.current_session_id = session_id;
+    }
+
+    /// Set the treasury address. Authority-only.
+    public fun set_treasury(
+        registry: &mut SessionRegistry,
+        treasury: address,
+        ctx: &TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == registry.authority, ENotAuthorized);
+        registry.treasury = treasury;
+    }
+
+    /// Advance to the next session. Authority-only.
+    /// Creates a fresh Session with vault=0, draw_count=0, and updates the
+    /// registry pointer. Called by the draw cron when the current session
+    /// exhausts all MAX_DRAWS numbers.
+    public fun advance_session(
+        registry: &mut SessionRegistry,
+        ctx: &mut TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == registry.authority, ENotAuthorized);
+
+        // Build wins_claimed vector (all false)
+        let mut wins_claimed = vector<bool>[];
+        let mut i = 0;
+        while (i < NUM_WIN_TYPES) {
+            vector::push_back(&mut wins_claimed, false);
+            i = i + 1;
+        };
+
+        let session = Session {
+            id: object::new(ctx),
+            active: true,
+            paused: false,
+            wins_claimed,
+            vault: balance::zero<HEIST>(),
+            treasury: registry.treasury,
+            authority: registry.authority,
+            treasury_fee_bps: TREASURY_FEE_BPS,
+            draw_count: 0,
+            last_number: 0,
+            drawn_numbers: vector[],
+            bankrupt_count: 0,
+        };
+
+        let session_id = object::id(&session);
+        transfer::share_object(session);
+        registry.current_session_id = session_id;
+
+        event::emit(SessionCreated {
+            session_id,
+            authority: registry.authority,
+            treasury: registry.treasury,
+            treasury_fee_bps: TREASURY_FEE_BPS,
+        });
+    }
+
+    /// Pause the game. Authority-only.
+    /// Sets paused=true and pause_end_ms = now + duration_ms.
+    /// Frontend reads this to show 'Under Construction' overlay.
+    /// Draw cron skips drawing while paused.
+    /// duration_ms = 0 means indefinite pause (resume manually).
+    public fun pause_game(
+        registry: &mut SessionRegistry,
+        duration_ms: u64,
+        ctx: &TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == registry.authority, ENotAuthorized);
+        registry.paused = true;
+        if (duration_ms > 0) {
+            registry.pause_end_ms = tx_context::epoch_timestamp_ms(ctx) + duration_ms;
+        } else {
+            registry.pause_end_ms = 0; // indefinite
+        };
+    }
+
+    /// Resume the game. Authority-only.
+    /// Sets paused=false and pause_end_ms=0.
+    public fun resume_game(
+        registry: &mut SessionRegistry,
+        ctx: &TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == registry.authority, ENotAuthorized);
+        registry.paused = false;
+        registry.pause_end_ms = 0;
+    }
+
+    /// Sweep remaining vault balance to treasury. Authority-only.
+    /// Called AFTER all 7 win types have been settled (claim_win_split)
+    /// to move any leftover HEIST (the 1% not allocated to win positions,
+    /// plus rounding dust) to the treasury wallet.
+    public fun sweep_remaining(
+        session: &mut Session,
+        ctx: &mut TxContext,
+    ) {
+        assert!(tx_context::sender(ctx) == session.authority, ENotAuthorized);
+        let remaining = balance::value(&session.vault);
+        if (remaining > 0) {
+            let coin = coin::take(&mut session.vault, remaining, ctx);
+            transfer::public_transfer(coin, session.treasury);
+        };
     }
 }

@@ -18,6 +18,7 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SESSION_OBJECT_ID = process.env.SESSION_OBJECT_ID
+const SESSION_REGISTRY_ID = process.env.SESSION_REGISTRY_ID || ''
 const SUI_PROGRAM_ID = process.env.SUI_PROGRAM_ID || ''
 const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet' | 'devnet'
 // USDT defaults to the confirmed Wormhole mainnet type (see lib/heist-prices.ts);
@@ -35,9 +36,26 @@ export async function GET() {
   try {
     const sui = createSuiClient(SUI_NETWORK)
 
+    // ── v6: Read session from registry if configured ──────────────────────
+    let sessionId = SESSION_OBJECT_ID || ''
+    let registryInfo: any = null
+    if (SESSION_REGISTRY_ID) {
+      const regObj = await sui.getObject({
+        objectId: SESSION_REGISTRY_ID,
+        include: { json: true },
+      })
+      if (regObj.object?.json) {
+        registryInfo = regObj.object.json as any
+        sessionId = registryInfo.current_session_id || sessionId
+      }
+    }
+    if (!sessionId) {
+      return NextResponse.json({ ok: false, msg: 'No session configured' })
+    }
+
     // v2.22.x gRPC client: objectId + include.json, response is { object: { json } }
     const sessionObj = await sui.getObject({
-      objectId: SESSION_OBJECT_ID,
+      objectId: sessionId,
       include: { json: true },
     })
 
@@ -117,9 +135,12 @@ export async function GET() {
       // SUI feed down — omit only the SUI entry (stables + HEIST stay mintable)
     }
 
+    // v6: MAX_DRAWS per session (must match contract constant)
+    const MAX_DRAWS = 59
+
     return NextResponse.json({
       ok: true,
-      session: SESSION_OBJECT_ID,
+      session: sessionId,
       active: active && !paused, // only active if not paused
       drawCount,
       lastNumber,
@@ -130,6 +151,13 @@ export async function GET() {
       prices,
       rates,
       heistPriceSet,
+      // v6: registry info (pause state, treasury, max draws)
+      ...(registryInfo ? {
+        registryPaused: Boolean(registryInfo.paused),
+        registryPauseEndMs: Number(registryInfo.pause_end_ms || 0),
+        registryTreasury: registryInfo.treasury || '',
+      } : {}),
+      maxDraws: MAX_DRAWS,
       ts: Date.now(),
     })
 

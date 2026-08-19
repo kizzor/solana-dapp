@@ -190,6 +190,8 @@ function useOnChainSession(active:boolean){
     vaultTotal:number;
     prices?:Record<string,{full:string;mtrx:string}>;
     rates?:Record<string,string>;
+    registryPaused?:boolean;registryPauseEndMs?:number;
+    maxDraws?:number;
   }|null>(null)
   useEffect(()=>{
     if(!active)return
@@ -2290,9 +2292,14 @@ function Ransome(){
         setTimeout(()=>setClickWindowOpen(true),150)
       }
     }
-    // Sync draw count — if on-chain shows all 90 drawn
-    if(onChainSession.drawCount>=90&&!bankHacked){
+    // Sync draw count — if on-chain shows all numbers drawn
+    const maxD = onChainSession.maxDraws || 59
+    if(onChainSession.drawCount>=maxD&&!bankHacked){
       setBankHacked(true)
+    }
+    // v6: 58th minute announcement — warn players game is ending
+    if(onChainSession.drawCount===maxD-1&&phase==='game'){
+      announce('⚠️ FINAL NUMBER — claim your wins NOW!')
     }
   },[onChainSession,phase,preGameSecs,bankHacked])
 
@@ -2417,7 +2424,10 @@ function Ransome(){
     try{
       const r=await fetch('/api/draw')
       const d=await r.json()
-      if(d.ok)announce(`⏩ ON-CHAIN DRAW ${d.number} (${d.drawCount}/90)`)
+      if(d.ok){
+        const mx=onChainSession?.maxDraws||59
+        announce(`⏩ ON-CHAIN DRAW ${d.number} (${d.drawCount}/${mx})`)
+      }
       else announce(`⚠ ${d.error||'draw failed'}`)
     }catch(e:any){announce('⚠ '+e.message)}
   }
@@ -2648,6 +2658,33 @@ function Ransome(){
     try{localStorage.removeItem('ransome_state_v1')}catch{}
     setDevices([]);setCalledNums(new Set());setCalledOrder([]);setWinStates(defaultWinStates());setWinRecords([]);setBankHacked(false);setPreGameSecs(0)
     setShowTerminate(false);setPhase('lobby')
+  }
+
+  // v6: Under-construction overlay when game is paused by admin
+  const regPaused = onChainSession?.registryPaused
+  const regPauseEnd = onChainSession?.registryPauseEndMs || 0
+  if(regPaused) {
+    const now = Date.now()
+    const indefinite = regPauseEnd === 0
+    const timeLeft = indefinite ? null : Math.max(0, regPauseEnd - now)
+    return(
+      <div data-theme={theme} style={{minHeight:'100vh',background:'#010810',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div style={{textAlign:'center',maxWidth:500,padding:40}}>
+          <div style={{fontSize:48,marginBottom:16}}>🔧</div>
+          <div style={{fontFamily:'Syne,sans-serif',fontSize:28,fontWeight:800,color:'#f59e0b',marginBottom:12}}>UNDER CONSTRUCTION</div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:11,color:'#4a7fa5',lineHeight:1.8,marginBottom:20}}>
+            The game is currently paused for maintenance.
+            {!indefinite && timeLeft !== null && (
+              <><br/>Resuming in: <span style={{color:'#f59e0b',fontWeight:700}}>{fmtTime(Math.ceil(timeLeft/1000))}</span></>
+            )}
+            {indefinite && <><br/>Please check back later.</>}
+          </div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#1e3a5f'}}>
+            RANSOME NETWORK — MAINTENANCE MODE
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if(phase==='setup')return(
@@ -2883,7 +2920,7 @@ function Ransome(){
         <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0,flexWrap:'wrap'}}>
           {preGameSecs>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:8,color:'#f59e0b',background:'rgba(245,158,11,0.08)',border:'1px solid rgba(245,158,11,0.25)',borderRadius:6,padding:'3px 7px'}}>⏱ {fmtTime(preGameSecs)}</div>}
           {onChainSession&&phase==='game'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:7,color:'#00e5a0',background:'rgba(0,229,160,0.06)',border:'1px solid rgba(0,229,160,0.2)',borderRadius:6,padding:'3px 6px'}}>
-            ⛓ {onChainSession.drawCount}/90 on-chain
+            ⛓ {onChainSession.drawCount}/{onChainSession.maxDraws||59} on-chain
           </div>}
           {phase==='game'&&preGameSecs===0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:7,color:sessionSecs>=(57*60)?'#ef4444':'#2a5a7a',background:sessionSecs>=(57*60)?'rgba(239,68,68,0.08)':'transparent',border:sessionSecs>=(57*60)?'1px solid rgba(239,68,68,0.25)':'none',borderRadius:6,padding:'3px 6px',transition:'all 0.5s'}}>
             {sessionSecs>=(57*60)?'🚨':'⏱'} {String(Math.floor(sessionSecs/60)).padStart(2,'0')}:{String(sessionSecs%60).padStart(2,'0')}

@@ -117,3 +117,64 @@ export async function executeSettlement(sui: SuiGrpcClient, programId: string, s
 
   return { ok: true, results, ts: Date.now() }
 }
+
+// ─── v6: Sweep remaining vault to treasury ─────────────────────────────────
+// Called AFTER all win types have been settled to move any leftover HEIST
+// (the ~1% not allocated to win positions + rounding dust) to treasury.
+export async function sweepRemaining(sui: SuiGrpcClient, programId: string, sessionId: string) {
+  const keypair = getAuthorityKeypair()
+  const senderAddr = keypair.toSuiAddress()
+
+  const txb = new Transaction()
+  txb.setSender(senderAddr)
+  txb.moveCall({
+    target: `${programId}::heist::sweep_remaining`,
+    arguments: [txb.object(sessionId)],
+  })
+  txb.setGasBudget(10_000_000)
+  txb.setGasPayment([])
+
+  const result: any = await sui.signAndExecuteTransaction({
+    transaction: txb,
+    signer: keypair,
+    include: { effects: true, objectTypes: true },
+  })
+  const txResult = result.Transaction ?? result.FailedTransaction
+  const ok = result.$kind === 'Transaction'
+  return {
+    ok,
+    digest: txResult?.digest,
+    error: ok ? undefined : txResult?.effects?.status?.error?.message,
+  }
+}
+
+// ─── v6: Advance to next session ───────────────────────────────────────────
+// Calls advance_session on the SessionRegistry to create a fresh Session
+// and update the current_session_id pointer. Called when the current session
+// exhausts all MAX_DRAWS numbers.
+export async function advanceSession(sui: SuiGrpcClient, programId: string, registryId: string) {
+  const keypair = getAuthorityKeypair()
+  const senderAddr = keypair.toSuiAddress()
+
+  const txb = new Transaction()
+  txb.setSender(senderAddr)
+  txb.moveCall({
+    target: `${programId}::heist::advance_session`,
+    arguments: [txb.object(registryId)],
+  })
+  txb.setGasBudget(10_000_000)
+  txb.setGasPayment([])
+
+  const result: any = await sui.signAndExecuteTransaction({
+    transaction: txb,
+    signer: keypair,
+    include: { effects: true, objectTypes: true },
+  })
+  const txResult = result.Transaction ?? result.FailedTransaction
+  const ok = result.$kind === 'Transaction'
+  return {
+    ok,
+    digest: txResult?.digest,
+    error: ok ? undefined : txResult?.effects?.status?.error?.message,
+  }
+}

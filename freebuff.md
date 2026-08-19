@@ -66,8 +66,9 @@ At the end of every session, the LLM MUST update the
 ## Inject this into the LLM on the next session to resume development
 
 **Created:** 2026-07-26
-**Last Updated:** 2026-08-16
+**Last Updated:** 2026-08-17
 **Session Status:** 
+  🎮 **GAME SESSION #1 COMPLETE — 90/90 NUMBERS DRAWN (2026-08-17). START HERE NEXT SESSION → STEP 1: INIT A NEW SESSION.** On-chain session `0x7ecd560b...` exhausted all 90 numbers (`draw_count 90`, `drawn_numbers` len 90, version 169) — the contract's `draw_number` asserts `drawn_len < 90` (`EAllNumbersDrawn`), so every cron draw attempt now fails → `/api/draw` returns **500** → GitHub canary failing since 08-16 ~08:00 UTC (run #1888 last success) + cron-job.org executions failing. **This is NOT a bug — it's end-of-game lifecycle.** Auth is fine (500 ≠ 401 → CRON_SECRET consistent). Vault 0, no wins claimed → nothing to settle. **NEXT SESSION: run `node init_session_sdk.mjs` with `SUI_PACKAGE_ID=0x688845...557e3c` → update Vercel `SESSION_OBJECT_ID` + `NEXT_PUBLIC_SESSION_OBJECT_ID` → redeploy → draws resume (drawCount 0 → climbs 1/min). Also confirm Inodra env (`SUI_RPC_URL` + `SUI_RPC_TOKEN`) so reads stay fresh.** Details in 🔐 ACTION ITEMS + SESSION LOG 2026-08-17 (2nd).
   🟡 **STALE-READ FIGHT CONTINUES (2026-08-16): Ankr public ALSO serves Vercel egress a STALE backend** — draws WORK (cron-job.org CONFIRMED: on-chain `draw_count` climbed 5→35+ at ~1/min, both Ankr + public fullnode agree from my machine) BUT the deployed `/api/session-state` froze at version 8 (drawCount 5 = state at redeploy) while the network is at v38+. Ankr `sui.grpc.ankr.com` serves fresh data to my machine (India) but a STUCK node to Vercel's US-East egress (same pattern as the public fullnode earlier). **NEW FIX SHIPPED (local, pending push): `lib/sui-client.ts` `createSuiClient()`** — adds optional `SUI_RPC_TOKEN` (+ `SUI_RPC_TOKEN_HEADER`, default `x-api-key`) passed via `GrpcWebFetchTransport` `meta` (⚠️ `fetchInit.headers` is OVERWRITTEN by the transport — only `meta` works; verified with dummy key → `UNAUTHENTICATED: Invalid API key` = header transmitted). All 6 routes now use the helper. **PLAN: switch to Inodra (free, no card, 1M credits/mo, gRPC-Web supported, docs match our SDK): `SUI_RPC_URL=https://mainnet-grpc.inodra.com` + `SUI_RPC_TOKEN=<key>`.** tsc=0, `npm run build` ✅.
   ✅ **USDT ENABLED (2026-08-15)!** — mainnet type CONFIRMED on-chain via getCoinMetadata (Wormhole `Tether USD`, 6 dec): `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN`. Hardcoded as the default in `lib/heist-prices.ts` + `app/page.tsx` + `app/api/session-state` (env still overrides) → USDT shows in the mint UI + server accepts it. ⚠️ The ON-CHAIN USDT price entry is NOT seeded yet — run `set-usdt-price.mjs` (ACTION ITEMS) or USDT mints fail `EUnsupportedCoin` on-chain.
   ✅ **CRON-JOB.ORG JOB CREATED + FIRING (2026-08-15)!** — `GET https://www.ransomematrix.xyz/api/draw` every minute with `Authorization: Bearer <CRON_SECRET>`. ⚠️ URL MUST be the `www.` form — apex `ransomematrix.xyz` 307-redirects to `www` and cron-job.org does NOT follow redirects. Auth passes (no more 401s); executions reach the draw logic. GitHub cron stays as backup.
@@ -134,11 +135,15 @@ At the end of every session, the LLM MUST update the
 ```
 Read C:\Users\admin\Desktop\markdowns\solana-dapp\freebuff.md and resume the RANSOME DAPP project.
 SECURITY: This file contains NO secrets. Never share private keys or tokens.
-Current: v5 DEPLOYED + LIVE (commit ca8edb2, 2026-08-07) — mint = $0.50/$0.25 in any coin; prices/rates live; vault holds ONLY HEIST.
-v5 deploy order: ✅ DONE (publish-heist-v4 → setup-heist → init_session_sdk → Vercel env → push ca8edb2).
-Live: https://ransomematrix.xyz (v5.1)
-PENDING: 1) 🔴 FIX THE FROZEN-READ DISPLAY BUG (v2) — Ankr public also serves Vercel egress a STUCK node (deployed API frozen at version 8 / drawCount 5 while on-chain is v38+). Code SHIPPED locally (`lib/sui-client.ts` createSuiClient + SUI_RPC_TOKEN support, all 6 routes, tsc+build ✅) — PENDING PUSH. Then: sign up at Inodra (free, no card) → Vercel: `SUI_RPC_URL=https://mainnet-grpc.inodra.com`, `SUI_RPC_TOKEN=<key>` → redeploy → verify drawCount climbs, 2) ✅ DONE — cron-job.org confirmed drawing ~1/min, 3) ⏳ Confirm `HEIST_ADMIN_ID` set in Vercel env (suiPriceSynced:false — price sync skipped), 4) ⏳ Seed on-chain USDT via `set-usdt-price.mjs`, 5) ⏳ Confirm CRON_SECRET was rotated (not the 08-07 exposed value), 6) tokenomics rebalance when airdrop discussed.
-Start with CONFIDENTIAL ACTION ITEMS.
+Current: 🎮 GAME SESSION #1 COMPLETE (90/90 drawn) — /api/draw 500s because the session is EXHAUSTED, not a bug.
+NEXT SESSION STARTS AT STEP 1: init a NEW session (see 🔐 CONFIDENTIAL ACTION ITEMS — current section).
+Live: https://ransomematrix.xyz (v5.1, package 0x688845...557e3c)
+STEP 1 (confidential, user): cd C:\Users\admin\Desktop\markdowns\solana-dapp && set SUI_PACKAGE_ID=0x688845378c50e314c43c54662c2443bad06be9c2dc1443852cbb53a2ab557e3c && node init_session_sdk.mjs → note NEW Session Object ID (never paste suiprivkey in chat).
+STEP 2: Vercel Production env — update SESSION_OBJECT_ID + NEXT_PUBLIC_SESSION_OBJECT_ID → new ID (SUI_PROGRAM_ID unchanged).
+STEP 3: confirm SUI_RPC_URL=https://mainnet-grpc.inodra.com + SUI_RPC_TOKEN=<key> applied (stale-read fix).
+STEP 4: redeploy. VERIFY: /api/session-state drawCount 0 → climbs ~1/min; canary green.
+Other open items: seed on-chain USDT (set-usdt-price.mjs — price table lacks USDT); confirm CRON_SECRET rotation; HEIST_ADMIN_ID in Vercel (suiPriceSynced:false); in-memory ledger → KV/Postgres (B3); tokenomics/airdrop rebalance.
+Start with CONFIDENTIAL ACTION ITEMS → CURRENT SESSION.
 ```
 
 ---
@@ -381,6 +386,35 @@ NEW heist.move v2 (PUBLISHED 2026-08-02): FH1=19.5% FH2=19.5% FH3=40% total=99%
 ---
 
 ## SESSION LOG
+
+### Session: 2026-08-17 (2nd) — 🎮 ROOT CAUSE FOUND: GAME SESSION #1 COMPLETE (90/90 drawn) — `/api/draw` 500 is END-OF-GAME, not a bug. NEXT SESSION = STEP 1: INIT NEW SESSION
+**Task:** User redeployed with Inodra env; re-verify live. GitHub canary log showed `curl: (22) The requested URL returned error: 500`.
+
+**Findings (all read-only):**
+1. 🔴 **`/api/draw` 500 root-caused = session exhausted.** Contract `draw_number` asserts `drawn_len < 90` (heist.move:812, `EAllNumbersDrawn`). On-chain session `0x7ecd560b...` has `draw_count 90` / `drawn_numbers` len 90 (version 169) → cron's draw #91 fails on-chain → route returns 500. The GitHub canary (auth passes — 500, not 401) has failed every run since 08-16 ~08:00 UTC (last SUCCESS run #1888 at 07:47Z; runs #1889–#1944 all failure, log = curl 500). cron-job.org executions likewise fail. On-chain frozen at 90 by design — a session is ONE 90-number game.
+2. ✅ **Nothing to settle:** vault 0, winsClaimed all false → old session retired cleanly (no sweep needed).
+3. ✅ **Auth/CRON_SECRET consistent** (500 ≠ 401) — not the blocker; rotation still advisable if the 08-07 exposed value is live.
+4. ✅ **Contract/session wiring confirmed:** all routes + frontend read session from env (`SESSION_OBJECT_ID` / `NEXT_PUBLIC_SESSION_OBJECT_ID`); same v5.1 package `0x688845...557e3c` reused — NO republish needed, just a fresh `initialize_session`.
+5. ⏳ **Still open (separate, non-blocking for resume):** deployed `/api/session-state` stale-read (64 vs 90) persists → confirm Inodra `SUI_RPC_URL`+`SUI_RPC_TOKEN` actually applied to the running Production deployment; USDT not seeded on-chain (price table has HEIST/SUI/USDC only) → `set-usdt-price.mjs`; CRON_SECRET rotation unconfirmed.
+
+**🔴 NEXT SESSION — STEP 1 (confidential, user): init a new session**
+```cmd
+cd C:\Users\admin\Desktop\markdowns\solana-dapp
+set SUI_PACKAGE_ID=0x688845378c50e314c43c54662c2443bad06be9c2dc1443852cbb53a2ab557e3c
+node init_session_sdk.mjs
+```
+→ paste suiprivkey at prompt (never in chat) → note NEW Session Object ID.
+**Step 2:** Vercel Production env: update `SESSION_OBJECT_ID` + `NEXT_PUBLIC_SESSION_OBJECT_ID` → new ID (SUI_PROGRAM_ID unchanged). **Step 3:** confirm `SUI_RPC_URL=https://mainnet-grpc.inodra.com` + `SUI_RPC_TOKEN=<key>` are applied. **Step 4:** redeploy. **Verify:** `/api/session-state` drawCount starts at 0 and climbs ~1/min; canary green.
+
+### Session: 2026-08-17 — RESUME VERIFICATION: draws WORK on-chain (90) · deployed API STILL STALE (64) · USDT NOT seeded on-chain · code all pushed
+**Task:** Resume per freebuff.md; verify the live end-to-end state (read-only, no secrets).
+
+**Findings (all read-only):**
+1. ✅ **Draws work on-chain:** session `0x7ecd560b...` at **version 169, draw_count 90, last_number 17, 90 drawn numbers** (verified via the project's own `SuiGrpcClient` against `fullnode.mainnet.sui.io`). cron-job.org is firing ~1/min.
+2. 🔴 **Deployed API STILL serves STALE reads:** `GET https://www.ransomematrix.xyz/api/session-state` returns **drawCount 64 / lastNumber 72** while on-chain is at 90 — sampled twice 15s apart (both 64, `ts` advancing → NOT a cache; a lagging node on the deployed instance's RPC path). The stale-read display bug is NOT resolved. Code-side fix is pushed (`createSuiClient` + `SUI_RPC_TOKEN` support, commits `3a374e2` + `5b56709`; git status clean, tsc=0) — the missing piece is the confidential env change: **dedicated gRPC provider (Inodra) + redeploy**. Do NOT re-push; all code is live.
+3. 🔴 **USDT NOT seeded on-chain:** HeistAdmin price table `0x57838e21...` has **3 dynamic fields only: `::heist::HEIST`, `::sui::SUI`, `0xdba346...::usdc::USDC`** — NO USDT. USDT mints would fail `EUnsupportedCoin` until `node set-usdt-price.mjs` is run (confidential). Live API advertises USDT in `prices` (500,000 raw) — UI/server accept it, but on-chain rejects it today.
+4. ✅ Live API otherwise healthy: `active:true`, vaultTotal 0, prices (USDC/USDT/HEIST/SUI) + rates present, `heistPriceSet:true`. tsc = 0 locally, tree clean (only freebuff.md modified).
+5. ⏳ **Still the user's to run (confidential — see 🔐 ACTION ITEMS):** Inodra key → Vercel `SUI_RPC_URL` + `SUI_RPC_TOKEN` → redeploy → verify drawCount matches on-chain; `set-usdt-price.mjs`; CRON_SECRET rotation (08-07 exposure unconfirmed rotated); confirm `HEIST_ADMIN_ID` in Vercel Production (`suiPriceSynced:false` in draw responses).
 
 ### Session: 2026-08-16 (2nd) — DRAWS CONFIRMED WORKING ON-CHAIN (4 draws!) · ROOT-CAUSED the drawCount-0 display bug: deployed instance STALE READS · fix SHIPPED + Ankr RPC pre-flight ✅
 **Task:** Interpret the GitHub canary draw response; find why /api/session-state still shows 0 when on-chain has draws.
@@ -843,7 +877,32 @@ Tag: CRON_SECRET_ROTATION_PENDING
 These are actions the LLM cannot do automatically. YOU must execute them manually.
 Follow the step-by-step instructions below.
 
-## 🔴 CURRENT SESSION (2026-08-06) — v5.1 DEPLOY BLOCKER RESOLVED: GAS BUDGET WAS BELOW ACTUAL PUBLISH COST
+## 🔴 CURRENT SESSION (2026-08-17) — GAME SESSION #1 COMPLETE: INIT A NEW SESSION (4 steps)
+
+**Why:** On-chain session `0x7ecd560b...` drew all 90 numbers → contract rejects further draws (`EAllNumbersDrawn`) → `/api/draw` 500s (canary failing since 08-16 08:00 UTC). Start a fresh 90-number game on the SAME v5.1 package `0x688845...557e3c` — no republish needed.
+
+### STEP 1 — Init a new session (confidential — prompts for suiprivkey, never paste it in chat)
+```cmd
+cd C:\Users\admin\Desktop\markdowns\solana-dapp
+set SUI_PACKAGE_ID=0x688845378c50e314c43c54662c2443bad06be9c2dc1443852cbb53a2ab557e3c
+node init_session_sdk.mjs
+```
+→ Save the NEW **Session Object ID** from the output. (Old session `0x7ecd560b...` is retired — vault 0, no claims, nothing to sweep.)
+
+### STEP 2 — Vercel env (Production): point at the new session
+- `SESSION_OBJECT_ID` → NEW session ID
+- `NEXT_PUBLIC_SESSION_OBJECT_ID` → NEW session ID
+- (`SUI_PROGRAM_ID`, `HEIST_ADMIN_ID`, `SUI_PRIVATE_KEY`, `CRON_SECRET`, `SUI_NETWORK=mainnet` — UNCHANGED)
+
+### STEP 3 — Confirm the Inodra RPC is applied (stale-read fix)
+- `SUI_RPC_URL=https://mainnet-grpc.inodra.com` + `SUI_RPC_TOKEN=<key>` in Production. If already set, verify it actually reached the running deployment (Settings → Env Vars → Production scope → latest Deployment Ready AFTER the save).
+
+### STEP 4 — Redeploy + verify
+- Redeploy in Vercel. Then: `curl https://www.ransomematrix.xyz/api/session-state` → `drawCount` should start at **0** and climb ~1/min; GitHub canary runs turn green; cron-job.org executions "Successful".
+
+---
+
+## ✅ PREVIOUS SESSION (2026-08-06) — v5.1 DEPLOY BLOCKER RESOLVED: GAS BUDGET WAS BELOW ACTUAL PUBLISH COST
 
 ### ✅ STEP 0 RESOLVED — the SUI was NEVER lost; NO funding needed
 **Root cause of `InsufficientGas` (verified by simulation on mainnet):** the authority wallet `0xc93cc3...` HAS its SUI — **11.71 SUI** confirmed via SUI CLI (`sui client balance`) and SDK `getBalance` (`addressBalance: 11715331435`). The SUI lives in the **native address-balance accumulator** (the wallet holds 4 UpgradeCaps + the balance directly; zero `Coin<SUI>` objects — that's why `listCoins`/`sui client gas` show none). Address-balance gas WORKS (a transfer + the publish both simulate fine at adequate budgets).
@@ -1165,3 +1224,38 @@ Vault now holds HEIST (mint payments + winner payouts ALL in HEIST)
 
 **⏳ Still open:** CRON_SECRET blank (draws blocked), in-memory ledger → KV/Postgres (B3), MTRX_CONTRACT_ADDRESS + DELEGATION_VAULT placeholders, Solana→SUI wallet linking for airdrop claims.
 
+PS C:\Users\admin\Desktop\markdowns\solana-dapp> curl "https://www.ransomematrix.xyz/api/session-state?x=$(date +%s)"
+Get-Date : Cannot bind parameter 'Date'. Cannot convert value "+%s" to type "System.DateTime". Error: "String was not recognized as a valid DateTime."
+At line:1 char:64
++ curl "https://www.ransomematrix.xyz/api/session-state?x=$(date +%s)"
++                                                                ~~~
+    + CategoryInfo          : InvalidArgument: (:) [Get-Date], ParameterBindingException
+    + FullyQualifiedErrorId : CannotConvertArgumentNoMessage,Microsoft.PowerShell.Commands.GetDateCommand
+
+    this is the response we got at last
+ 
+
+
+StatusCode        : 200
+StatusDescription : OK
+Content           : {"ok":true,"session":"0x7ecd560bcff592fd30cb4448a8322249daac334a31eca08d3232e05d6a84c8b3","active":true,"drawCount":64,"lastNumber":72
+                    ,"drawn":[4,3,76,19,52,68,86,85,9,14,49,6,20,56,50,36,28,35,63,80,...
+RawContent        : HTTP/1.1 200 OK
+                    Age: 0
+                    Strict-Transport-Security: max-age=63072000
+                    Vary: RSC, Next-Router-State-Tree, Next-Router-Prefetch
+                    X-Matched-Path: /api/session-state
+                    X-Vercel-Cache: MISS
+                    X-Vercel-Id: bo...
+Forms             : {}
+Headers           : {[Age, 0], [Strict-Transport-Security, max-age=63072000], [Vary, RSC, Next-Router-State-Tree, Next-Router-Prefetch], [X-Matched-Path, 
+                    /api/session-state]...}
+Images            : {}
+InputFields       : {}
+Links             : {}
+ParsedHtml        : mshtml.HTMLDocumentClass
+RawContentLength  : 701
+
+
+
+PS C:\Users\admin\Desktop\markdowns\solana-dapp> 
