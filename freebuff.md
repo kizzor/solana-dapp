@@ -66,9 +66,10 @@ At the end of every session, the LLM MUST update the
 ## Inject this into the LLM on the next session to resume development
 
 **Created:** 2026-07-26
-**Last Updated:** 2026-08-17
+**Last Updated:** 2026-08-19
 **Session Status:** 
-  🎮 **GAME SESSION #1 COMPLETE — 90/90 NUMBERS DRAWN (2026-08-17). START HERE NEXT SESSION → STEP 1: INIT A NEW SESSION.** On-chain session `0x7ecd560b...` exhausted all 90 numbers (`draw_count 90`, `drawn_numbers` len 90, version 169) — the contract's `draw_number` asserts `drawn_len < 90` (`EAllNumbersDrawn`), so every cron draw attempt now fails → `/api/draw` returns **500** → GitHub canary failing since 08-16 ~08:00 UTC (run #1888 last success) + cron-job.org executions failing. **This is NOT a bug — it's end-of-game lifecycle.** Auth is fine (500 ≠ 401 → CRON_SECRET consistent). Vault 0, no wins claimed → nothing to settle. **NEXT SESSION: run `node init_session_sdk.mjs` with `SUI_PACKAGE_ID=0x688845...557e3c` → update Vercel `SESSION_OBJECT_ID` + `NEXT_PUBLIC_SESSION_OBJECT_ID` → redeploy → draws resume (drawCount 0 → climbs 1/min). Also confirm Inodra env (`SUI_RPC_URL` + `SUI_RPC_TOKEN`) so reads stay fresh.** Details in 🔐 ACTION ITEMS + SESSION LOG 2026-08-17 (2nd).
+  🎉 **v6 DEPLOYED + LIVE (2026-08-19)!** Auto session rotation active. Fresh session `0x55a85a48...` with `drawCount:0`, `maxDraws:59`. SessionRegistry `0x45348b93...` manages auto-rotation. Draws will resume when cron-job.org fires. Admin panel live at `/turbolucent`.
+  🔴 **STALE-READ FIGHT CONTINUES (2026-08-16): Ankr public ALSO serves Vercel egress a STALE backend** — draws WORK (cron-job.org CONFIRMED: on-chain `draw_count` climbed 5→35+ at ~1/min, both Ankr + public fullnode agree from my machine) BUT the deployed `/api/session-state` froze at version 8 (drawCount 5 = state at redeploy) while the network is at v38+. Ankr `sui.grpc.ankr.com` serves fresh data to my machine (India) but a STUCK node to Vercel's US-East egress (same pattern as the public fullnode earlier). **NEW FIX SHIPPED (local, pending push): `lib/sui-client.ts` `createSuiClient()`** — adds optional `SUI_RPC_TOKEN` (+ `SUI_RPC_TOKEN_HEADER`, default `x-api-key`) passed via `GrpcWebFetchTransport` `meta`. All 6 routes now use the helper. **PLAN: switch to Inodra (free, no card, 1M credits/mo, gRPC-Web supported, docs match our SDK): `SUI_RPC_URL=https://mainnet-grpc.inodra.com` + `SUI_RPC_TOKEN=<key>`.** tsc=0, `npm run build` ✅.
   🟡 **STALE-READ FIGHT CONTINUES (2026-08-16): Ankr public ALSO serves Vercel egress a STALE backend** — draws WORK (cron-job.org CONFIRMED: on-chain `draw_count` climbed 5→35+ at ~1/min, both Ankr + public fullnode agree from my machine) BUT the deployed `/api/session-state` froze at version 8 (drawCount 5 = state at redeploy) while the network is at v38+. Ankr `sui.grpc.ankr.com` serves fresh data to my machine (India) but a STUCK node to Vercel's US-East egress (same pattern as the public fullnode earlier). **NEW FIX SHIPPED (local, pending push): `lib/sui-client.ts` `createSuiClient()`** — adds optional `SUI_RPC_TOKEN` (+ `SUI_RPC_TOKEN_HEADER`, default `x-api-key`) passed via `GrpcWebFetchTransport` `meta` (⚠️ `fetchInit.headers` is OVERWRITTEN by the transport — only `meta` works; verified with dummy key → `UNAUTHENTICATED: Invalid API key` = header transmitted). All 6 routes now use the helper. **PLAN: switch to Inodra (free, no card, 1M credits/mo, gRPC-Web supported, docs match our SDK): `SUI_RPC_URL=https://mainnet-grpc.inodra.com` + `SUI_RPC_TOKEN=<key>`.** tsc=0, `npm run build` ✅.
   ✅ **USDT ENABLED (2026-08-15)!** — mainnet type CONFIRMED on-chain via getCoinMetadata (Wormhole `Tether USD`, 6 dec): `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN`. Hardcoded as the default in `lib/heist-prices.ts` + `app/page.tsx` + `app/api/session-state` (env still overrides) → USDT shows in the mint UI + server accepts it. ⚠️ The ON-CHAIN USDT price entry is NOT seeded yet — run `set-usdt-price.mjs` (ACTION ITEMS) or USDT mints fail `EUnsupportedCoin` on-chain.
   ✅ **CRON-JOB.ORG JOB CREATED + FIRING (2026-08-15)!** — `GET https://www.ransomematrix.xyz/api/draw` every minute with `Authorization: Bearer <CRON_SECRET>`. ⚠️ URL MUST be the `www.` form — apex `ransomematrix.xyz` 307-redirects to `www` and cron-job.org does NOT follow redirects. Auth passes (no more 401s); executions reach the draw logic. GitHub cron stays as backup.
@@ -135,15 +136,9 @@ At the end of every session, the LLM MUST update the
 ```
 Read C:\Users\admin\Desktop\markdowns\solana-dapp\freebuff.md and resume the RANSOME DAPP project.
 SECURITY: This file contains NO secrets. Never share private keys or tokens.
-Current: 🎮 GAME SESSION #1 COMPLETE (90/90 drawn) — /api/draw 500s because the session is EXHAUSTED, not a bug.
-NEXT SESSION STARTS AT STEP 1: init a NEW session (see 🔐 CONFIDENTIAL ACTION ITEMS — current section).
-Live: https://ransomematrix.xyz (v5.1, package 0x688845...557e3c)
-STEP 1 (confidential, user): cd C:\Users\admin\Desktop\markdowns\solana-dapp && set SUI_PACKAGE_ID=0x688845378c50e314c43c54662c2443bad06be9c2dc1443852cbb53a2ab557e3c && node init_session_sdk.mjs → note NEW Session Object ID (never paste suiprivkey in chat).
-STEP 2: Vercel Production env — update SESSION_OBJECT_ID + NEXT_PUBLIC_SESSION_OBJECT_ID → new ID (SUI_PROGRAM_ID unchanged).
-STEP 3: confirm SUI_RPC_URL=https://mainnet-grpc.inodra.com + SUI_RPC_TOKEN=<key> applied (stale-read fix).
-STEP 4: redeploy. VERIFY: /api/session-state drawCount 0 → climbs ~1/min; canary green.
-Other open items: seed on-chain USDT (set-usdt-price.mjs — price table lacks USDT); confirm CRON_SECRET rotation; HEIST_ADMIN_ID in Vercel (suiPriceSynced:false); in-memory ledger → KV/Postgres (B3); tokenomics/airdrop rebalance.
-Start with CONFIDENTIAL ACTION ITEMS → CURRENT SESSION.
+Current: 🎉 v6 DEPLOYED + LIVE (2026-08-19). Auto session rotation active. Fresh session 0x55a85a48... (drawCount 0, maxDraws 59). SessionRegistry 0x45348b93... manages rotation. Admin panel at /turbolucent.
+Live: https://ransomematrix.xyz (v6, package 0x732ce6fd...294d8)
+START HERE: verify cron-job.org is firing draws → check drawCount climbs ~1/min. If stale-read issue persists, confirm Inodra env vars applied.
 ```
 
 ---
@@ -198,8 +193,17 @@ UPGRADE_CAP (v2):              0xf64b6371fb98222de4e491cac2ca7a19bce370bd6f1855f
 SESSION_OBJECT (OLD v1): 0xd4cfa99e18e57b94f9961c854cf9feecf15f607ca9955e0e1e78c387b31e94f4
 SESSION_OBJECT (v2, LIVE, to be replaced): 0x94d75eeca0bfade2e98db9bfd093b57d2f1e6668d06f0d81c2f6e330170b35a4
 
-# v5.1 (PUBLISHED 2026-08-06 — digest 3U7HEvsZ5tAQC1d3pRHeWRmkgsYjdxActfNtRQMEupvN)
-HEIST_PACKAGE_ID (v5.1, NEW):  0x688845378c50e314c43c54662c2443bad06be9c2dc1443852cbb53a2ab557e3c
+# v6 (PUBLISHED 2026-08-19 — digest 6r7yEXyBng7mgrjD1UTQoa5ZxHLkHoyDLsFJG8GrQ9Bm)
+HEIST_PACKAGE_ID (v6, CURRENT):  0x732ce6fd07519ba4c2698168c46482e95199891f4f810d896ad0dfc3d9e294d8
+UPGRADE_CAP (v6):              0xb67247fa2ae5b592ce78047aedbb962e5136b0063f1b56f82b234e3755cbf397
+HEIST_TREASURY_CAP (v6):       0x3d9c62edce4fb65a2f571ee0554834203a6c451e39522e303ff28ef076b41e75
+COIN_METADATA (frozen):        0xbe01b32184ba398928bd93fdb2110e463c02ffbe68ab958ab758f80cd8a12c1b
+HEIST_ADMIN (v6, CREATED):     0x1c498f45f0857231ee773197619e8e1395d0be06c3017d6e996b707c5d858049
+SESSION_REGISTRY (v6, CREATED): 0x45348b93730100f974d2311191b6dce6600b3007c14ef5b5fac173fc87715928
+SESSION_OBJECT (v6, CREATED):  0x55a85a48d5a76fca00346c663b3e3d1c61c0ca5c26471fcad57cfc1d2d03f13e
+
+# v5.1 (RETIRED — replaced by v6)
+HEIST_PACKAGE_ID (v5.1):  0x688845378c50e314c43c54662c2443bad06be9c2dc1443852cbb53a2ab557e3c
 UPGRADE_CAP (v5.1):           0x8bc988f512f9944c43a8c0091ca762e2d1a86b2e7706278161fc330833a0916e
 HEIST_TREASURY_CAP (v5.1):    0xf7ad8ba7626932e50556a6052b50ef3972e37c8cc83132a837c8e78e578db1ca
 COIN_METADATA (frozen):       0xeaf16db4c906cc60ef93010e427b58ba8f4b94d0815dcacccc3326e7914855ed
@@ -386,6 +390,38 @@ NEW heist.move v2 (PUBLISHED 2026-08-02): FH1=19.5% FH2=19.5% FH3=40% total=99%
 ---
 
 ## SESSION LOG
+
+### Session: 2026-08-19 — 🎉 v6 DEPLOYED: Auto Session Rotation + Admin Controls
+**Task:** Implement auto session rotation (59-draw limit), SessionRegistry, admin pause/resume, /turbolucent admin page.
+
+**Done (all code + deploy):**
+1. ✅ **Contract v6 published** — `0x732ce6fd...294d8` (digest `6r7yEXyBng7mgrjD1UTQoa5ZxHLkHoyDLsFJG8GrQ9Bm`). New features: `SessionRegistry` (auto-rotation), `MAX_DRAWS=59`, `advance_session()`, `pause_game(duration_ms)`, `resume_game()`, `sweep_remaining()`, `draw_number` limit changed from 90→59.
+2. ✅ **On-chain setup complete** — HeistAdmin `0x1c498f45...8049` (prices seeded, 1B HEIST minted), SessionRegistry `0x45348b93...5928`, Session `0x55a85a48...f13e` (registered in registry). All via `setup-v6.mjs`.
+3. ✅ **Server: draw route rewritten** — detects exhaustion at 59 draws → auto-settles pending claims → sweeps remaining vault → advances to next session via `advance_session()`. Returns `{ exhausted: true, advanced: ... }`.
+4. ✅ **Server: session-state reads from SessionRegistry** — returns `registryPaused`, `registryPauseEndMs`, `maxDraws: 59`.
+5. ✅ **Server: /api/admin route created** — password-protected admin actions: pause, resume, change-treasury.
+6. ✅ **Frontend: under-construction overlay** — shows when game is paused by admin, with countdown timer.
+7. ✅ **Frontend: 58th minute announcement** — "⚠️ FINAL NUMBER — claim your wins NOW!" at draw #58.
+8. ✅ **Admin page at /turbolucent** — password-protected dashboard for pause/resume/change-treasury.
+9. ✅ **All builds pass** — `tsc --noEmit` = 0, `sui move build` = warnings only, `npm run build` = success. /turbolucent in build output.
+10. ✅ **Vercel env vars set** — all v6 IDs configured, commit pushed (`6ace1a0`).
+11. ✅ **Live verification** — `GET /api/session-state` returns `drawCount:0`, `maxDraws:59`, `active:true`, prices (USDC/USDT/HEIST/SUI), `registryPaused:false`.
+
+**On-chain addresses (v6 — CURRENT):**
+```
+Package:        0x732ce6fd07519ba4c2698168c46482e95199891f4f810d896ad0dfc3d9e294d8
+HeistAdmin:     0x1c498f45f0857231ee773197619e8e1395d0be06c3017d6e996b707c5d858049
+SessionRegistry: 0x45348b93730100f974d2311191b6dce6600b3007c14ef5b5fac173fc87715928
+Session:         0x55a85a48d5a76fca00346c663b3e3d1c61c0ca5c26471fcad57cfc1d2d03f13e
+Authority:       0xc93cc39962b557cfa33b2b835c6d122f69365720bb8796bf339bc3d35d9ed354
+Treasury:        0x01d4a72efddaa35d8196b2d07f32b619a1e237e74200d5331f565a925bb8ace1
+```
+
+**What's next:**
+- Verify cron-job.org is firing draws → check `drawCount` climbs ~1/min
+- If stale-read issue persists, confirm Inodra env vars applied to running deployment
+- Admin panel test: pause/resume at `/turbolucent`
+- Open items: seed USDT on-chain (`set-usdt-price.mjs`), in-memory ledger → persistent store
 
 ### Session: 2026-08-17 (2nd) — 🎮 ROOT CAUSE FOUND: GAME SESSION #1 COMPLETE (90/90 drawn) — `/api/draw` 500 is END-OF-GAME, not a bug. NEXT SESSION = STEP 1: INIT NEW SESSION
 **Task:** User redeployed with Inodra env; re-verify live. GitHub canary log showed `curl: (22) The requested URL returned error: 500`.
@@ -877,28 +913,26 @@ Tag: CRON_SECRET_ROTATION_PENDING
 These are actions the LLM cannot do automatically. YOU must execute them manually.
 Follow the step-by-step instructions below.
 
-## 🔴 CURRENT SESSION (2026-08-17) — GAME SESSION #1 COMPLETE: INIT A NEW SESSION (4 steps)
+## ✅ v6 DEPLOYED (2026-08-19) — AUTO SESSION ROTATION LIVE
 
-**Why:** On-chain session `0x7ecd560b...` drew all 90 numbers → contract rejects further draws (`EAllNumbersDrawn`) → `/api/draw` 500s (canary failing since 08-16 08:00 UTC). Start a fresh 90-number game on the SAME v5.1 package `0x688845...557e3c` — no republish needed.
+**Status:** v6 contract published + on-chain setup complete + Vercel deployed + verified live.
+**Package:** `0x732ce6fd...294d8` | **Session:** `0x55a85a48...f13e` | **Registry:** `0x45348b93...5928`
 
-### STEP 1 — Init a new session (confidential — prompts for suiprivkey, never paste it in chat)
-```cmd
-cd C:\Users\admin\Desktop\markdowns\solana-dapp
-set SUI_PACKAGE_ID=0x688845378c50e314c43c54662c2443bad06be9c2dc1443852cbb53a2ab557e3c
-node init_session_sdk.mjs
-```
-→ Save the NEW **Session Object ID** from the output. (Old session `0x7ecd560b...` is retired — vault 0, no claims, nothing to sweep.)
+### PENDING — Verify draws are working
+- Check cron-job.org job is firing: `curl https://www.ransomematrix.xyz/api/session-state` → `drawCount` should climb ~1/min
+- If `drawCount` stays 0, confirm `SUI_PRIVATE_KEY` + `CRON_SECRET` are set correctly in Vercel Production
+- Admin panel: https://www.ransomematrix.xyz/turbolucent (use `ADMIN_SECRET`)
 
-### STEP 2 — Vercel env (Production): point at the new session
-- `SESSION_OBJECT_ID` → NEW session ID
-- `NEXT_PUBLIC_SESSION_OBJECT_ID` → NEW session ID
-- (`SUI_PROGRAM_ID`, `HEIST_ADMIN_ID`, `SUI_PRIVATE_KEY`, `CRON_SECRET`, `SUI_NETWORK=mainnet` — UNCHANGED)
+### OPTIONAL — Set the correct treasury address in registry
+The registry defaulted treasury to the authority address. To change it to the real treasury wallet:
+- Go to https://www.ransomematrix.xyz/turbolucent → login with `ADMIN_SECRET`
+- Enter treasury address `0x01d4a72efddaa35d8196b2d07f32b619a1e237e74200d5331f565a925bb8ace1` → click CHANGE TREASURY
+- (Or keep as-is if authority = treasury is intentional)
 
-### STEP 3 — Confirm the Inodra RPC is applied (stale-read fix)
-- `SUI_RPC_URL=https://mainnet-grpc.inodra.com` + `SUI_RPC_TOKEN=<key>` in Production. If already set, verify it actually reached the running deployment (Settings → Env Vars → Production scope → latest Deployment Ready AFTER the save).
-
-### STEP 4 — Redeploy + verify
-- Redeploy in Vercel. Then: `curl https://www.ransomematrix.xyz/api/session-state` → `drawCount` should start at **0** and climb ~1/min; GitHub canary runs turn green; cron-job.org executions "Successful".
+### OTHER OPEN ITEMS
+- Seed USDT on-chain: `node set-usdt-price.mjs` (confidential — prompts for key)
+- In-memory ledger → persistent store (KV/Postgres) for serverless safety
+- Tokenomics / airdrop rebalance when discussed
 
 ---
 
