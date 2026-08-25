@@ -2795,6 +2795,27 @@ function Ransome() {
           )}
         </div>
       </div>
+      <div className="mobile-vault-status">
+        <div className="mobile-vault-heading">
+          <span>💎 VAULT_STATUS</span>
+          <span className="mobile-vault-countdown">{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : `NEXT ${fmtTime(lobbyCountdown)}`}</span>
+        </div>
+        <div className="mobile-vault-content">
+          <div className="mobile-vault-graphic">
+            <div className="mobile-vault-fill" style={{ height: `${lobbyFill * 100}%` }} />
+            <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill * 1000000)} />
+          </div>
+          <div className="mobile-vault-stats">
+            <div><span>OPERATIVES</span><strong>2,104</strong></div>
+            <div><span>SUCCESS</span><strong>92.4%</strong></div>
+            <div><span>LAST BREACH</span><strong>+450 SOL</strong></div>
+            <div><span>THREAT</span><strong>LOW</strong></div>
+          </div>
+        </div>
+        <div className="mobile-vault-claim">
+          <VaultClaimPanel wallet={wallet} announce={announce} />
+        </div>
+      </div>
       {/* Wallet debug panel */}
       {walletDebug.length > 0 && chain === 'sui' && !wallet && (
         <div style={{ margin: '0 24px', padding: '8px 12px', background: '#0a0f1a', border: '1px solid #4da6ff30', borderRadius: 8, maxHeight: 120, overflowY: 'auto' }}>
@@ -2821,7 +2842,7 @@ function Ransome() {
         </div>
         {navTab === 'operative' && <div style={{ flex: 1, padding: 20, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="lobby-live-now" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div><div style={{ fontSize: 8, color: '#ef4444', marginBottom: 2 }}>🔴 LIVE NOW</div><div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{BANKS[liveBank].name}</div><div style={{ fontSize: 8, color: '#2a5a7a' }}>{BANKS[liveBank].city} · {BANKS[liveBank].vault}</div></div>
               <div style={{ textAlign: 'right' }}><div style={{ fontSize: 22, fontWeight: 800, color: '#00e5a0' }}>$1,000,000</div><div style={{ fontSize: 9, color: lobbyCountdown <= 60 ? '#ef4444' : '#2a5a7a', fontWeight: 700 }}>{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : 'NEXT: ' + fmtTime(lobbyCountdown)}</div></div>
             </div>
@@ -2875,7 +2896,7 @@ function Ransome() {
             </div>
             <div><div style={{ fontSize: 8, color: '#1e4a6a', marginBottom: 6 }}>💬 LOBBY CHAT</div><ChatTerminal nickname={nickname} /></div>
           </div>
-          <div style={{ background: '#09141e', border: '1px solid rgba(63,73,83,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="lobby-vault-panel" style={{ background: '#09141e', border: '1px solid rgba(63,73,83,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 14 }}>💎</span><span style={{ fontSize: 14, fontWeight: 700, color: '#dce6f3' }}>VAULT_STATUS</span></div>
             <div style={{ position: 'relative', background: '#050f17', border: '1px solid rgba(63,73,83,0.15)', minHeight: 180 }}>
               <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#2ff3ad,#00658e)', opacity: 0.2, transition: 'height 1s linear' }} />
