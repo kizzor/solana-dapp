@@ -1,4 +1,13 @@
-# 🚨 SECURITY WARNING — READ BEFORE PROCEEDING 🚨
+# 🚨🚨🚨 SECURITY WARNING — READ FIRST 🚨🚨🚨
+#
+# ⚠️ CONFIDENTIAL PROTOCOL — PERMANENT RULE FOR EVERY SESSION
+# This file is the ONLY source of truth for project state.
+# BEFORE reading any other file or starting work:
+# 1. RE-READ this protocol block
+# 2. NEVER read .env.local, keystore files, wallet files, or any config with secrets
+# 3. NEVER show private keys, recovery phrases, tokens, or API keys to ANY LLM
+# 4. ALL confidential operations (deploy, env vars, signing, on-chain txs) = USER runs manually
+# 5. LLM provides STEP-BY-STEP instructions ONLY — never executes confidential actions
 #
 # This file contains NO secrets. All private keys, recovery phrases, tokens,
 # and API keys have been redacted. ONLY the following is safe for LLM:
@@ -10,11 +19,46 @@
 # 🚫 Do NOT paste .env.local, wallet files, or keystore contents into LLM.
 # 🚫 Do NOT let the LLM read configuration files that contain secrets.
 #
-# CRON_SECRET: ROTATE NOW (2026-08-07). A fresh value set in Vercel + GitHub
-#   was EXPOSED in a chat session while testing /api/draw (user pasted it).
-#   Treat it as COMPROMISED. Generate a new value, set it in BOTH Vercel and
-#   GitHub Actions, and NEVER paste it into chat. Do not defer this rotation.
 # 🚨 END SECURITY WARNING 🚨
+
+---
+
+## 🔑 SECRET ROTATION LOG — ACTIVE (2026-09-02)
+
+**Trigger:** the project `.env` files were exposed to an LLM on 2026-09-02. Per the
+permanent manual-config protocol, every credential that lived in `.env.local` / Vercel /
+GitHub is now treated as **COMPROMISED**, and rotation is REQUIRED (no longer deferred).
+This table holds STATE MARKERS only — actual secret values must NEVER be written here or
+in chat. Each row flips to ✅ ROTATED once the user confirms the manual step is done.
+
+| # | Secret | Where it lives | Status | How to generate the new value |
+|---|--------|----------------|--------|-------------------------------|
+| 1 | `CRON_SECRET` | Vercel Prod + GitHub Actions + cron-job.org header | ✅ ROTATED (2026-09-03) | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| 2 | `ADMIN_SECRET` (turbolucent panel) | Vercel Prod | ✅ ROTATED (2026-09-03) | fresh random string, ≥32 chars |
+| 3 | `SUI_RPC_TOKEN` (Inodra) | Vercel Prod | ✅ ROTATED (2026-09-03) | regenerate key in Inodra dashboard |
+| 4 | Helius key | Vercel Prod | ❌ NOT REQUIRED (2026-09-04) | Game is SUI-only. No live code reads Helius. Optional leftover `SOLANA_RPC_URL` is only for MTRX discount (public Solana RPC is enough). If a Helius URL/key exists in Vercel, DELETE it — do not create a new one. |
+| 5 | Vercel deploy token | Vercel account | ✅ ROTATED (2026-09-04) | Revoked old token, created new, updated GitHub Actions + .env |
+| 6 | `SUI_PRIVATE_KEY` (authority) | Vercel Prod + local scripts | ⏳ PENDING — see note | new keypair + **on-chain republish** |
+
+**⚠️ CRITICAL on #6 (`SUI_PRIVATE_KEY`):** the authority **address** is baked into the
+deployed HeistAdmin / SessionRegistry / Session objects. Rotating the `.env` value alone
+does **NOT** revoke the compromised on-chain authority — an attacker holding the old key
+can still act as authority on-chain (draw, pause, sweep, mint from TreasuryCap). Full
+revocation requires: generate a NEW SUI keypair → **REPUBLISH** the contract with the new
+authority → re-init SessionRegistry + Session → update env → verify. This is the only path
+that actually removes the old key's power. **Decision on whether to republish now: PENDING
+user choice.** Until then #6 stays in this table as incomplete.
+
+**Non-secret values from the same exposed file — DO NOT need rotation** (public / on-chain
+IDs, not credentials): `SUI_PROGRAM_ID`, `SESSION_OBJECT_ID`, `SESSION_REGISTRY_ID`,
+`HEIST_ADMIN_ID`, `NEXT_PUBLIC_*` addresses, treasury address, `USDT_COIN_TYPE`,
+`MTRX_CONTRACT_ADDRESS`, `MTRX_DELEGATION_VAULT`, `SUI_NETWORK`, price & band envs
+(`HEIST_PRICE_USD`, `SUI_PRICE_USD`, `HEIST_PRICE_MAX_USD`, `SUI_PRICE_MAX_USD`),
+`HEIST_COINGECKO_ID`, `HEIST_PRICE_API_URL`, `MINT_REGISTRATION_WINDOW_MS`,
+`SUI_RPC_URL`, `SUI_RPC_TOKEN_HEADER`.
+
+**Protocol:** when the user reports a row complete, flip it to ✅ ROTATED with the date
+(2026-09-02) in the Status column.
 
 
 # ⚙️ MANUAL CONFIG MODE — PERMANENT PROTOCOL
@@ -66,11 +110,14 @@ At the end of every session, the LLM MUST update the
 ## Inject this into the LLM on the next session to resume development
 
 **Created:** 2026-07-26
-**Last Updated:** 2026-08-25
+**Last Updated:** 2026-09-04
 **Session Status:** 
   🎉 **v6 DEPLOYED + LIVE (2026-08-19)!** Auto session rotation active. SessionRegistry `0x45348b93...` manages auto-rotation. Admin panel live at `/turbolucent`.
-  ✅ **PRODUCTION VERIFIED (2026-08-25):** `/api/session-state` returns the active registry session `0xcacc768a...`, `drawCount:7`, `maxDraws:59`, `registryPaused:false`, current SUI/HEIST rates, and USDC/USDT/HEIST/SUI prices. `/turbolucent` returns HTTP 200. Local TypeScript and production builds pass.
-  🟡 **REMAINING MANUAL CHECKS:** confirm `HEIST_ADMIN_ID` and dedicated RPC credentials in Vercel Production, seed the on-chain USDT price if not already done, and keep CRON_SECRET rotation pending unless a real leak or production issue appears.
+  ✅ **PRODUCTION VERIFIED (2026-08-30):** `/api/session-state` returns an active registry session with `ok:true`, `active:true`, `drawCount:19`, `maxDraws:59`, `registryPaused:false`, `HEIST/SUI` prices, and HTTP 200. The production site responds and the local TypeScript + Next production build pass.
+  ✅ **MOBILE LOBBY UPDATE COMPLETE (2026-08-25):** Mobile now prioritizes map, vault, mint, and chat. The operative sidebar is hidden behind the hamburger; compact `VAULT_STATUS` with metrics and the existing claim option appears under the mobile header. `LIVE NOW` and the large desktop vault panel are hidden on mobile. Commits `46cbca6` and `d07014d` are on `origin/main`.
+  ✅ **WALLET-DEPENDENT GAMEPLAY PATH VERIFIED AS THE ONLY REMAINING GATE:** the app shell and live API are healthy; the remaining end-to-end validation requires a real connected SUI wallet to complete mint + draw + claim flows. Production is live and stable; we are now ready to transition from production verification into the airdrop test/launch phase once wallet-powered gameplay is validated.
+  🟡 **NEXT SESSION:** after wallet E2E validation passes, enter the airdrop phase: define reward allocation, claim eligibility, and pre-airdrop verification steps; then resume from this handoff with the airdrop checklist and active production state.
+  🟡 **REMAINING MANUAL CHECKS:** confirm `HEIST_ADMIN_ID` and dedicated RPC credentials in Vercel Production, seed the on-chain USDT price if still missing, and keep CRON_SECRET rotation pending unless a real leak or production issue appears.
   🔴 **STALE-READ FIGHT CONTINUES (2026-08-16): Ankr public ALSO serves Vercel egress a STALE backend** — draws WORK (cron-job.org CONFIRMED: on-chain `draw_count` climbed 5→35+ at ~1/min, both Ankr + public fullnode agree from my machine) BUT the deployed `/api/session-state` froze at version 8 (drawCount 5 = state at redeploy) while the network is at v38+. Ankr `sui.grpc.ankr.com` serves fresh data to my machine (India) but a STUCK node to Vercel's US-East egress (same pattern as the public fullnode earlier). **NEW FIX SHIPPED (local, pending push): `lib/sui-client.ts` `createSuiClient()`** — adds optional `SUI_RPC_TOKEN` (+ `SUI_RPC_TOKEN_HEADER`, default `x-api-key`) passed via `GrpcWebFetchTransport` `meta`. All 6 routes now use the helper. **PLAN: switch to Inodra (free, no card, 1M credits/mo, gRPC-Web supported, docs match our SDK): `SUI_RPC_URL=https://mainnet-grpc.inodra.com` + `SUI_RPC_TOKEN=<key>`.** tsc=0, `npm run build` ✅.
   🟡 **STALE-READ FIGHT CONTINUES (2026-08-16): Ankr public ALSO serves Vercel egress a STALE backend** — draws WORK (cron-job.org CONFIRMED: on-chain `draw_count` climbed 5→35+ at ~1/min, both Ankr + public fullnode agree from my machine) BUT the deployed `/api/session-state` froze at version 8 (drawCount 5 = state at redeploy) while the network is at v38+. Ankr `sui.grpc.ankr.com` serves fresh data to my machine (India) but a STUCK node to Vercel's US-East egress (same pattern as the public fullnode earlier). **NEW FIX SHIPPED (local, pending push): `lib/sui-client.ts` `createSuiClient()`** — adds optional `SUI_RPC_TOKEN` (+ `SUI_RPC_TOKEN_HEADER`, default `x-api-key`) passed via `GrpcWebFetchTransport` `meta` (⚠️ `fetchInit.headers` is OVERWRITTEN by the transport — only `meta` works; verified with dummy key → `UNAUTHENTICATED: Invalid API key` = header transmitted). All 6 routes now use the helper. **PLAN: switch to Inodra (free, no card, 1M credits/mo, gRPC-Web supported, docs match our SDK): `SUI_RPC_URL=https://mainnet-grpc.inodra.com` + `SUI_RPC_TOKEN=<key>`.** tsc=0, `npm run build` ✅.
   ✅ **USDT ENABLED (2026-08-15)!** — mainnet type CONFIRMED on-chain via getCoinMetadata (Wormhole `Tether USD`, 6 dec): `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN`. Hardcoded as the default in `lib/heist-prices.ts` + `app/page.tsx` + `app/api/session-state` (env still overrides) → USDT shows in the mint UI + server accepts it. ⚠️ The ON-CHAIN USDT price entry is NOT seeded yet — run `set-usdt-price.mjs` (ACTION ITEMS) or USDT mints fail `EUnsupportedCoin` on-chain.
@@ -138,10 +185,19 @@ At the end of every session, the LLM MUST update the
 ```
 Read C:\Users\admin\Desktop\markdowns\solana-dapp\freebuff.md and resume the RANSOME DAPP project.
 SECURITY: This file contains NO secrets. Never share private keys or tokens.
-Current: 🎉 v6 DEPLOYED + LIVE (2026-08-19). Auto session rotation active. Fresh session 0x55a85a48... (drawCount 0, maxDraws 59). SessionRegistry 0x45348b93... manages rotation. Admin panel at /turbolucent.
-Live: https://ransomematrix.xyz (v6, package 0x732ce6fd...294d8)
-START HERE: Step 2 — verify the production RPC path and admin config. Confirm SUI_RPC_URL/SUI_RPC_TOKEN are set to the dedicated provider, HEIST_ADMIN_ID is present, and /api/session-state matches on-chain state. Keep CRON_SECRET as pending unless a real leak or production issue appears.
+Current: 🚀 ROBINHOOD CHAIN (Arbitrum Orbit L2, Chain ID: 4663) ARCHITECTURE READY FOR TEST FEEDBACK.
+Tokens: Strictly USDG, USDT, USDC, and ETH accepted for minting ($0.50 base / $0.25 with 1,000 X locked in XLockVault with 24h unbonding).
+Vault: 100% of mint proceeds auto-swap to "X" tokens via Pons/Uniswap router and deposit to RansomeVault (99% player prize reserve, 1% admin treasury reserve).
+Claims: Direct X token transfers with zero slippage, claimable during active 59-draw game OR in lobby anytime.
+Dev/Test: TestXToken.sol + MockPonsRouter.sol + Dev tools (5,000 free X faucet, test ETH mint, lobby timer skip) ready for testnet feedback.
+Next: Review user testing feedback, deploy official Pons X token, and launch to live production.
 ```
+
+**⚠️ MANDATORY RESUME PROTOCOL:**
+When this file is read to resume:
+1. **Read freebuff.md fully** to load current state
+2. **Ask the user for testing feedback** on the TestXToken / MockPonsRouter / Dev tools / UI flow
+3. **Continue development** based on that feedback (fixes, production deploy, or iteration)
 
 ---
 
@@ -392,6 +448,20 @@ NEW heist.move v2 (PUBLISHED 2026-08-02): FH1=19.5% FH2=19.5% FH3=40% total=99%
 ---
 
 ## SESSION LOG
+
+### Session: 2026-08-25 — Mobile lobby composition and production handoff
+**Task:** Make the mobile lobby usable by prioritizing the map, vault, mint terminal, and chat while keeping operative navigation available through a hamburger menu.
+
+**Done:**
+1. ✅ Added mobile hamburger navigation and hid the operative sidebar by default on phones.
+2. ✅ Added a compact mobile `VAULT_STATUS` block beneath the header with reduced vault graphic, metrics, countdown, and the existing `VaultClaimPanel` claim option.
+3. ✅ Hid the mobile `LIVE NOW` card and large desktop vault panel so they do not crowd the mobile lobby.
+4. ✅ Preserved desktop layout and console occupancy behavior.
+5. ✅ Verified mobile document has no horizontal overflow and hamburger open state reveals operative navigation.
+6. ✅ `npx tsc --noEmit`, `npm run build`, and `git diff --check` pass.
+7. ✅ Mobile changes committed and pushed: `46cbca6` and `d07014d`.
+
+**Next session:** verify the Vercel deployment from `d07014d` at mobile width. Confirm the production first viewport shows compact vault status, claim access, map, and chat, while the operative panel appears only after opening the hamburger.
 
 ### Session: 2026-08-19 — 🎉 v6 DEPLOYED: Auto Session Rotation + Admin Controls
 **Task:** Implement auto session rotation (59-draw limit), SessionRegistry, admin pause/resume, /turbolucent admin page.
@@ -943,7 +1013,10 @@ We are not forcing a CRON_SECRET rotation unless a real leak or production issue
 - Only do this after the live RPC fix and admin config are confirmed.
 
 ### PENDING — CRON_SECRET rotation
-- Default status: **pending**.
+- ⚠️ **SUPERSEDED 2026-09-02:** the project `.env` files were exposed to an LLM, so this is
+  now a FORCED rotation (not deferred). See the 🔑 SECRET ROTATION LOG — ACTIVE section at
+  the top of this file. #1 CRON_SECRET.
+- Default status: **pending** (historical).
 - Do not rotate it automatically just because it was once mentioned in chat.
 - Rotate only if you have evidence of a real leak or a production issue that requires it.
 - If you do rotate it later, set the same value in Vercel + GitHub + cron-job.org and do not paste the secret in chat.
@@ -958,6 +1031,10 @@ The registry defaulted treasury to the authority address. To change it to the re
 - Seed USDT on-chain: `node set-usdt-price.mjs` (confidential — prompts for key)
 - In-memory ledger → persistent store (KV/Postgres) for serverless safety
 - Tokenomics / airdrop rebalance when discussed
+
+### 2026-09-04 — HELIUS NOT NEEDED + VERCEL TOKEN ROTATION
+- **Helius:** NOT used by the live SUI game. Do **not** create a new Helius key. In Vercel Production, if `SOLANA_RPC_URL` (or any URL containing helius) exists, **delete** it unless you are actively using the $0.25 MTRX discount. MTRX checks can use public Solana RPC if that feature is kept.
+- **Vercel deploy token:** still PENDING. Rotate from the account Tokens page (see session 2026-09-04 instructions). Do not paste the token in chat. After creating a new token, update any local `vercel` CLI login / GitHub secret that used the old one, then revoke the old token.
 
 ---
 
@@ -1315,6 +1392,40 @@ Links             : {}
 ParsedHtml        : mshtml.HTMLDocumentClass
 RawContentLength  : 701
 
+### Session: 2026-09-14 — AUTOMATION & DRAW ARCHITECTURE EVALUATION + DEV TEST MODE
+**Architecture Exploration (Chainlink Automation / Keepers vs Arbitrum Lazy Seed):**
+- **Evaluation:** Evaluated fully autonomous on-chain draw mechanisms to eliminate centralized server crons.
+- **Option 1 (Chainlink Automation / Gelato Keepers):** External decentralized bots call `drawNumber()` every 59s. Gas cost estimate: ~$0.85 – $1.00 total per 59-draw game on Arbitrum Orbit (paid/refunded from contract gas reserve/treasury).
+- **Option 2 (Arbitrum Lazy-Seed / Accumulated Entropy):** Entropy committed on 1st mint or lobby pooling; numbers time-derived on-demand via view function, win verified at claim time. Zero crons, zero gas during game.
+- **Decision & Current Testing Focus:**
+  - Placed a formal architecture note to potentially implement the **Chainlink Automation combo / Decentralized Keepers** or **Arbitrum Lazy-Seed**.
+  - Immediate next priority: Test the live EVM gameplay efficiency in **Dev Mode with Test ETH** to evaluate game mechanics before finalizing contract automation.
+  - Test tools ready: `TestXToken.sol`, `MockPonsRouter.sol`, 5,000 X faucet, test ETH minting path, and lobby clock skip.
 
-
-PS C:\Users\admin\Desktop\markdowns\solana-dapp> 
+**Architecture Plan & Deliverables:**
+- **Network:** Robinhood Chain (Arbitrum Orbit L2, Chain ID: `4663`, Gas token: ETH).
+- **Core Tokens & Minting Rules:**
+  - Strictly accepted mint tokens: **USDG, USDT, USDC, and ETH** ($0.50 base / $0.25 with 1,000 X locked).
+  - 100% of mint proceeds are auto-swapped to "X" tokens on Pons and deposited into `RansomeVault`.
+  - Inside `RansomeVault`: **99% is allocated to the prizePoolReserve** (for winning players) and **1% is held in the on-chain treasuryReserve**.
+  - The Admin/Treasury can claim the 1% accumulated reserve via `claimTreasuryReserve()` at any time.
+- **Game Mechanics:**
+  - Standard Mint: `0.50 USDG` per hacking console.
+  - Discounted Mint: `0.25 USDG` per console for players with **1,000 "X" tokens locked**.
+  - Lock Vault (`XLockVault.sol`): 1,000 X lock requirement + **24-hour unbonding cooldown** (prevents flash-mints / lock-dump exploits).
+  - Payout on Claim (`RansomeVault.sol`): Vault USDG prize share is **swapped directly into "X" tokens** via Pons / Uniswap V3 Router and delivered to the winner's wallet.
+- **Smart Contracts (`contracts/`):**
+  - `contracts/interfaces/IERC20.sol`
+  - `contracts/interfaces/ISwapRouter.sol`
+  - `contracts/XLockVault.sol`
+  - `contracts/RansomeVault.sol`
+  - `contracts/RansomeGame.sol`
+- **Frontend & API Adaptors (`lib/` & `app/api/`):**
+  - `lib/robinhood-config.ts` — Chain configuration, RPC endpoints, and token/contract bindings.
+  - `lib/game-abi.ts` — TypeScript ABIs for Game, Vaults, and ERC20.
+  - `lib/evm-client.ts` — Viem public client.
+  - `lib/use-evm-wallet.ts` — EVM wallet connection, 1000 X lock/unbond controls, and USDG console minting.
+  - `app/api/session-state/route.ts` — EVM session and vault state.
+  - `app/api/draw/route.ts` — Cron-driven 59-draw session authority engine.
+  - `app/api/claim-win/route.ts` — Win verification and USDG -> X swap trigger.
+  - `scripts/deploy-robinhood.mjs` — Deployment automation for Robinhood Chain.
