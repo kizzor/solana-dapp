@@ -1429,3 +1429,43 @@ RawContentLength  : 701
   - `app/api/draw/route.ts` — Cron-driven 59-draw session authority engine.
   - `app/api/claim-win/route.ts` — Win verification and USDG -> X swap trigger.
   - `scripts/deploy-robinhood.mjs` — Deployment automation for Robinhood Chain.
+
+---
+
+### Session: 2026-09-17 — LOBBY TRANSPARENT TERMINAL HUD, EVM INTEGRATION & LOBBY FIXATION CHECKPOINT
+
+**Tag Checkpoint:** `lobbyfixation` (Commit: `0bfcd6e`)
+
+#### Key Completed Deliverables:
+1. **EVM Multi-Chain & Token Minting Integration (`app/page.tsx`):**
+   - Cleaned deprecated SUI wallet hooks and imports in `app/page.tsx`.
+   - Wired `useEvmWallet` exposing `evmAddress`, `evmChainId`, `ethBalance`, `usdgBalance`, `usdcBalance`, `xBalance`, `isXLocked`, and `xDiscountedPrice` across Robinhood Chain (`4663`), Sepolia Testnet (`11155111`), Arbitrum, and ETH.
+   - Standardized all terminology strictly to **"Decentralized Vault"** / **"DECENTERILZIED VAULT"**.
+
+2. **Full-Map Transparent Cyber Terminal HUD (`LobbyMapWithOverlays`):**
+   - **100% Map Fill:** `WorldMapSketch` spans the full container background with bank breach targets, continent textures, and SVG grid.
+   - **Transparent Cyber HUD:** Chat interface overlays the map directly with transparent cyber glassmorphism (`rgba(2, 8, 16, 0.25)`, `backdrop-filter: blur(2px)`), keeping world map nodes and laser trails visible under messages.
+   - **Top Control & Action Header Bar:**
+     - Live Heist Mint Notification ticker: `[HEIST #...] <username> HAS MINTED <X> CONSOLES!`.
+     - **VBGIOR Neon Color Band Palette Strip** (`#a855f7` Violet, `#00b8ff` Blue, `#00e5a0` Green, `#06b6d4` Indigo, `#f59e0b` Orange, `#ef4444` Red, `#ffd166` Yellow) for real-time text color customization.
+     - **📟 VIEW CONSOLES ({devices.length})** opening the Cyber Console Terminal modal with 3x9 micro-matrix previews and device metadata.
+     - **⚡ ENTER MATRIX →** direct breach action button embedded in the HUD header.
+     - Live Heist cycle countdown timer.
+
+3. **Terminal Media & Floating Minimizable Small DM Terminal (`SmallDmTerminal`):**
+   - **Universal File Insertion (📎 INSERT FILE):** Supports all images (previewed inline) and audio files (rendered with native `<audio controls />` player).
+   - **Small DM Terminal:** Clicking `✉ DM` in the Heist List opens a floating, minimizable (`—`/`□`) and closeable (`✕`) encrypted P2P terminal with individual color selection and file sharing.
+   - **Operatives Heist List (Extreme Right):** Shows active operatives with one-click `✉ DM` and `🚫 BLOCK / UNBLOCK` toggle that automatically filters messages.
+   - **Laser Animations:** Real-time SVG laser beams firing across map coordinates on console minting events that slowly fade out.
+
+4. **Matrix Arena Layout Refactor (`HackMatrixDisplay`):**
+   - Repositioned the Decentralized Vault sketch, 99% prize allocation reserve metrics, claim panel, and Game Stats into the adjacent empty grid space beside the Matrix Arena.
+
+5. **Build & Quality Assurance:**
+   - `npx tsc --noEmit`: 0 errors.
+   - `npm run build`: Production compilation verified.
+   - Dev server live on `http://localhost:3000`.
+
+#### Next Steps for Upcoming Session:
+- User feedback review on the transparent lobby terminal HUD and DM workflows.
+- Finalizing on-chain draw automation testing (Chainlink Keeper vs Arbitrum Lazy Seed) on Robinhood Chain / Sepolia.
