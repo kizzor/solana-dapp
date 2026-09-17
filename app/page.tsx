@@ -6,10 +6,11 @@ import { ConnectionProvider, WalletProvider, useWallet, useConnection } from '@s
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets'
 import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-react-ui'
+import { useEvmWallet } from '@/lib/use-evm-wallet'
+import { ROBINHOOD_CHAIN_ID, ROBINHOOD_CHAIN, SUPPORTED_EVM_CHAINS } from '@/lib/robinhood-config'
 // SUI imports
-import { Transaction } from '@mysten/sui/transactions'
 // dapp-kit hooks — wallet state, connect/disconnect, and tx signing
-import { useCurrentAccount, useConnectWallet, useDisconnectWallet, useSignAndExecuteTransaction, useWallets, useSuiClient } from '@mysten/dapp-kit'
+// EVM wallet hook imported below
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Cell = { num: number | null; matched: boolean; clicked: boolean; missed: boolean }
@@ -227,15 +228,15 @@ function MiniStopwatch({ seconds, total }: { seconds: number; total: number }) {
 }
 
 // ─── Outline World Map with bank sketches ────────────────────────────────────
-function WorldMapSketch({ currentHour, onSelectBank }: { currentHour: number; onSelectBank?: (id: number) => void }) {
+function WorldMapSketch({ currentHour, onSelectBank, style }: { currentHour: number; onSelectBank?: (id: number) => void; style?: React.CSSProperties }) {
   const live = getLiveBank(currentHour)
   const hourCd = useHourCountdown()
   const [hov, setHov] = useState<number | null>(null)
   return (
-    <div style={{ position: 'relative', width: '100%', background: '#020c18', overflow: 'hidden', minHeight: 200 }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#020c18', overflow: 'hidden', minHeight: 200, ...style }}>
       <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-qpHYdNrYszBgUEZK-XDwmoipoMY4fuwa6ooHcfdmGgOMR5hPsRnliaYv7UJIzsxEbBsoczbGp6nMjFaXT_Rwg2-zWBrnyEkuAKxW9KAc96MFqIKwxhSHGFXRMNEgYKENqjtU0LSdGC7Rj88SfAUFBK0_gcGjXckGkgXuEZySbIs4zWwpI6knvocSlgQdEYGheuw7Zanu5xobKhkWNSKh8okeX4k4QU0KSuxu-CD85KNnOYUlO0lEYScZM-1_wi7E_IAnX1gr460x"
-        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', position: 'absolute', inset: 0, opacity: 0.4, filter: 'saturate(0.3) brightness(0.6) contrast(1.2)', pointerEvents: 'none' }} alt="" />
-      <svg viewBox="0 0 400 210" style={{ width: '100%', display: 'block', position: 'relative', zIndex: 2 }}>
+        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', position: 'absolute', inset: 0, opacity: 0.45, filter: 'saturate(0.35) brightness(0.7) contrast(1.2)', pointerEvents: 'none' }} alt="" />
+      <svg viewBox="0 0 400 210" preserveAspectRatio="xMidYMid slice" style={{ width: '100%', height: '100%', display: 'block', position: 'relative', zIndex: 2 }}>
         {Array.from({ length: 41 }, (_, i) => <line key={"vg" + i} x1={i * 10} y1="0" x2={i * 10} y2="210" stroke="#0a1830" strokeWidth="0.15" />)}
         {Array.from({ length: 22 }, (_, i) => <line key={"hg" + i} x1="0" y1={i * 10} x2="400" y2={i * 10} stroke="#0a1830" strokeWidth="0.15" />)}
         <line x1="0" y1="105" x2="400" y2="105" stroke="#0a2535" strokeWidth="0.6" strokeDasharray="4,4" />
@@ -1253,7 +1254,950 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
 
 
 
-// ─── Chat Terminal (media queue, text + media only) ──────────────────────────
+
+// ─── Map & Terminal Chat & Overlays ──────────────────────────────────────────
+interface OperativeUser {
+  id: string;
+  name: string;
+  level: number;
+  devices: number;
+  status: 'online' | 'in_heist' | 'minting';
+}
+
+const INITIAL_OPERATIVES: OperativeUser[] = [
+  { id: 'op1', name: 'CIPHER_9', level: 6, devices: 4, status: 'online' },
+  { id: 'op2', name: 'GHOST_X', level: 9, devices: 8, status: 'in_heist' },
+  { id: 'op3', name: 'ZERO_DAY', level: 7, devices: 5, status: 'online' },
+  { id: 'op4', name: 'NEO_404', level: 3, devices: 2, status: 'minting' },
+  { id: 'op5', name: 'SPECTRE_1', level: 5, devices: 3, status: 'online' },
+  { id: 'op6', name: 'VORTEX_8', level: 4, devices: 2, status: 'in_heist' },
+  { id: 'op7', name: 'SHADOW_OPS', level: 8, devices: 6, status: 'online' },
+]
+
+// VBGIOR Neon Color Band Palette
+const NEON_PALETTE = [
+  { name: 'Violet', hex: '#a855f7' },
+  { name: 'Blue', hex: '#00b8ff' },
+  { name: 'Green', hex: '#00e5a0' },
+  { name: 'Indigo/Cyan', hex: '#06b6d4' },
+  { name: 'Orange', hex: '#f59e0b' },
+  { name: 'Red', hex: '#ef4444' },
+  { name: 'Yellow', hex: '#ffd166' },
+]
+
+interface MintNotification {
+  id: string;
+  heistId: string;
+  username: string;
+  count: number;
+  timestamp: number;
+  x: number;
+  y: number;
+}
+
+// ── Small Floating DM Terminal Component ─────────────────────────────────────
+function SmallDmTerminal({
+  targetUser,
+  onClose,
+  nickname,
+  isBlocked,
+  onToggleBlock,
+}: {
+  targetUser: string;
+  onClose: () => void;
+  nickname: string;
+  isBlocked: boolean;
+  onToggleBlock: (name: string) => void;
+}) {
+  const [minimized, setMinimized] = useState(false)
+  const [messages, setMessages] = useState<Array<{ sender: string; text: string; color?: string; img?: string; audio?: string }>>([
+    { sender: 'SYSTEM', text: `ENCRYPTED P2P TUNNEL // TARGET: ${targetUser}`, color: '#00e5a0' },
+    { sender: targetUser, text: 'Heist channel secured. Send coordinates.', color: '#ec4899' },
+  ])
+  const [dmInput, setDmInput] = useState('')
+  const [dmColor, setDmColor] = useState('#00e5a0')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
+  }, [messages])
+
+  const sendDm = () => {
+    if (!dmInput.trim()) return
+    const sender = (nickname || 'OPERATIVE').toUpperCase()
+    const text = dmInput.trim()
+    setMessages(p => [...p, { sender, text, color: dmColor }])
+    setDmInput('')
+
+    if (!isBlocked) {
+      setTimeout(() => {
+        setMessages(p => [...p, {
+          sender: targetUser,
+          text: `[ACK] Payload received: "${text.slice(0, 16)}..." Standby for breach pulse.`,
+          color: '#ec4899'
+        }])
+      }, 1200)
+    }
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    files.forEach(f => {
+      const isImg = f.type.startsWith('image/')
+      const isAudio = f.type.startsWith('audio/')
+      if (!isImg && !isAudio) return
+      const reader = new FileReader()
+      reader.onload = ev => {
+        const src = ev.target?.result as string
+        const sender = (nickname || 'OPERATIVE').toUpperCase()
+        setMessages(p => [
+          ...p,
+          {
+            sender,
+            text: `[SHARED FILE] ${f.name}`,
+            color: dmColor,
+            img: isImg ? src : undefined,
+            audio: isAudio ? src : undefined,
+          }
+        ])
+      }
+      reader.readAsDataURL(f)
+    })
+    e.target.value = ''
+  }
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 230,
+        bottom: 12,
+        width: 320,
+        background: 'rgba(3,10,20,0.96)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: '1px solid #ec4899',
+        borderRadius: 8,
+        boxShadow: '0 0 24px rgba(236,72,153,0.35)',
+        zIndex: 50,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        fontFamily: 'DM Mono, monospace',
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        padding: '6px 10px',
+        background: 'rgba(236,72,153,0.15)',
+        borderBottom: '1px solid rgba(236,72,153,0.3)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 9, color: '#ec4899', fontWeight: 700 }}>✉ TERM://DM/@{targetUser}</span>
+          {isBlocked && <span style={{ fontSize: 7, color: '#ef4444', background: 'rgba(239,68,68,0.2)', padding: '1px 4px', borderRadius: 3 }}>BLOCKED</span>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => onToggleBlock(targetUser)}
+            style={{ background: 'transparent', border: 'none', color: isBlocked ? '#22c55e' : '#ef4444', fontSize: 8, cursor: 'pointer' }}
+            title={isBlocked ? "Unblock User" : "Block User"}
+          >
+            {isBlocked ? 'UNBLOCK' : 'BLOCK'}
+          </button>
+          <button
+            onClick={() => setMinimized(m => !m)}
+            style={{ background: 'transparent', border: 'none', color: '#00e5a0', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}
+            title="Minimize"
+          >
+            {minimized ? '□' : '—'}
+          </button>
+          <button
+            onClick={onClose}
+            style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {!minimized && (
+        <>
+          {/* Chat Messages */}
+          <div ref={listRef} style={{ height: 160, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, background: '#020712' }}>
+            {messages.map((m, i) => (
+              <div key={i} style={{ fontSize: 8, lineHeight: 1.4 }}>
+                <span style={{ color: m.color || '#00e5a0', fontWeight: 700 }}>[{m.sender}]: </span>
+                <span style={{ color: m.color || '#dce6f3' }}>{m.text}</span>
+                {m.img && <img src={m.img} alt="" style={{ maxWidth: '100%', maxHeight: 80, borderRadius: 4, marginTop: 4, display: 'block', border: '1px solid #ec4899' }} />}
+                {m.audio && <audio controls src={m.audio} style={{ width: '100%', height: 26, marginTop: 4 }} />}
+              </div>
+            ))}
+          </div>
+
+          {/* Color strip for DM */}
+          <div style={{ display: 'flex', gap: 4, padding: '4px 8px', background: 'rgba(5,15,25,0.9)', borderTop: '1px solid rgba(236,72,153,0.2)', alignItems: 'center' }}>
+            <span style={{ fontSize: 7, color: '#4a7fa5' }}>COLOR:</span>
+            {NEON_PALETTE.map(p => (
+              <div
+                key={p.hex}
+                onClick={() => setDmColor(p.hex)}
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 2,
+                  background: p.hex,
+                  cursor: 'pointer',
+                  border: dmColor === p.hex ? '1px solid #fff' : '1px solid transparent',
+                  boxShadow: dmColor === p.hex ? `0 0 6px ${p.hex}` : 'none',
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Input & File Controls */}
+          <div style={{ display: 'flex', borderTop: '1px solid rgba(236,72,153,0.3)', background: '#01050a' }}>
+            <input ref={fileInputRef} type="file" accept="image/*,audio/*" multiple onChange={handleFileUpload} style={{ display: 'none' }} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{ background: 'transparent', border: 'none', borderRight: '1px solid rgba(236,72,153,0.2)', padding: '6px 8px', color: '#ec4899', cursor: 'pointer', fontSize: 10 }}
+              title="Insert Image/Audio"
+            >
+              📎
+            </button>
+            <input
+              value={dmInput}
+              onChange={e => setDmInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && sendDm()}
+              placeholder={isBlocked ? "USER BLOCKED" : "SEND ENCRYPTED DM..."}
+              disabled={isBlocked}
+              style={{ flex: 1, background: 'transparent', border: 'none', padding: '6px 8px', fontFamily: 'DM Mono,monospace', fontSize: 8, color: dmColor, outline: 'none' }}
+            />
+            <button
+              onClick={sendDm}
+              disabled={isBlocked}
+              style={{ background: 'rgba(236,72,153,0.2)', border: 'none', borderLeft: '1px solid rgba(236,72,153,0.3)', padding: '6px 10px', color: '#ec4899', cursor: isBlocked ? 'default' : 'pointer', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700 }}
+            >
+              TX
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── View Minted Consoles Terminal Modal ──────────────────────────────────────
+function MintedConsolesModal({
+  devices,
+  onClose,
+}: {
+  devices: Device[];
+  onClose: () => void;
+}) {
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(1,8,16,0.88)',
+      backdropFilter: 'blur(10px)',
+      WebkitBackdropFilter: 'blur(10px)',
+      zIndex: 1000,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 16,
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: 620,
+        maxHeight: '85vh',
+        background: '#040d18',
+        border: '1px solid #00e5a0',
+        borderRadius: 12,
+        boxShadow: '0 0 40px rgba(0,229,160,0.25)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        fontFamily: 'DM Mono, monospace',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '10px 14px', background: 'rgba(0,229,160,0.12)', borderBottom: '1px solid #00e5a0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14 }}>📟</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#00e5a0' }}>MINTED CONSOLES TERMINAL [{devices.length} ARMED]</span>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {devices.length === 0 ? (
+            <div style={{ padding: 30, textAlign: 'center', color: '#4a7fa5', fontSize: 11 }}>
+              NO CONSOLES DETECTED. MINT CONSOLES FROM THE VAULT OR ROBINHOOD LOCK PANEL TO INITIATE HACKING MATRIX.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+              {devices.map((d, idx) => (
+                <div key={d.id} style={{ background: '#081626', border: '1px solid rgba(0,229,160,0.25)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#00e5a0' }}>CONSOLE #{idx + 1} ({d.nftId ? d.nftId.slice(0, 8) : `#DEV-${d.id}`})</span>
+                    <span style={{ fontSize: 8, color: d.active ? '#22c55e' : '#f59e0b', background: 'rgba(34,197,94,0.1)', padding: '1px 5px', borderRadius: 3 }}>{d.active ? 'ACTIVE' : 'READY'}</span>
+                  </div>
+                  <div style={{ fontSize: 7, color: '#4a7fa5' }}>HASH: {d.walletAddr ? d.walletAddr.slice(0, 16) + '...' : 'LOCAL_STORAGE_NFT'}</div>
+                  {/* Micro 3x9 Matrix Preview */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 2, background: '#020810', padding: 4, borderRadius: 4 }}>
+                    {d.grid.flatMap((row, rIdx) => row.map((cell, cIdx) => (
+                      <div
+                        key={`${rIdx}-${cIdx}`}
+                        style={{
+                          aspectRatio: '1',
+                          background: cell.num ? 'rgba(0,229,160,0.15)' : 'rgba(255,255,255,0.02)',
+                          border: `1px solid ${cell.num ? 'rgba(0,229,160,0.4)' : 'transparent'}`,
+                          borderRadius: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 6,
+                          color: cell.num ? '#00e5a0' : '#2a4a6a',
+                        }}
+                      >
+                        {cell.num || ''}
+                      </div>
+                    )))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '8px 14px', background: '#020710', borderTop: '1px solid rgba(0,229,160,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 8, color: '#4a7fa5' }}>
+          <span>DECENTERILZIED HARDWARE SPECS: 27 NODES · 15 RANDOM SEEDS</span>
+          <button onClick={onClose} style={{ background: 'rgba(0,229,160,0.15)', border: '1px solid #00e5a0', color: '#00e5a0', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>CLOSE</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Integrated Lobby Map With Full Terminal Chat Overlay ─────────────────────
+// ── Integrated Lobby Map With Draggable Translucent Cyber Terminal ─────────────
+// ── Integrated Lobby Map With Full-Map Transparent Cyber Terminal ─────────────
+function LobbyMapWithOverlays({
+  nickname,
+  currentHour,
+  liveBank,
+  selectedBank,
+  setSelectedBank,
+  lobbyCountdown,
+  onEnterGame,
+  devices,
+}: {
+  nickname: string;
+  currentHour: number;
+  liveBank: number;
+  selectedBank: number | null;
+  setSelectedBank: (id: number | null) => void;
+  lobbyCountdown: number;
+  onEnterGame: () => void;
+  devices: Device[];
+}) {
+  const [activeDmUser, setActiveDmUser] = useState<string | null>(null)
+  const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())
+  const [operatives, setOperatives] = useState<OperativeUser[]>(INITIAL_OPERATIVES)
+  const [showConsolesModal, setShowConsolesModal] = useState(false)
+  const [selectedColor, setSelectedColor] = useState('#00e5a0')
+
+  // Laser animations and Mint Notifications
+  const [mintNotifications, setMintNotifications] = useState<MintNotification[]>([
+    { id: 'm1', heistId: 'HEIST_#892', username: 'GHOST_X', count: 10, timestamp: Date.now() - 5000, x: 35, y: 40 },
+  ])
+  const [lasers, setLasers] = useState<Array<{ id: string; x1: number; y1: number; x2: number; y2: number; color: string; opacity: number }>>([])
+
+  // Trigger laser and notification simulation periodically or on mint
+  useEffect(() => {
+    const triggerMintEvent = (heistId: string, username: string, count: number) => {
+      const x = 20 + Math.random() * 60
+      const y = 20 + Math.random() * 60
+      const newNotif: MintNotification = {
+        id: Math.random().toString(),
+        heistId,
+        username,
+        count,
+        timestamp: Date.now(),
+        x,
+        y,
+      }
+      setMintNotifications(prev => [newNotif, ...prev.slice(0, 3)])
+
+      // Spawn laser beams towards map targets
+      const laserId = Math.random().toString()
+      setLasers(prev => [
+        ...prev,
+        {
+          id: laserId,
+          x1: x,
+          y1: y,
+          x2: 50 + (Math.random() - 0.5) * 40,
+          y2: 50 + (Math.random() - 0.5) * 40,
+          color: ['#00e5a0', '#00b8ff', '#f59e0b', '#ec4899'][Math.floor(Math.random() * 4)],
+          opacity: 1,
+        }
+      ])
+
+      // Slowly fade out laser
+      setTimeout(() => {
+        setLasers(prev => prev.filter(l => l.id !== laserId))
+      }, 4000)
+    }
+
+    const interval = setInterval(() => {
+      const sampleUsers = ['CIPHER_9', 'ZERO_DAY', 'SPECTRE_1', 'NEO_404', 'SHADOW_OPS']
+      const u = sampleUsers[Math.floor(Math.random() * sampleUsers.length)]
+      const c = [2, 5, 10, 20][Math.floor(Math.random() * 4)]
+      const h = `HEIST_#${Math.floor(1000 + Math.random() * 9000)}`
+      triggerMintEvent(h, u, c)
+    }, 14000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Watch user's own devices for new mint animations
+  const prevDeviceCountRef = useRef(devices.length)
+  useEffect(() => {
+    if (devices.length > prevDeviceCountRef.current) {
+      const diff = devices.length - prevDeviceCountRef.current
+      const myName = (nickname || 'OPERATIVE').toUpperCase()
+      const heistId = `HEIST_#${Math.floor(1000 + Math.random() * 9000)}`
+      
+      const newNotif: MintNotification = {
+        id: Math.random().toString(),
+        heistId,
+        username: myName,
+        count: diff,
+        timestamp: Date.now(),
+        x: 50,
+        y: 50,
+      }
+      setMintNotifications(prev => [newNotif, ...prev.slice(0, 3)])
+      
+      // Spawn intense laser beam
+      const laserId = Math.random().toString()
+      setLasers(prev => [
+        ...prev,
+        { id: laserId, x1: 50, y1: 50, x2: 20, y2: 30, color: '#00e5a0', opacity: 1 },
+        { id: laserId + '_2', x1: 50, y1: 50, x2: 80, y2: 70, color: '#00b8ff', opacity: 1 },
+      ])
+      setTimeout(() => {
+        setLasers(prev => prev.filter(l => !l.id.startsWith(laserId)))
+      }, 4500)
+    }
+    prevDeviceCountRef.current = devices.length
+  }, [devices.length, nickname])
+
+  // Chat state
+  const [lines, setLines] = useState<Array<{ sender: string; m: string; t?: string; src?: string; audioSrc?: string; color?: string }>>([
+    { sender: 'SYSTEM', m: 'HEIST TERMINAL ACTIVE · DECENTERILZIED VAULT SECURED', t: 'sys', color: '#00e5a0' },
+    { sender: 'CIPHER_9', m: 'All 4 hacking consoles deployed and synchronized.', t: 'user', color: '#00b8ff' },
+    { sender: 'ZERO_DAY', m: 'Monitoring target bank security node.', t: 'user', color: '#ffd166' },
+  ])
+  const [input, setInput] = useState('')
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const b = scrollRef.current
+    if (b) b.scrollTop = b.scrollHeight
+  }, [lines])
+
+  const toggleBlock = (targetName: string) => {
+    setBlockedUsers(prev => {
+      const next = new Set(prev)
+      if (next.has(targetName)) next.delete(targetName)
+      else next.add(targetName)
+      return next
+    })
+  }
+
+  const send = () => {
+    if (!input.trim()) return
+    const myName = (nickname || 'OPERATIVE').toUpperCase()
+    setLines(p => [...p, { sender: myName, m: input.trim(), t: 'user', color: selectedColor }])
+    setInput('')
+  }
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    files.forEach(f => {
+      const isImg = f.type.startsWith('image/')
+      const isAud = f.type.startsWith('audio/')
+      if (!isImg && !isAud) return
+      const r = new FileReader()
+      r.onload = ev => {
+        const src = ev.target?.result as string
+        const myName = (nickname || 'OPERATIVE').toUpperCase()
+        setLines(p => [
+          ...p,
+          {
+            sender: myName,
+            m: `[UPLOADED ${isAud ? 'AUDIO' : 'IMAGE'}]: ${f.name}`,
+            src: isImg ? src : undefined,
+            audioSrc: isAud ? src : undefined,
+            t: 'file',
+            color: selectedColor,
+          }
+        ])
+      }
+      r.readAsDataURL(f)
+    })
+    e.target.value = ''
+  }
+
+  const visibleLines = lines.filter(l => !blockedUsers.has(l.sender))
+
+  return (
+    <div style={{ position: 'relative', background: '#020c18', border: '1px solid rgba(0,229,160,0.3)', borderRadius: 12, overflow: 'hidden', minHeight: 560, display: 'flex', flexDirection: 'column' }}>
+      
+      {/* ── Main Map Container (100% Full View Area) ── */}
+      <div style={{ position: 'relative', flex: 1, minHeight: 560, width: '100%', height: '100%', overflow: 'hidden' }}>
+        
+        {/* The World Map Background (100% full view underneath) */}
+        <WorldMapSketch currentHour={currentHour} onSelectBank={setSelectedBank} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+
+        {/* ── Laser Beam SVG Overlay on Map ── */}
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 8 }}>
+          <defs>
+            <filter id="laserGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          {lasers.map(l => (
+            <g key={l.id}>
+              <line
+                x1={`${l.x1}%`}
+                y1={`${l.y1}%`}
+                x2={`${l.x2}%`}
+                y2={`${l.y2}%`}
+                stroke={l.color}
+                strokeWidth="2.5"
+                filter="url(#laserGlow)"
+                style={{ opacity: l.opacity, transition: 'opacity 3.5s ease-out' }}
+              />
+              <circle
+                cx={`${l.x1}%`}
+                cy={`${l.y1}%`}
+                r="8"
+                fill="none"
+                stroke={l.color}
+                strokeWidth="2"
+                style={{ opacity: l.opacity, transition: 'opacity 3.5s ease-out' }}
+              />
+              <circle
+                cx={`${l.x2}%`}
+                cy={`${l.y2}%`}
+                r="14"
+                fill="none"
+                stroke={l.color}
+                strokeWidth="1.5"
+                strokeDasharray="4 2"
+                style={{ opacity: l.opacity, transition: 'opacity 3.5s ease-out' }}
+              />
+            </g>
+          ))}
+        </svg>
+
+        {/* ── FULL MAP TRANSPARENT CHAT INTERFACE HUD ── */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            background: 'rgba(2, 8, 16, 0.25)',
+            backdropFilter: 'blur(2px)',
+            WebkitBackdropFilter: 'blur(2px)',
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            fontFamily: 'DM Mono, monospace',
+          }}
+        >
+          {/* Top Organized Icons & Action Controls Header */}
+          <div
+            style={{
+              padding: '8px 14px',
+              background: 'rgba(3, 14, 28, 0.82)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              borderBottom: '1px solid rgba(0, 229, 160, 0.25)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              zIndex: 20,
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            {/* Left: Terminal Identity & Live Map Target */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00e5a0', animation: 'ledBlink 1.5s infinite', boxShadow: '0 0 8px #00e5a0' }} />
+                <span style={{ fontSize: 10, color: '#00e5a0', fontWeight: 700 }}>TERMINAL://GLOBAL_HEIST_HUD</span>
+              </div>
+              <span style={{ fontSize: 8, color: '#4a7fa5' }}>· TARGET: {BANKS[liveBank].name}</span>
+              <span style={{ fontSize: 8, color: '#ef4444', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 6px', borderRadius: 3, fontWeight: 700 }}>LIVE</span>
+            </div>
+
+            {/* Center: Live Mint Notification Ticker */}
+            {mintNotifications[0] && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'linear-gradient(90deg, rgba(0,229,160,0.15), rgba(0,184,255,0.15))',
+                border: '1px solid rgba(0,229,160,0.4)',
+                borderRadius: 4,
+                padding: '3px 10px',
+                animation: 'ledBlink 2.5s infinite',
+              }}>
+                <span style={{ fontSize: 9 }}>⚡</span>
+                <span style={{ fontSize: 8, color: '#00e5a0', fontWeight: 700 }}>
+                  [{mintNotifications[0].heistId}] <span style={{ color: '#fff' }}>{mintNotifications[0].username}</span> HAS MINTED <span style={{ color: '#ffd166' }}>{mintNotifications[0].count} CONSOLES</span>!
+                </span>
+              </div>
+            )}
+
+            {/* Right: Arranged Top Action Icons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* VBGIOR Neon Color Band Palette Strip */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(0,0,0,0.4)', padding: '3px 7px', borderRadius: 5, border: '1px solid rgba(0,229,160,0.2)' }}>
+                <span style={{ fontSize: 7, color: '#4a7fa5', fontWeight: 700 }}>TEXT COLOR:</span>
+                {NEON_PALETTE.map(p => (
+                  <div
+                    key={p.hex}
+                    onClick={() => setSelectedColor(p.hex)}
+                    title={`${p.name} (${p.hex})`}
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 2,
+                      background: p.hex,
+                      cursor: 'pointer',
+                      border: selectedColor === p.hex ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.15)',
+                      boxShadow: selectedColor === p.hex ? `0 0 8px ${p.hex}` : 'none',
+                      transform: selectedColor === p.hex ? 'scale(1.2)' : 'scale(1)',
+                      transition: 'all 0.12s ease',
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* View Consoles Button */}
+              <button
+                onClick={() => setShowConsolesModal(true)}
+                style={{
+                  padding: '4px 8px',
+                  background: 'rgba(0,229,160,0.12)',
+                  border: '1px solid #00e5a0',
+                  borderRadius: 4,
+                  color: '#00e5a0',
+                  fontSize: 8,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'DM Mono, monospace',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+                title="View Minted Consoles"
+              >
+                📟 VIEW CONSOLES ({devices.length})
+              </button>
+
+              {/* ⚡ ENTER THE MATRIX Button */}
+              <button
+                onClick={onEnterGame}
+                style={{
+                  background: 'linear-gradient(135deg,#ef4444,#dc2626)',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  borderRadius: 4,
+                  padding: '4px 10px',
+                  fontSize: 9,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 0 12px rgba(239,68,68,0.5)',
+                  fontFamily: 'Syne, sans-serif',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+                title="Enter Hack Matrix"
+              >
+                <span>⚡</span> ENTER MATRIX →
+              </button>
+
+              <span style={{ fontSize: 8, color: '#4a7fa5', marginLeft: 4 }}>CYCLE:</span>
+              <span style={{ fontSize: 9, color: '#00e5a0', fontWeight: 700 }}>{fmtTime(lobbyCountdown)}</span>
+            </div>
+          </div>
+
+          {/* ── Middle Transparent Chat Body & Floating Heist List ── */}
+          <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
+            
+            {/* Transparent Chat Log Area (Map is fully visible through here) */}
+            <div
+              ref={scrollRef}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '14px 16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                background: 'transparent',
+                marginRight: 235,
+              }}
+            >
+              {visibleLines.map((l, i) => (
+                <div
+                  key={i}
+                  style={{
+                    fontSize: 9,
+                    lineHeight: 1.5,
+                    wordBreak: 'break-word',
+                    background: 'rgba(3, 12, 24, 0.45)',
+                    backdropFilter: 'blur(3px)',
+                    WebkitBackdropFilter: 'blur(3px)',
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    borderLeft: `2px solid ${l.color || '#00e5a0'}`,
+                    width: 'fit-content',
+                    maxWidth: '85%',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  {l.t === 'sys' ? (
+                    <span style={{ color: '#00e5a0', fontWeight: 700 }}>[SYS_OP] {l.m}</span>
+                  ) : (
+                    <span>
+                      <strong style={{ color: l.sender === (nickname || 'OPERATIVE').toUpperCase() ? '#00e5a0' : '#00b8ff' }}>root@{l.sender}:~$ </strong>
+                      <span style={{ color: l.color || '#dce6f3' }}>{l.m}</span>
+                    </span>
+                  )}
+                  {l.src && (
+                    <img
+                      src={l.src}
+                      alt=""
+                      style={{ maxWidth: '100%', maxHeight: 110, borderRadius: 4, marginTop: 4, display: 'block', border: '1px solid rgba(0,229,160,0.3)' }}
+                    />
+                  )}
+                  {l.audioSrc && (
+                    <div style={{ marginTop: 4 }}>
+                      <audio controls src={l.audioSrc} style={{ width: '100%', maxWidth: 280, height: 26 }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* ── Extreme Right: Heist List (Operatives list with DM & Block) ── */}
+            <div
+              style={{
+                position: 'absolute',
+                right: 12,
+                top: 12,
+                bottom: 12,
+                width: 215,
+                background: 'rgba(3, 14, 28, 0.80)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                border: '1px solid rgba(0,229,160,0.25)',
+                borderRadius: 8,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+                zIndex: 20,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Header */}
+              <div style={{ padding: '7px 10px', background: 'rgba(2,10,20,0.95)', borderBottom: '1px solid rgba(0,229,160,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#00e5a0' }}>◈ HEIST LIST</span>
+                <span style={{ fontSize: 7, color: '#22c55e', background: 'rgba(34,197,94,0.12)', padding: '1px 5px', borderRadius: 3 }}>{operatives.length} OPERATIVES</span>
+              </div>
+
+              {/* User list */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {operatives.map(op => {
+                  const isBlocked = blockedUsers.has(op.name)
+                  const isTargetingDm = activeDmUser === op.name
+                  return (
+                    <div
+                      key={op.id}
+                      style={{
+                        padding: '6px 8px',
+                        background: isBlocked ? 'rgba(239,68,68,0.08)' : isTargetingDm ? 'rgba(236,72,153,0.1)' : 'rgba(10,22,38,0.6)',
+                        border: `1px solid ${isBlocked ? 'rgba(239,68,68,0.3)' : isTargetingDm ? '#ec4899' : 'rgba(30,58,95,0.4)'}`,
+                        borderRadius: 5,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <div style={{ width: 5, height: 5, borderRadius: '50%', background: op.status === 'online' ? '#22c55e' : op.status === 'in_heist' ? '#f59e0b' : '#00b8ff' }} />
+                          <span style={{ fontSize: 8, fontWeight: 700, color: isBlocked ? '#ef4444' : '#dce6f3', textDecoration: isBlocked ? 'line-through' : 'none' }}>{op.name}</span>
+                        </div>
+                        <span style={{ fontSize: 7, color: '#4a7fa5' }}>{op.devices} devs</span>
+                      </div>
+
+                      {/* Actions: DM & Block */}
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 2 }}>
+                        <button
+                          onClick={() => setActiveDmUser(op.name)}
+                          disabled={isBlocked}
+                          style={{
+                            padding: '2px 6px',
+                            background: 'rgba(236,72,153,0.15)',
+                            border: '1px solid rgba(236,72,153,0.35)',
+                            borderRadius: 3,
+                            color: isBlocked ? '#4a6a7a' : '#ec4899',
+                            fontSize: 7,
+                            fontWeight: 700,
+                            cursor: isBlocked ? 'default' : 'pointer',
+                          }}
+                        >
+                          ✉ DM
+                        </button>
+                        <button
+                          onClick={() => toggleBlock(op.name)}
+                          style={{
+                            padding: '2px 6px',
+                            background: isBlocked ? 'rgba(239,68,68,0.2)' : 'rgba(100,116,139,0.1)',
+                            border: `1px solid ${isBlocked ? '#ef4444' : 'rgba(100,116,139,0.3)'}`,
+                            borderRadius: 3,
+                            color: isBlocked ? '#ef4444' : '#64748b',
+                            fontSize: 7,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {isBlocked ? '✓ BLOCKED' : '🚫 BLOCK'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div style={{ padding: '5px 8px', borderTop: '1px solid rgba(0,229,160,0.15)', background: 'rgba(2,10,20,0.98)', textAlign: 'center', fontSize: 7, color: '#4a7fa5' }}>
+                DECENTERILZIED VAULT HUNTERS
+              </div>
+            </div>
+
+            {/* ── Active Small DM Terminal Window (Floating) ── */}
+            {activeDmUser && (
+              <SmallDmTerminal
+                targetUser={activeDmUser}
+                onClose={() => setActiveDmUser(null)}
+                nickname={nickname}
+                isBlocked={blockedUsers.has(activeDmUser)}
+                onToggleBlock={toggleBlock}
+              />
+            )}
+          </div>
+
+          {/* ── Bottom Transparent Input Bar with Universal File Upload ── */}
+          <div
+            style={{
+              display: 'flex',
+              borderTop: '1px solid rgba(0,229,160,0.25)',
+              background: 'rgba(3, 14, 28, 0.85)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              zIndex: 20,
+            }}
+          >
+            <input ref={fileRef} type="file" accept="image/*,audio/*" multiple onChange={handleFile} style={{ display: 'none' }} />
+            <button
+              onClick={() => fileRef.current?.click()}
+              style={{
+                background: 'rgba(0,229,160,0.08)',
+                border: 'none',
+                borderRight: '1px solid rgba(0,229,160,0.2)',
+                padding: '8px 14px',
+                color: '#ffd166',
+                cursor: 'pointer',
+                fontSize: 9,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+              title="Insert Image or Audio File"
+            >
+              📎 INSERT FILE
+            </button>
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && send()}
+              placeholder="ENTER TRANSMISSION COMMAND TO GLOBAL HEIST MATRIX..."
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                padding: '8px 12px',
+                fontFamily: 'DM Mono,monospace',
+                fontSize: 9,
+                color: selectedColor,
+                outline: 'none',
+              }}
+            />
+            <button
+              onClick={send}
+              style={{
+                background: 'rgba(0,229,160,0.2)',
+                border: 'none',
+                borderLeft: '1px solid rgba(0,229,160,0.3)',
+                padding: '8px 18px',
+                color: '#00e5a0',
+                cursor: 'pointer',
+                fontFamily: 'DM Mono,monospace',
+                fontSize: 9,
+                fontWeight: 700,
+              }}
+            >
+              TRANSMIT
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Minted Consoles Modal ── */}
+      {showConsolesModal && (
+        <MintedConsolesModal
+          devices={devices}
+          onClose={() => setShowConsolesModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+
 function ChatTerminal({ nickname }: { nickname: string }) {
   const [lines, setLines] = useState<ChatLine[]>([
     { t: 'sys', m: 'HACKING MATRIX v3.7.1 INITIALIZED' },
@@ -1817,25 +2761,31 @@ function Ransome() {
     FULL_HOUSE_1: 4, FULL_HOUSE_2: 5, FULL_HOUSE_3: 6,
   }
   // ─── Chain selection (solana | sui) ─────────────────────────────────────
-  const [chain, setChain] = useState<'solana' | 'sui'>('sui')
-  // SUI state — reactive via dapp-kit (WalletProvider handles wallet detection,
-  // auto-connect and the connect modal)
-  const currentAccount = useCurrentAccount()
-  const { mutateAsync: connectWallet } = useConnectWallet()
-  const { mutateAsync: disconnectWallet } = useDisconnectWallet()
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction()
-  const registeredWallets = useWallets()
-  const suiClient = useSuiClient()
-  const suiAddress = currentAccount?.address ?? null
-  const suiConnected = !!currentAccount
-  // ═══ SET AFTER PUBLISHING HEIST CONTRACT — then set env vars in Vercel ═══
-  const SUI_PROGRAM_ID = process.env.NEXT_PUBLIC_SUI_PROGRAM_ID || 'SET_AFTER_PUBLISH'
-  const SESSION_OBJECT_ID = process.env.NEXT_PUBLIC_SESSION_OBJECT_ID || 'SET_AFTER_PUBLISH'
-  // Chain for wallet signing — testnet when NEXT_PUBLIC_SUI_NETWORK=testnet (faucet dev testing)
-  const SUI_CHAIN = (process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet') === 'testnet' ? 'sui:testnet' : 'sui:mainnet'
+  const [chain, setChain] = useState<'solana' | 'evm'>('evm')
+  // EVM wallet state — reactive via useEvmWallet hook
+  const {
+    address: evmAddress,
+    chainId: evmChainId,
+    connecting: evmConnecting,
+    ethBalance,
+    usdgBalance,
+    usdcBalance,
+    usdtBalance,
+    xBalance,
+    isDiscountEligible,
+    connect: connectEvm,
+    disconnect: disconnectEvm,
+    switchNetwork: switchEvmNetwork,
+    lockXTokens,
+    mintConsoles,
+    refreshBalances,
+  } = useEvmWallet()
+
+  const evmConnected = !!evmAddress
+  const evmWallet = { address: evmAddress, chainId: evmChainId, connected: evmConnected, isDiscountEligible, lockXTokens, switchNetwork: switchEvmNetwork }
   // HEIST price rules defined at top (see HEIST PRICING RULES) — this is the on-chain HEIST payment amount
   // Unified wallet address
-  const wallet = chain === 'solana' && connected && publicKey ? publicKey.toBase58() : chain === 'sui' && suiConnected ? suiAddress : null
+  const wallet = chain === 'solana' && connected && publicKey ? publicKey.toBase58() : chain === 'evm' && evmConnected ? evmAddress : null
   // ── Check MTRX delegation status ───────────────────────────────────
   const checkMtrxDelegation = useCallback(async (addr: string) => {
     if (!addr || addr.length < 32) { setMtrxDelegated(false); setMtrxBalance(0); return }
@@ -1857,7 +2807,7 @@ function Ransome() {
   const [announcement, setAnnouncement] = useState<string | null>(null)
   const [bankruptCount, setBankruptCount] = useState(0)
   const [mintCount, setMintCount] = useState(1)
-  const [mintToken, setMintToken] = useState('SUI')
+  const [mintToken, setMintToken] = useState('ETH')
   const [mtrxDelegated, setMtrxDelegated] = useState(false)
   const [mtrxBalance, setMtrxBalance] = useState(0)
   const [solAddress, setSolAddress] = useState('')
@@ -1919,17 +2869,21 @@ function Ransome() {
 
   // ── v5 mint cost display: per-device cost in the SELECTED token + live rates ──
   const mintCostLabel = useMemo(() => {
-    if (chain !== 'sui') return `${mintCount}× $${(mintCount * 0.5).toFixed(2)} SOL`
-    const e = mintPrices?.[mintToken]
-    if (!e) return `${mintCount}× $${(mintCount * (mtrxDelegated ? 0.25 : 0.5)).toFixed(2)} USD`
-    const raw = mtrxDelegated ? e.mtrx : e.full
-    const dec = mintToken === 'USDC' || mintToken === 'USDT' ? 6 : 9
-    const per = Number(raw) / Math.pow(10, dec)
-    const total = per * mintCount
-    const usd = mintCount * (mtrxDelegated ? 0.25 : 0.5)
-    const rate = mintToken === 'HEIST' ? ` 1 HEIST=$${mintRates?.HEIST ?? '—'}` : mintToken === 'SUI' ? ` 1 SUI=$${mintRates?.SUI ?? '—'}` : ''
-    return `${total.toLocaleString(undefined, { maximumFractionDigits: dec === 6 ? 2 : 1 })} ${mintToken} · $${usd.toFixed(2)}${rate ? ' · ' + rate : ''}`
-  }, [chain, mintCount, mintToken, mtrxDelegated, mintPrices, mintRates])
+    if (chain === 'solana') return `${mintCount}× $${(mintCount * (mtrxDelegated ? 0.25 : 0.5)).toFixed(2)} SOL`
+    const isDisc = isDiscountEligible
+    const pricePer = isDisc ? 0.25 : 0.50
+    const totalUsd = mintCount * pricePer
+    if (mintToken === 'ETH') {
+      const estEth = ((totalUsd / 2500) * 1.05).toFixed(5)
+      return `${mintCount}× $${pricePer.toFixed(2)} (~${estEth} ETH) · $${totalUsd.toFixed(2)}${isDisc ? ' (50% OFF)' : ''}`
+    }
+    if (mintToken === 'X') {
+      const pricePerX = isDisc ? 25 : 50
+      const totalX = mintCount * pricePerX
+      return `${totalX} X · $${totalUsd.toFixed(2)}${isDisc ? ' (50% OFF)' : ''}`
+    }
+    return `${totalUsd.toFixed(2)} ${mintToken} · $${totalUsd.toFixed(2)}${isDisc ? ' (50% OFF)' : ''}`
+  }, [chain, mintCount, mintToken, mtrxDelegated, isDiscountEligible])
 
   // ── Persist & restore state ──────────────────────────────────────────────
   const resumeRef = useRef(false)
@@ -2006,17 +2960,7 @@ function Ransome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Wallet detection is handled by dapp-kit's WalletProvider — just log what's
-  // available for the debug panel; no manual getWallets()/subscribe needed.
-  useEffect(() => {
-    if (chain !== 'sui') return
-    try {
-      const sui = registeredWallets.filter((w: any) => w.chains?.some((c: string) => c.startsWith('sui:')))
-      if (sui.length > 0) {
-        console.log(`[SUI Auto] ${sui.length} SUI wallet(s) available: ${sui.map((w: any) => w.name).join(', ')}`)
-      }
-    } catch { }
-  }, [chain, registeredWallets])
+
 
   // Save ALL game state on every meaningful change
   useEffect(() => {
@@ -2486,176 +3430,57 @@ function Ransome() {
   }
 
   // ─── SUI wallet connect/disconnect (dapp-kit hooks) ────────────────────
-  const connectSui = async () => {
-    const log = (msg: string) => { console.log(msg); setWalletDebug(p => [...p.slice(-15), `${new Date().toLocaleTimeString()} ${msg}`]) }
-    try {
-      log(`[SUI] dapp-kit sees ${registeredWallets.length} wallet(s)`)
-      registeredWallets.forEach((w: any) => {
-        log(`[SUI]   "${w.name}" chains=${w.chains?.join(',')} features=${Object.keys(w.features || {}).join(',')}`)
-      })
-
-      const suiWallets = registeredWallets.filter((w: any) => w.features?.['sui:signAndExecuteTransaction'])
-      log(`[SUI] SUI wallets (after filter): ${suiWallets.length}`)
-
-      if (suiWallets.length === 0) {
-        announce('⚠ No SUI wallet extension detected — install Slush or Suiet')
-        return
-      }
-
-      const wallet = suiWallets[0]
-      log(`[SUI] Connecting to "${wallet.name}"...`)
-      const result = await connectWallet({ wallet })
-      log(`[SUI] connect result: accounts=${result.accounts.length}`)
-      if (!result.accounts?.length) { announce('⚠ Connect cancelled — no account returned'); return }
-      const account = result.accounts[0]
-      announce(`✅ SUI CONNECTED — ${account.address.slice(0, 10)}…`)
-    } catch (e: any) {
-      log(`[SUI] Error: ${e.message}`)
-      announce('⚠ SUI connect failed: ' + e.message)
-    }
-  }
-  const disconnectSui = async () => { try { await disconnectWallet() } catch { } setWalletDebug([]); announce('🔌 SUI DISCONNECTED') }
-
+  
   // ─── Mint devices (SUI or Solana) ──────────────────────────────────────
   const mintDevices = async () => {
     const count = mintCount
 
-    // DEV MODE — local-only mint ONLY when no wallet is connected (pure UI
-    // testing). With a wallet connected, fall through to the real on-chain
-    // mint so grids register server-side and claims verify end-to-end
-    // (faucet testnet testing).
-    if (DEV_MODE && !(chain === 'sui' && suiConnected && suiAddress) && !(chain === 'solana' && connected && publicKey)) {
+    // DEV MODE — local-only mint ONLY when no wallet is connected (pure UI testing)
+    if (DEV_MODE && !(chain === 'evm' && evmConnected && evmAddress) && !(chain === 'solana' && connected && publicKey)) {
       const nd = Array.from({ length: count }, (_, i) => ({ ...generateDevice(devices.length + i), walletAddr: wallet || 'DEV_LOCAL' }))
       setDevices(p => [...p, ...nd])
       announce(`⚡ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED (DEV) — ${devices.length + count} TOTAL`)
       return
     }
 
-    // If SUI chain selected and wallet connected, build real SUI transaction
-    if (chain === 'sui' && suiConnected && suiAddress) {
+    // EVM chain (Robinhood, Sepolia, etc.) — real on-chain mint via useEvmWallet
+    if (chain === 'evm' && evmConnected && evmAddress) {
       try {
-        // ── v5: ANY-COIN mint ($0.50 / $0.25 MTRX) — pay in the SELECTED token ──
-        // Prices come from /api/session-state. Minting happens from the lobby
-        // (phase !== 'game'), where the 2s game-poll isn't running — fetch the
-        // price map on demand if we don't have it yet.
-        let prices = mintPrices
-        let rates = mintRates
-        if (!prices) {
-          try {
-            const pr = await fetch('/api/session-state')
-            if (pr.ok) { const pd = await pr.json(); if (pd.ok && pd.prices) { prices = pd.prices; rates = pd.rates } }
-          } catch { }
-        }
-        const priceEntry = prices?.[mintToken]
-        let required = 0n
-        if (priceEntry) {
-          required = BigInt(mtrxDelegated ? priceEntry.mtrx : priceEntry.full)
-        } else if (mintToken === 'HEIST' && rates?.HEIST) {
-          // fallback: $0.50 / current HEIST price (floatable)
-          const full = BigInt(Math.floor(0.5 / Number(rates.HEIST) * 1e9))
-          required = mtrxDelegated ? full / 2n : full
-        } else if (mintToken === 'USDC' || mintToken === 'USDT') {
-          required = mtrxDelegated ? 250000n : 500000n
-        } else {
-          announce('⚠ PRICE FEED UNAVAILABLE — retry in a moment')
-          return
-        }
-        // SUI/HEIST: pay a small buffer so the exact amount clears the on-chain
-        // price table even if the cron-synced price moved since session-state
-        // (the contract returns change; the server allows up to +3%).
-        const payAmount = (mintToken === 'SUI' || mintToken === 'HEIST') ? required + required / 100n : required
-        const total = payAmount * BigInt(count)
-        const coinType = mintToken === 'SUI' ? SUI_COIN_TYPE : mintToken === 'USDC' ? USDC_COIN_TYPE : mintToken === 'USDT' ? USDT_COIN_TYPE : `${SUI_PROGRAM_ID}::heist::HEIST`
-        if (!coinType) { announce(`⚠ ${mintToken} payments not configured yet`); return }
-        if (HEIST_ADMIN_ID === 'SET_AFTER_SETUP') { announce('⚠ HEIST admin not set — run setup-heist first'); return }
+        const nd = Array.from({ length: count }, (_, i) => ({ ...generateDevice(devices.length + i), walletAddr: evmAddress }))
+        const rawGrids = nd.map(d => d.grid.map(row => row.map(c => c.num || 0)))
+        
+        const tokenForMint = (['USDG', 'USDC', 'USDT', 'ETH', 'X'].includes(mintToken) ? mintToken : 'ETH') as 'USDG' | 'USDC' | 'USDT' | 'ETH' | 'X'
+        
+        announce(`⚡ MINTING ${count} DEVICE${count > 1 ? 'S' : ''} WITH ${tokenForMint}...`)
+        const result = await mintConsoles(tokenForMint, count, rawGrids)
+        const txHash = (result as any)?.receipt?.transactionHash || (result as any)?.mintTx || (result as any)?.tx || 'tx'
 
-        // Find a coin covering the total cost (paginated 50/page)
-        let payCoin: any = null
-        let held = 0n
-        let cursor: string | null = null
-        do {
-          const page = await suiClient.getCoins({ owner: suiAddress, coinType, cursor: cursor ?? undefined, limit: 50 })
-          for (const c of page.data) {
-            held += BigInt(c.balance)
-            if (!payCoin && BigInt(c.balance) >= total) payCoin = c
-          }
-          cursor = page.hasNextPage ? page.nextCursor : null
-        } while (cursor && !payCoin)
-        if (!payCoin) {
-          const dec = mintToken === 'USDC' || mintToken === 'USDT' ? 1e6 : 1e9
-          announce(`⚠ INSUFFICIENT ${mintToken} — need ${(Number(total) / dec).toFixed(2)} ${mintToken}, you have ${(Number(held) / dec).toFixed(2)}`)
-          return
-        }
-        // One multi-split of the payment coin → one payment coin per mint
-        const txb = new Transaction()
-        txb.setSender(suiAddress)
-        const paymentCoins = txb.splitCoins(txb.object(payCoin.coinObjectId), Array.from({ length: count }, () => payAmount))
-        for (let i = 0; i < count; i++) {
-          txb.moveCall({
-            target: `${SUI_PROGRAM_ID}::heist::mint_device`,
-            typeArguments: [coinType],
-            arguments: [paymentCoins[i], txb.object(SESSION_OBJECT_ID), txb.object(HEIST_ADMIN_ID), txb.pure.bool(mtrxDelegated), txb.pure.u8(devices.length + i)],
+        // Register grids server-side so claims can be verified
+        try {
+          const regRes = await fetch('/api/mint-nft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              wallet: evmAddress,
+              mintTxHash: typeof txHash === 'string' ? txHash : '',
+              chain: 'evm',
+              solAddress,
+              coinType: tokenForMint,
+              devices: nd.map(d => ({ grid: d.grid.map(r => r.map(c => c.num)) })),
+            }),
           })
-        }
-
-        // Sign + execute via dapp-kit — automatically uses the connected
-        // wallet/account and the modern sui:signAndExecuteTransaction feature.
-        const result: any = await signAndExecute({ transaction: txb, chain: SUI_CHAIN })
-
-        console.log('[SUI] Mint result:', result)
-        const nd = Array.from({ length: count }, (_, i) => ({ ...generateDevice(devices.length + i), walletAddr: suiAddress }))
-        // ── Register grids server-side so claims can be verified on-chain ──
-        // Anti-cheat: the server derives the REAL created heist::Device object IDs
-        // from the mint tx and uses the ON-CHAIN grids as authoritative — the
-        // client's nftId/grid previews are only a display fallback. Registration
-        // must complete for the tickets to be claimable.
-        if (result?.digest) {
-          try {
-            const regRes = await fetch('/api/mint-nft', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                wallet: suiAddress,
-                mintDigest: result.digest,
-                solAddress, // server verifies MTRX discount (250-HEIST tier) against this
-                coinType,   // v5: server cross-checks the paid coin + amount
-                devices: nd.map(d => ({ grid: d.grid.map(r => r.map(c => c.num)) })),
-              }),
+          const regData = await regRes.json()
+          if (regData.ok && Array.isArray(regData.devices) && regData.devices.length === nd.length) {
+            regData.devices.forEach((on: any, i: number) => {
+              nd[i] = { ...nd[i], nftId: on.objectId, grid: on.grid.map((row: any) => row.map((n: any) => ({ num: n, matched: false, clicked: false, missed: false }))) }
             })
-            const regData = await regRes.json()
-            if (regData.ok) {
-              console.log('[SUI] Grids registered server-side:', regData.registered)
-              // Adopt the authoritative on-chain tickets (real object IDs + the
-              // on-chain generated grids) so the displayed ticket = the ticket
-              // claims are verified against.
-              if (Array.isArray(regData.devices) && regData.devices.length === nd.length) {
-                regData.devices.forEach((on: any, i: number) => {
-                  nd[i] = { ...nd[i], nftId: on.objectId, grid: on.grid.map((row: any) => row.map((n: any) => ({ num: n, matched: false, clicked: false, missed: false }))) }
-                })
-              }
-              setDevices(p => [...p, ...nd])
-              announce(`⚡ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED ON SUI — ${(result?.digest || 'tx').slice(0, 16)}…`)
-            } else {
-              console.warn('[SUI] Grid registration rejected:', regData.error)
-              setDevices(p => [...p, ...nd])
-              announce(`⚠ MINT OK — REGISTRATION REJECTED: ${regData.error}`)
-            }
-          } catch (e: any) {
-            console.warn('[SUI] Grid registration error:', e.message)
-            setDevices(p => [...p, ...nd])
-            announce(`⚠ MINTED BUT REGISTRATION FAILED — ${e.message}`)
           }
-        } else {
-          // No digest returned (wallet quirk) — show the devices so the mint
-          // isn't silently lost, but flag that they are NOT registered and
-          // therefore cannot be claimed.
-          console.warn('[SUI] Mint succeeded but no digest was returned — grids NOT registered')
-          setDevices(p => [...p, ...nd])
-          announce('⚠ MINTED BUT NO TX DIGEST — GRIDS NOT REGISTERED, NOT CLAIMABLE')
-        }
+        } catch { }
+        setDevices(p => [...p, ...nd])
+        announce(`⚡ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED ON EVM — ${String(txHash).slice(0, 16)}…`)
       } catch (e: any) {
-        console.error('[SUI] Mint error:', e)
-        announce(`⚠ SUI MINT FAILED: ${e.message}`)
+        console.error('[EVM] Mint error:', e)
+        announce(`⚠ EVM MINT FAILED: ${e?.shortMessage || e?.message || e}`)
       }
       return
     }
@@ -2663,7 +3488,7 @@ function Ransome() {
     // Solana chain or fallback — local mint (no on-chain tx for now)
     if (chain === 'solana' && connected && publicKey) {
       try {
-        const { PublicKey, Transaction, TransactionInstruction, SystemProgram } = await import('@solana/web3.js')
+        const { PublicKey } = await import('@solana/web3.js')
         const programId = new PublicKey(PROGRAM_ID_STR)
         const nd = Array.from({ length: count }, (_, i) => ({ ...generateDevice(devices.length + i), walletAddr: publicKey.toBase58() }))
         setDevices(p => [...p, ...nd])
@@ -2756,23 +3581,23 @@ function Ransome() {
           <div style={{ fontSize: 10, color: '#4a7fa5', background: '#0a1628', border: '1px solid #1e3a5f', borderRadius: 6, padding: '4px 8px' }}>👤 {nickname}</div>
           {/* Governance button */}
           <a href="/governance" style={{ textDecoration: 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: chain === 'sui' ? 'rgba(168,85,247,0.1)' : 'rgba(0,229,160,0.1)', border: `1px solid ${chain === 'sui' ? 'rgba(168,85,247,0.3)' : 'rgba(0,229,160,0.3)'}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: chain === 'evm' ? 'rgba(168,85,247,0.1)' : 'rgba(0,229,160,0.1)', border: `1px solid ${chain === 'evm' ? 'rgba(168,85,247,0.3)' : 'rgba(0,229,160,0.3)'}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
               <span style={{ fontSize: 10 }}>🗳</span>
-              <span style={{ fontSize: 8, fontWeight: 700, color: chain === 'sui' ? '#a855f7' : '#00e5a0' }}>GOVERN</span>
+              <span style={{ fontSize: 8, fontWeight: 700, color: chain === 'evm' ? '#a855f7' : '#00e5a0' }}>GOVERN</span>
               {mtrxDelegated && <span style={{ fontSize: 8, color: '#22c55e', background: 'rgba(34,197,94,0.15)', borderRadius: 3, padding: '1px 4px' }}>MTRX</span>}
             </div>
           </a>
           {/* Chain selector */}
           <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid #1e3a5f' }}>
             <button onClick={() => setChain('solana')} style={{ padding: '4px 8px', fontSize: 9, fontWeight: 700, cursor: 'pointer', background: chain === 'solana' ? '#00e5a020' : 'transparent', color: chain === 'solana' ? '#00e5a0' : '#4a7fa5', border: 'none' }}>SOL</button>
-            <button onClick={() => setChain('sui')} style={{ padding: '4px 8px', fontSize: 9, fontWeight: 700, cursor: 'pointer', background: chain === 'sui' ? '#4da6ff20' : 'transparent', color: chain === 'sui' ? '#4da6ff' : '#4a7fa5', border: 'none', borderLeft: '1px solid #1e3a5f' }}>SUI</button>
+            <button onClick={() => setChain('evm')} style={{ padding: '4px 8px', fontSize: 9, fontWeight: 700, cursor: 'pointer', background: chain === 'evm' ? '#4da6ff20' : 'transparent', color: chain === 'evm' ? '#4da6ff' : '#4a7fa5', border: 'none', borderLeft: '1px solid #1e3a5f' }}>EVM</button>
           </div>
           {/* Wallet connect based on chain */}
-          {wallet ? (<div style={{ display: 'flex', gap: 6 }}><div style={{ background: '#0a1628', border: `1px solid ${chain === 'sui' ? '#4da6ff40' : 'rgba(0,229,160,0.25)'}`, borderRadius: 6, padding: '4px 8px', fontSize: 9, color: chain === 'sui' ? '#4da6ff' : '#00e5a0' }}>{wallet.slice(0, 6)}…{wallet.slice(-4)}</div><button onClick={() => chain === 'sui' ? disconnectSui() : disconnect()} style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 6, padding: '4px 8px', fontSize: 9, color: '#ef4444', cursor: 'pointer' }}>✕</button></div>) : (
-            chain === 'sui' ? (
+          {wallet ? (<div style={{ display: 'flex', gap: 6 }}><div style={{ background: '#0a1628', border: `1px solid ${chain === 'evm' ? '#4da6ff40' : 'rgba(0,229,160,0.25)'}`, borderRadius: 6, padding: '4px 8px', fontSize: 9, color: chain === 'evm' ? '#4da6ff' : '#00e5a0' }}>{wallet.slice(0, 6)}…{wallet.slice(-4)}</div><button onClick={() => chain === 'evm' ? disconnectEvm() : disconnect()} style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 6, padding: '4px 8px', fontSize: 9, color: '#ef4444', cursor: 'pointer' }}>✕</button></div>) : (
+            chain === 'evm' ? (
               <div style={{ display: 'flex', gap: 4 }}>
-                <button onClick={connectSui} style={{ background: 'linear-gradient(135deg,#4da6ff,#2563eb)', color: '#000', borderRadius: 6, fontSize: 10, fontWeight: 700, height: 'auto', padding: '6px 12px', cursor: 'pointer', border: 'none' }}>CONNECT SUI</button>
-                <button onClick={() => setWalletDebug(p => p.length > 0 ? [] : ['Click CONNECT SUI first, then check console (F12)'])} style={{ background: '#0a1628', border: '1px solid #4da6ff40', borderRadius: 6, padding: '4px 8px', fontSize: 9, color: '#4da6ff', cursor: 'pointer', position: 'relative' }} title="Wallet debug">?
+                <button onClick={connectEvm} style={{ background: 'linear-gradient(135deg,#4da6ff,#2563eb)', color: '#000', borderRadius: 6, fontSize: 10, fontWeight: 700, height: 'auto', padding: '6px 12px', cursor: 'pointer', border: 'none' }}>CONNECT EVM</button>
+                <button onClick={() => setWalletDebug(p => p.length > 0 ? [] : ['Click CONNECT EVM first, then check console (F12)'])} style={{ background: '#0a1628', border: '1px solid #4da6ff40', borderRadius: 6, padding: '4px 8px', fontSize: 9, color: '#4da6ff', cursor: 'pointer', position: 'relative' }} title="Wallet debug">?
                   {walletDebug.length > 0 && <div style={{ position: 'absolute', top: -4, right: -4, width: 8, height: 8, borderRadius: '50%', background: '#4da6ff', fontSize: 8, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{walletDebug.length}</div>}
                 </button>
               </div>
@@ -2804,7 +3629,7 @@ function Ransome() {
         </div>
       </div>
       {/* Wallet debug panel */}
-      {walletDebug.length > 0 && chain === 'sui' && !wallet && (
+      {walletDebug.length > 0 && chain === 'evm' && !wallet && (
         <div style={{ margin: '0 24px', padding: '8px 12px', background: '#0a0f1a', border: '1px solid #4da6ff30', borderRadius: 8, maxHeight: 120, overflowY: 'auto' }}>
           <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#4da6ff', fontWeight: 700, marginBottom: 4 }}>🔍 WALLET DETECTION LOG</div>
           {walletDebug.map((line, i) => (
@@ -2827,63 +3652,20 @@ function Ransome() {
             {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 ? (<button onClick={enterGame} style={{ width: '100%', padding: '8px 0', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer', animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>ENTER MATRIX</button>) : DEV_MODE ? (<button onClick={enterGame} style={{ width: '100%', padding: '8px 0', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>ENTER MATRIX (DEV)</button>) : (<div style={{ padding: '8px', background: 'rgba(0,229,160,0.06)', border: '1px solid rgba(0,229,160,0.2)', color: '#00e5a0', fontSize: 9, textAlign: 'center' }}>INITIALIZE_HEIST</div>)}
           </div>
         </div>
-        {navTab === 'operative' && <div style={{ flex: 1, padding: 20, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="lobby-live-now" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div><div style={{ fontSize: 8, color: '#ef4444', marginBottom: 2 }}>🔴 LIVE NOW</div><div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{BANKS[liveBank].name}</div><div style={{ fontSize: 8, color: '#2a5a7a' }}>{BANKS[liveBank].city} · {BANKS[liveBank].vault}</div></div>
-              <div style={{ textAlign: 'right' }}><div style={{ fontSize: 22, fontWeight: 800, color: '#00e5a0' }}>$1,000,000</div><div style={{ fontSize: 9, color: lobbyCountdown <= 60 ? '#ef4444' : '#2a5a7a', fontWeight: 700 }}>{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : 'NEXT: ' + fmtTime(lobbyCountdown)}</div></div>
-            </div>
-            <div style={{ position: 'relative', background: '#09141e', border: '1px solid rgba(63,73,83,0.3)' }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, width: 12, height: 12, borderTop: '2px solid rgba(0,229,160,0.5)', borderLeft: '2px solid rgba(0,229,160,0.5)', zIndex: 3 }} />
-              <div style={{ position: 'absolute', top: 0, right: 0, width: 12, height: 12, borderTop: '2px solid rgba(0,229,160,0.5)', borderRight: '2px solid rgba(0,229,160,0.5)', zIndex: 3 }} />
-              <div style={{ position: 'absolute', bottom: 0, left: 0, width: 12, height: 12, borderBottom: '2px solid rgba(0,229,160,0.5)', borderLeft: '2px solid rgba(0,229,160,0.5)', zIndex: 3 }} />
-              <div style={{ position: 'absolute', bottom: 0, right: 0, width: 12, height: 12, borderBottom: '2px solid rgba(0,229,160,0.5)', borderRight: '2px solid rgba(0,229,160,0.5)', zIndex: 3 }} />
-              {/* Huge translucent countdown over the map */}
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4, pointerEvents: 'none' }}>
-                <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 74, fontWeight: 800, color: lobbyCountdown <= 60 ? 'rgba(239,68,68,0.18)' : 'rgba(0,229,160,0.15)', letterSpacing: '0.02em', textShadow: '0 0 46px rgba(0,229,160,0.18)' }}>{fmtTime(lobbyCountdown)}</div>
-              </div>
-              <WorldMapSketch currentHour={currentHour} onSelectBank={setSelectedBank} />
-              {selectedBank !== null && (<div style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #0a2535' }}><div style={{ fontSize: 10, color: '#00e5a0', fontWeight: 700 }}>{BANKS[selectedBank].name}</div><div style={{ fontSize: 9, color: selectedBank === liveBank ? '#22c55e' : '#1e4a6a' }}>{selectedBank === liveBank ? '🟢 LIVE' : 'SCHEDULED'}</div></div>)}
-            </div>
-            <div style={{ background: '#0e1b25', border: '1px solid rgba(63,73,83,0.2)', padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#dce6f3' }}>💻 MINT_TERMINAL</span>
-                <span style={{ fontSize: 9, color: chain === 'sui' ? '#4da6ff' : '#00e5a0', fontWeight: 700 }}>{mintCostLabel}</span>
-                {mtrxDelegated && chain === 'sui' && <span style={{ fontSize: 8, color: '#22c55e', marginLeft: 4 }}>⚡MTRX 50% OFF</span>}
-              </div>
-              {/* MTRX Delegation strip */}
-              {chain === 'sui' && (
-                <div style={{ background: 'linear-gradient(90deg,rgba(168,85,247,0.04),transparent)', border: '1px solid rgba(168,85,247,0.12)', borderRadius: 6, padding: '6px 10px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 8, color: '#a855f7', whiteSpace: 'nowrap', fontWeight: 700 }}>🗳 MTRX</span>
-                  <input
-                    type="text"
-                    placeholder="Your Solana address to check delegation"
-                    value={solAddress}
-                    onChange={e => setSolAddress(e.target.value)}
-                    style={{ flex: 1, background: '#0a1628', border: '1px solid #0a2535', borderRadius: 4, padding: '4px 6px', fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#00e5a0', outline: 'none', minWidth: 0 }}
-                  />
-                  <button onClick={() => checkMtrxDelegation(solAddress)} disabled={checkingMtrx || solAddress.length < 32} style={{ padding: '4px 8px', background: 'linear-gradient(135deg,#a855f7,#7c3aed)', color: '#fff', border: 'none', borderRadius: 4, fontSize: 8, fontWeight: 700, cursor: checkingMtrx || solAddress.length < 32 ? 'default' : 'pointer', opacity: checkingMtrx || solAddress.length < 32 ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-                    {checkingMtrx ? '...' : 'CHECK'}
-                  </button>
-                  {mtrxDelegated && <span style={{ fontSize: 8, color: '#22c55e', background: 'rgba(34,197,94,0.1)', borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }}>✓ {mtrxBalance.toFixed(0)} MTRX</span>}
-                  {!mtrxDelegated && mtrxBalance > 0 && <span style={{ fontSize: 8, color: '#f59e0b', whiteSpace: 'nowrap' }}>{mtrxBalance.toFixed(1)}/1000</span>}
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, alignItems: 'end' }}>
-                <div><div style={{ fontSize: 9, color: '#4a6a7a', marginBottom: 4 }}>QTY{DEV_MODE && <span style={{ color: '#f59e0b', marginLeft: 4 }}>DEV</span>}</div><div style={{ display: 'flex', gap: 3 }}>{(DEV_MODE ? [1, 3, 5, 10, 20] : [1, 3, 5, 10]).map(n => (<button key={n} onClick={() => setMintCount(n)} style={{ flex: 1, padding: '7px 0', background: mintCount === n ? (chain === 'sui' ? 'rgba(77,166,255,0.15)' : 'rgba(0,229,160,0.15)') : 'rgba(0,0,0,0.3)', border: '1px solid ' + (mintCount === n ? (chain === 'sui' ? 'rgba(77,166,255,0.5)' : 'rgba(0,229,160,0.5)') : 'rgba(63,73,83,0.3)'), color: mintCount === n ? (chain === 'sui' ? '#4da6ff' : '#00e5a0') : '#4a6a7a', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{n}</button>))}</div></div>
-                <div><div style={{ fontSize: 9, color: '#4a6a7a', marginBottom: 4 }}>TOKEN</div><div style={{ display: 'flex', gap: 3 }}>{(chain === 'sui' ? ['SUI', 'USDC', 'USDT', 'HEIST'].filter(t => t !== 'USDT' || USDT_COIN_TYPE) : ['SOL', 'USDT', 'HEIST']).map(t => (<button key={t} onClick={() => setMintToken(t)} style={{ flex: 1, padding: '7px 3px', background: mintToken === t ? 'rgba(0,229,160,0.15)' : 'rgba(0,0,0,0.3)', border: '1px solid ' + (mintToken === t ? 'rgba(0,229,160,0.5)' : 'rgba(63,73,83,0.3)'), color: mintToken === t ? '#00e5a0' : '#4a6a7a', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>{t}</button>))}</div></div>
-                <div>{wallet ? (<button onClick={mintDevices} style={{ width: '100%', padding: '9px 0', background: chain === 'sui' ? 'linear-gradient(135deg,#4da6ff,#2563eb)' : 'linear-gradient(135deg,#00e5a0,#00b8ff)', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>MINT →</button>) : (
-                  chain === 'sui' ? (
-                    <button onClick={connectSui} style={{ width: '100%', padding: '9px 0', background: 'linear-gradient(135deg,#4da6ff,#2563eb)', color: '#000', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>CONNECT SUI →</button>
-                  ) : (
-                    <WalletMultiButton style={{ width: '100%', background: 'linear-gradient(135deg,#00e5a0,#00b8ff)', color: '#000', borderRadius: 0, fontSize: 10, fontWeight: 700, height: 'auto', padding: '9px 0' }} />
-                  )
-                )}</div>
-              </div>
-            </div>
-            <div><div style={{ fontSize: 8, color: '#1e4a6a', marginBottom: 6 }}>💬 LOBBY CHAT</div><ChatTerminal nickname={nickname} /></div>
+        {navTab === 'operative' && <div style={{ flex: 1, padding: 20, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: 16, alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+            <LobbyMapWithOverlays
+              nickname={nickname}
+              currentHour={currentHour}
+              liveBank={liveBank}
+              selectedBank={selectedBank}
+              setSelectedBank={setSelectedBank}
+              lobbyCountdown={lobbyCountdown}
+              onEnterGame={enterGame}
+              devices={devices}
+            />
           </div>
-          <div className="lobby-vault-panel" style={{ background: '#09141e', border: '1px solid rgba(63,73,83,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="lobby-vault-panel"  style={{ background: '#09141e', border: '1px solid rgba(63,73,83,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 14 }}>💎</span><span style={{ fontSize: 14, fontWeight: 700, color: '#dce6f3' }}>DECENTERILZIED VAULT</span></div>
             <div style={{ position: 'relative', background: '#050f17', border: '1px solid rgba(63,73,83,0.15)', minHeight: 180 }}>
               <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#2ff3ad,#00658e)', opacity: 0.2, transition: 'height 1s linear' }} />
