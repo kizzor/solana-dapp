@@ -554,16 +554,17 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   .lobby-grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 180px) !important;
     grid-template-areas: "map vault" "mint mint" !important;
-  }
-}
+    }
+    }
 
-@media (max-width: 600px) {
-  .mobile-vault-status {
-    display: block;
-    margin-top: 56px;
-    padding: 8px 10px 0;
-    background: #050f17;
-  }
+    .lobby-operative-layout {
+    padding: 20px;
+    }
+
+    @media (max-width: 600px) {
+    .mobile-vault-status {
+  display: none !important;
+}
 
   .mobile-vault-heading {
     display: flex;
@@ -665,7 +666,16 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     margin-top: 0;
   }
 
-  .lobby-live-now,
+  .lobby-live-now {
+    display: none !important;
+  }
+  .lobby-operative-layout {
+    padding: 0 !important;
+    display: block !important;
+  }
+  .lobby-hud-container {
+    gap: 0 !important;
+  }
   .lobby-vault-panel {
     display: none !important;
   }
@@ -773,6 +783,6 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
 @media (min-width: 601px) {
   .mobile-vault-status {
-    display: none;
-  }
+  display: none !important;
+}
 }
