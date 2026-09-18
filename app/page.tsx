@@ -524,13 +524,13 @@ function MintPanel({ wallet, devices, mintCount, mintToken, setMintCount, setMin
                   <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 16, fontWeight: 800, color: '#00e5a0', textShadow: '0 0 8px rgba(0,229,160,0.4)' }}>${DEVICE_PRICE_USDC.toFixed(2)}<span style={{ fontSize: 9, fontWeight: 400, color: '#4a7fa5', marginLeft: 3 }}>USD</span></span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#1e4a6a' }}>ANY COIN: SUI · USDC · USDT · HEIST<span style={{ color: '#2a5a7a' }}> | </span>MTRX 50% OFF</span>
+                  <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#1e4a6a' }}>ANY COIN: ETH · USDG · USDC · USDT · X<span style={{ color: '#2a5a7a' }}> | </span>1000 X LOCK 50% OFF</span>
                   <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f59e0b' }}>1 HEIST = live from /api/session-state</span>
                 </div>
               </div>
               <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2a5a7a', marginBottom: 6 }}>SELECT TOKEN</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
-                {['SUI', 'USDC', 'USDT', 'HEIST'].filter(t => t !== 'USDT' || USDT_COIN_TYPE).map(t => (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
+                {['ETH', 'USDG', 'USDC', 'USDT', 'X'].map(t => (
                   <button key={t} onClick={() => setMintToken(t)} style={{
                     ...btnBase, padding: '10px 6px', fontSize: 10,
                     background: mintToken === t ? '#0a3a5a' : 'transparent',
@@ -1586,8 +1586,6 @@ function MintedConsolesModal({
   )
 }
 
-// ── Integrated Lobby Map With Full Terminal Chat Overlay ─────────────────────
-// ── Integrated Lobby Map With Draggable Translucent Cyber Terminal ─────────────
 // ── Integrated Lobby Map With Full-Map Transparent Cyber Terminal ─────────────
 function LobbyMapWithOverlays({
   nickname,
@@ -1598,6 +1596,10 @@ function LobbyMapWithOverlays({
   lobbyCountdown,
   onEnterGame,
   devices,
+  mintToken,
+  setMintToken,
+  onQuickMint,
+  mintCostLabel,
 }: {
   nickname: string;
   currentHour: number;
@@ -1607,12 +1609,19 @@ function LobbyMapWithOverlays({
   lobbyCountdown: number;
   onEnterGame: () => void;
   devices: Device[];
+  mintToken?: string;
+  setMintToken?: (t: string) => void;
+  onQuickMint?: (count: number) => void;
+  mintCostLabel?: string;
 }) {
   const [activeDmUser, setActiveDmUser] = useState<string | null>(null)
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())
   const [operatives, setOperatives] = useState<OperativeUser[]>(INITIAL_OPERATIVES)
   const [showConsolesModal, setShowConsolesModal] = useState(false)
   const [selectedColor, setSelectedColor] = useState('#00e5a0')
+  const [quickMintCount, setQuickMintCount] = useState(1)
+  const [heistPanelOpen, setHeistPanelOpen] = useState(true)
+  const [mobileHeistOpen, setMobileHeistOpen] = useState(false)
 
   // Laser animations and Mint Notifications
   const [mintNotifications, setMintNotifications] = useState<MintNotification[]>([
@@ -1762,7 +1771,7 @@ function LobbyMapWithOverlays({
   const visibleLines = lines.filter(l => !blockedUsers.has(l.sender))
 
   return (
-    <div style={{ position: 'relative', background: '#020c18', border: '1px solid rgba(0,229,160,0.3)', borderRadius: 12, overflow: 'hidden', minHeight: 560, display: 'flex', flexDirection: 'column' }}>
+    <div className="lobby-map-stage" style={{ position: 'relative', background: '#020c18', border: '1px solid rgba(0,229,160,0.3)', borderRadius: 12, overflow: 'hidden', minHeight: 560, display: 'flex', flexDirection: 'column' }}>
       
       {/* ── Main Map Container (100% Full View Area) ── */}
       <div style={{ position: 'relative', flex: 1, minHeight: 560, width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -1835,8 +1844,8 @@ function LobbyMapWithOverlays({
           {/* Top Organized Icons & Action Controls Header */}
           <div
             style={{
-              padding: '8px 14px',
-              background: 'rgba(3, 14, 28, 0.82)',
+              padding: '8px 12px',
+              background: 'rgba(3, 14, 28, 0.85)',
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)',
               borderBottom: '1px solid rgba(0, 229, 160, 0.25)',
@@ -1849,13 +1858,13 @@ function LobbyMapWithOverlays({
             }}
           >
             {/* Left: Terminal Identity & Live Map Target */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00e5a0', animation: 'ledBlink 1.5s infinite', boxShadow: '0 0 8px #00e5a0' }} />
                 <span style={{ fontSize: 10, color: '#00e5a0', fontWeight: 700 }}>TERMINAL://GLOBAL_HEIST_HUD</span>
               </div>
               <span style={{ fontSize: 8, color: '#4a7fa5' }}>· TARGET: {BANKS[liveBank].name}</span>
-              <span style={{ fontSize: 8, color: '#ef4444', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 6px', borderRadius: 3, fontWeight: 700 }}>LIVE</span>
+              <span style={{ fontSize: 8, color: '#ef4444', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>LIVE</span>
             </div>
 
             {/* Center: Live Mint Notification Ticker */}
@@ -1863,38 +1872,38 @@ function LobbyMapWithOverlays({
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
+                gap: 5,
                 background: 'linear-gradient(90deg, rgba(0,229,160,0.15), rgba(0,184,255,0.15))',
                 border: '1px solid rgba(0,229,160,0.4)',
                 borderRadius: 4,
-                padding: '3px 10px',
+                padding: '2px 8px',
                 animation: 'ledBlink 2.5s infinite',
               }}>
-                <span style={{ fontSize: 9 }}>⚡</span>
-                <span style={{ fontSize: 8, color: '#00e5a0', fontWeight: 700 }}>
-                  [{mintNotifications[0].heistId}] <span style={{ color: '#fff' }}>{mintNotifications[0].username}</span> HAS MINTED <span style={{ color: '#ffd166' }}>{mintNotifications[0].count} CONSOLES</span>!
+                <span style={{ fontSize: 8 }}>⚡</span>
+                <span style={{ fontSize: 7.5, color: '#00e5a0', fontWeight: 700 }}>
+                  [{mintNotifications[0].heistId}] <span style={{ color: '#fff' }}>{mintNotifications[0].username}</span> MINTED <span style={{ color: '#ffd166' }}>{mintNotifications[0].count} CONSOLES</span>!
                 </span>
               </div>
             )}
 
             {/* Right: Arranged Top Action Icons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               {/* VBGIOR Neon Color Band Palette Strip */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(0,0,0,0.4)', padding: '3px 7px', borderRadius: 5, border: '1px solid rgba(0,229,160,0.2)' }}>
-                <span style={{ fontSize: 7, color: '#4a7fa5', fontWeight: 700 }}>TEXT COLOR:</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(0,229,160,0.2)' }}>
+                <span style={{ fontSize: 6.5, color: '#4a7fa5', fontWeight: 700 }}>COLOR:</span>
                 {NEON_PALETTE.map(p => (
                   <div
                     key={p.hex}
                     onClick={() => setSelectedColor(p.hex)}
                     title={`${p.name} (${p.hex})`}
                     style={{
-                      width: 12,
-                      height: 12,
+                      width: 11,
+                      height: 11,
                       borderRadius: 2,
                       background: p.hex,
                       cursor: 'pointer',
                       border: selectedColor === p.hex ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.15)',
-                      boxShadow: selectedColor === p.hex ? `0 0 8px ${p.hex}` : 'none',
+                      boxShadow: selectedColor === p.hex ? `0 0 6px ${p.hex}` : 'none',
                       transform: selectedColor === p.hex ? 'scale(1.2)' : 'scale(1)',
                       transition: 'all 0.12s ease',
                     }}
@@ -1906,22 +1915,22 @@ function LobbyMapWithOverlays({
               <button
                 onClick={() => setShowConsolesModal(true)}
                 style={{
-                  padding: '4px 8px',
+                  padding: '3px 7px',
                   background: 'rgba(0,229,160,0.12)',
                   border: '1px solid #00e5a0',
                   borderRadius: 4,
                   color: '#00e5a0',
-                  fontSize: 8,
+                  fontSize: 7.5,
                   fontWeight: 700,
                   cursor: 'pointer',
                   fontFamily: 'DM Mono, monospace',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 3,
                 }}
                 title="View Minted Consoles"
               >
-                📟 VIEW CONSOLES ({devices.length})
+                📟 CONSOLES ({devices.length})
               </button>
 
               {/* ⚡ ENTER THE MATRIX Button */}
@@ -1932,23 +1941,38 @@ function LobbyMapWithOverlays({
                   color: '#fff',
                   border: '1px solid rgba(255,255,255,0.3)',
                   borderRadius: 4,
-                  padding: '4px 10px',
-                  fontSize: 9,
+                  padding: '4px 9px',
+                  fontSize: 8.5,
                   fontWeight: 800,
                   cursor: 'pointer',
-                  boxShadow: '0 0 12px rgba(239,68,68,0.5)',
+                  boxShadow: '0 0 10px rgba(239,68,68,0.5)',
                   fontFamily: 'Syne, sans-serif',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 3,
                 }}
                 title="Enter Hack Matrix"
               >
-                <span>⚡</span> ENTER MATRIX →
+                <span>⚡</span> MATRIX →
               </button>
 
-              <span style={{ fontSize: 8, color: '#4a7fa5', marginLeft: 4 }}>CYCLE:</span>
-              <span style={{ fontSize: 9, color: '#00e5a0', fontWeight: 700 }}>{fmtTime(lobbyCountdown)}</span>
+              {/* Mobile toggle for Heist List */}
+              <button
+                onClick={() => setMobileHeistOpen(o => !o)}
+                style={{
+                  padding: '3px 7px',
+                  background: mobileHeistOpen ? 'rgba(236,72,153,0.2)' : 'rgba(0,184,255,0.12)',
+                  border: `1px solid ${mobileHeistOpen ? '#ec4899' : '#00b8ff'}`,
+                  borderRadius: 4,
+                  color: mobileHeistOpen ? '#ec4899' : '#00b8ff',
+                  fontSize: 7.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'DM Mono, monospace',
+                }}
+              >
+                👥 HEIST LIST ({operatives.length})
+              </button>
             </div>
           </div>
 
@@ -1961,19 +1985,19 @@ function LobbyMapWithOverlays({
               style={{
                 flex: 1,
                 overflowY: 'auto',
-                padding: '14px 16px',
+                padding: '12px 14px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 8,
                 background: 'transparent',
-                marginRight: 235,
+                marginRight: mobileHeistOpen ? 0 : 240,
               }}
             >
               {visibleLines.map((l, i) => (
                 <div
                   key={i}
                   style={{
-                    fontSize: 9,
+                    fontSize: 8.5,
                     lineHeight: 1.5,
                     wordBreak: 'break-word',
                     background: 'rgba(3, 12, 24, 0.45)',
@@ -2011,18 +2035,18 @@ function LobbyMapWithOverlays({
               ))}
             </div>
 
-            {/* ── Extreme Right: Heist List (Operatives list with DM & Block) ── */}
+            {/* ── Extreme Right: Heist List Section with Quick Mint Tab above ── */}
             <div
               style={{
                 position: 'absolute',
                 right: 12,
                 top: 12,
                 bottom: 12,
-                width: 215,
-                background: 'rgba(3, 14, 28, 0.80)',
+                width: 220,
+                background: 'rgba(3, 14, 28, 0.88)',
                 backdropFilter: 'blur(10px)',
                 WebkitBackdropFilter: 'blur(10px)',
-                border: '1px solid rgba(0,229,160,0.25)',
+                border: '1px solid rgba(0,229,160,0.3)',
                 borderRadius: 8,
                 boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
                 zIndex: 20,
@@ -2031,14 +2055,87 @@ function LobbyMapWithOverlays({
                 overflow: 'hidden',
               }}
             >
-              {/* Header */}
-              <div style={{ padding: '7px 10px', background: 'rgba(2,10,20,0.95)', borderBottom: '1px solid rgba(0,229,160,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#00e5a0' }}>◈ HEIST LIST</span>
-                <span style={{ fontSize: 7, color: '#22c55e', background: 'rgba(34,197,94,0.12)', padding: '1px 5px', borderRadius: 3 }}>{operatives.length} OPERATIVES</span>
+              {/* ── Quick Mint Console Tab (Above Heist List) ── */}
+              <div style={{
+                padding: '8px 10px',
+                background: 'linear-gradient(180deg, rgba(0,229,160,0.14), rgba(4,18,34,0.95))',
+                borderBottom: '1px solid rgba(0,229,160,0.25)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 5,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 8, fontWeight: 800, color: '#00e5a0', letterSpacing: '0.05em' }}>⚡ QUICK MINT CONSOLE</span>
+                  <span style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 4px', borderRadius: 3 }}>
+                    {mintToken || 'ETH'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1 }}>
+                  <button
+                    onClick={() => setQuickMintCount(c => Math.max(1, c - 1))}
+                    style={{
+                      padding: '3px 0',
+                      background: '#0a1628',
+                      border: '1px solid #0a2535',
+                      borderRadius: 4,
+                      color: '#00e5a0',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontFamily: 'DM Mono, monospace',
+                      userSelect: 'none',
+                    }}
+                  >
+                    ↑
+                  </button>
+                  <span style={{ fontSize: 10, color: '#00e5a0', fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{quickMintCount}×</span>
+                  <button
+                    onClick={() => setQuickMintCount(c => c + 1)}
+                    style={{
+                      padding: '3px 0',
+                      background: '#0a1628',
+                      border: '1px solid #0a2535',
+                      borderRadius: 4,
+                      color: '#00e5a0',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontFamily: 'DM Mono, monospace',
+                      userSelect: 'none',
+                    }}
+                  >
+                    ↓
+                  </button>
+                </div>
+                <button
+                  onClick={() => onQuickMint ? onQuickMint(quickMintCount) : null}
+                  style={{
+                    padding: '6px 12px',
+                    background: 'linear-gradient(135deg,#00e5a0,#00b8ff)',
+                    border: 'none',
+                    borderRadius: 6,
+                    color: '#000',
+                    fontSize: 10,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    fontFamily: 'Syne, sans-serif',
+                    boxShadow: '0 0 12px rgba(0,229,160,0.4)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  MINT
+                </button>
               </div>
 
-              {/* User list */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {/* Heist List Header */}
+              <div style={{ padding: '6px 8px', background: 'rgba(2,10,20,0.98)', borderBottom: '1px solid rgba(0,229,160,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 8.5, fontWeight: 700, color: '#00e5a0' }}>◈ HEIST LIST</span>
+                <span style={{ fontSize: 7, color: '#22c55e', background: 'rgba(34,197,94,0.12)', padding: '1px 5px', borderRadius: 3 }}>{operatives.length} ACTIVE</span>
+              </div>
+
+              {/* Operatives user list */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '6px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {operatives.map(op => {
                   const isBlocked = blockedUsers.has(op.name)
                   const isTargetingDm = activeDmUser === op.name
@@ -2046,30 +2143,30 @@ function LobbyMapWithOverlays({
                     <div
                       key={op.id}
                       style={{
-                        padding: '6px 8px',
+                        padding: '5px 7px',
                         background: isBlocked ? 'rgba(239,68,68,0.08)' : isTargetingDm ? 'rgba(236,72,153,0.1)' : 'rgba(10,22,38,0.6)',
                         border: `1px solid ${isBlocked ? 'rgba(239,68,68,0.3)' : isTargetingDm ? '#ec4899' : 'rgba(30,58,95,0.4)'}`,
                         borderRadius: 5,
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 4,
+                        gap: 3,
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <div style={{ width: 5, height: 5, borderRadius: '50%', background: op.status === 'online' ? '#22c55e' : op.status === 'in_heist' ? '#f59e0b' : '#00b8ff' }} />
-                          <span style={{ fontSize: 8, fontWeight: 700, color: isBlocked ? '#ef4444' : '#dce6f3', textDecoration: isBlocked ? 'line-through' : 'none' }}>{op.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: op.status === 'online' ? '#22c55e' : op.status === 'in_heist' ? '#f59e0b' : '#00b8ff' }} />
+                          <span style={{ fontSize: 7.5, fontWeight: 700, color: isBlocked ? '#ef4444' : '#dce6f3', textDecoration: isBlocked ? 'line-through' : 'none' }}>{op.name}</span>
                         </div>
                         <span style={{ fontSize: 7, color: '#4a7fa5' }}>{op.devices} devs</span>
                       </div>
 
                       {/* Actions: DM & Block */}
-                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 2 }}>
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 1 }}>
                         <button
                           onClick={() => setActiveDmUser(op.name)}
                           disabled={isBlocked}
                           style={{
-                            padding: '2px 6px',
+                            padding: '2px 5px',
                             background: 'rgba(236,72,153,0.15)',
                             border: '1px solid rgba(236,72,153,0.35)',
                             borderRadius: 3,
@@ -2084,7 +2181,7 @@ function LobbyMapWithOverlays({
                         <button
                           onClick={() => toggleBlock(op.name)}
                           style={{
-                            padding: '2px 6px',
+                            padding: '2px 5px',
                             background: isBlocked ? 'rgba(239,68,68,0.2)' : 'rgba(100,116,139,0.1)',
                             border: `1px solid ${isBlocked ? '#ef4444' : 'rgba(100,116,139,0.3)'}`,
                             borderRadius: 3,
@@ -2094,7 +2191,7 @@ function LobbyMapWithOverlays({
                             cursor: 'pointer',
                           }}
                         >
-                          {isBlocked ? '✓ BLOCKED' : '🚫 BLOCK'}
+                          {isBlocked ? '✓' : '🚫'}
                         </button>
                       </div>
                     </div>
@@ -2102,7 +2199,7 @@ function LobbyMapWithOverlays({
                 })}
               </div>
 
-              <div style={{ padding: '5px 8px', borderTop: '1px solid rgba(0,229,160,0.15)', background: 'rgba(2,10,20,0.98)', textAlign: 'center', fontSize: 7, color: '#4a7fa5' }}>
+              <div style={{ padding: '4px 6px', borderTop: '1px solid rgba(0,229,160,0.15)', background: 'rgba(2,10,20,0.98)', textAlign: 'center', fontSize: 6.5, color: '#4a7fa5' }}>
                 DECENTERILZIED VAULT HUNTERS
               </div>
             </div>
@@ -2137,10 +2234,10 @@ function LobbyMapWithOverlays({
                 background: 'rgba(0,229,160,0.08)',
                 border: 'none',
                 borderRight: '1px solid rgba(0,229,160,0.2)',
-                padding: '8px 14px',
+                padding: '8px 12px',
                 color: '#ffd166',
                 cursor: 'pointer',
-                fontSize: 9,
+                fontSize: 8.5,
                 fontWeight: 700,
                 display: 'flex',
                 alignItems: 'center',
@@ -2161,7 +2258,7 @@ function LobbyMapWithOverlays({
                 border: 'none',
                 padding: '8px 12px',
                 fontFamily: 'DM Mono,monospace',
-                fontSize: 9,
+                fontSize: 8.5,
                 color: selectedColor,
                 outline: 'none',
               }}
@@ -2172,11 +2269,11 @@ function LobbyMapWithOverlays({
                 background: 'rgba(0,229,160,0.2)',
                 border: 'none',
                 borderLeft: '1px solid rgba(0,229,160,0.3)',
-                padding: '8px 18px',
+                padding: '8px 16px',
                 color: '#00e5a0',
                 cursor: 'pointer',
                 fontFamily: 'DM Mono,monospace',
-                fontSize: 9,
+                fontSize: 8.5,
                 fontWeight: 700,
               }}
             >
@@ -3643,10 +3740,10 @@ function Ransome() {
             <div style={{ width: 32, height: 32, background: '#13212c', border: '1px solid rgba(0,229,160,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎭</div>
             <div><div style={{ color: '#00e5a0', fontWeight: 700, fontSize: 10 }}>OPERATIVE</div><div style={{ color: '#4a6a7a', fontSize: 9 }}>{nickname.slice(0, 10).toUpperCase()}</div></div>
           </div>
-          {(['OPERATIVE', 'MISSIONS', 'NETWORK'] as const).map((item, i) => {
-            const tab = (['operative', 'missions', 'network'] as const)[i]
+          {(['OPERATIVE', 'MISSIONS'] as const).map((item, i) => {
+            const tab = (['operative', 'missions'] as const)[i]
             const active = navTab === tab
-            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#00e5a0' : '#4a6a7a', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #00e5a0' : 'none', background: active ? 'rgba(0,229,160,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🎯 ', '📋 ', '🌐 '][i]}{item}</div>)
+            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#00e5a0' : '#4a6a7a', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #00e5a0' : 'none', background: active ? 'rgba(0,229,160,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🎯 ', '📋 '][i]}{item}</div>)
           })}
           <div style={{ marginTop: 'auto', padding: '0 12px 16px' }}>
             {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 ? (<button onClick={enterGame} style={{ width: '100%', padding: '8px 0', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer', animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>ENTER MATRIX</button>) : DEV_MODE ? (<button onClick={enterGame} style={{ width: '100%', padding: '8px 0', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>ENTER MATRIX (DEV)</button>) : (<div style={{ padding: '8px', background: 'rgba(0,229,160,0.06)', border: '1px solid rgba(0,229,160,0.2)', color: '#00e5a0', fontSize: 9, textAlign: 'center' }}>INITIALIZE_HEIST</div>)}
@@ -3663,6 +3760,15 @@ function Ransome() {
               lobbyCountdown={lobbyCountdown}
               onEnterGame={enterGame}
               devices={devices}
+              mintToken={mintToken}
+              setMintToken={setMintToken}
+              onQuickMint={(count) => {
+                setMintCount(count)
+                setTimeout(() => {
+                  mintDevices()
+                }, 100)
+              }}
+              mintCostLabel={mintCostLabel}
             />
           </div>
           <div className="lobby-vault-panel"  style={{ background: '#09141e', border: '1px solid rgba(63,73,83,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -3690,7 +3796,6 @@ function Ransome() {
           </div>
         </div>}
         {navTab === 'missions' && <MissionsDemo />}
-        {navTab === 'network' && <NetworkHub nickname={nickname} wallet={wallet} />}
       </div>
       <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', zIndex: 50, height: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', background: '#000', borderTop: '1px solid rgba(0,229,160,0.15)', boxSizing: 'border-box' }}>
         <span style={{ fontSize: 9, color: 'rgba(0,229,160,0.6)' }}>SYSTEM_BREACH_LOGS v2.4.0 · ACCESSING_NODE_01...</span>
