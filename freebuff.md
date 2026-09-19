@@ -1552,3 +1552,10 @@ RawContentLength  : 701
 - **Site-wide glow:** panel glow treatment added to sidebar/vault/heist/chat/matrix panels (`0 0 22px` + `0 0 60px` purple).
 - **CSS bug found & fixed:** multi-layer `box-shadow` lists with mid-list `!important` are INVALID (declaration dropped → hover shadow leaked onto press). Stripped all 55 non-essential `!important`s; kept the 2 intentional ones (heist-closed slide, mobile vault hide). Also removed legacy `.keyboard-key-accent` leftover block from the pre-neon rounds.
 - **Verified:** 8/8 headless checks incl. white halo in backdrop, purple tube + white legend, hover halo expansion, press flare `rgba(192,132,252,0.8)`, pink danger keys; regressions pass. tsc 0, build passes, dev 200. Screenshots refreshed.
+- Tagged **`recall_purple`** on this commit (`55c4f3a`) before the next styling swing.
+
+### Session: 2026-09-19 — Rollback: n3 navy build → `recall_purple` (neon)
+- User judged the n3.md navy-terminal build (commit `df8f922`, untagged — recoverable via `git reflog` ~30 days if ever wanted) as missing the mark.
+- Executed the recall protocol: `git reset --hard recall_purple` → cleared `.next` → rebuilt → restarted dev. HTTP 200 confirmed.
+- App is back on the exact full-neon purple state (purple ambient backdrop, white core halo, glowing neon keys). Working tree clean at `55c4f3a`.
+- Protocol note: tag (`recall_2`, `recall_3`…) before every major styling swing; each checkpoint stays one-command recoverable.
