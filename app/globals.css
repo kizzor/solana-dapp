@@ -14,20 +14,20 @@ html {
 
 /* ─── Cyber Deck Redesign Theme (recall_1 reskin — structure unchanged) ─── */
 :root {
-  --bg-main: #0b0f19;
-  --bg-panel: #111827;
-  --border-glow: #1f2937;
+  --bg-main: #0b1219;
+  --bg-panel: #111c26;
+  --border-glow: #1e2c3a;
   --text-primary: #f8fafc;
-  --text-muted: #94a3b8;
-  --key-face-top: #334155;
-  --key-face-bottom: #1e293b;
-  --key-top-edge: #475569;
-  --key-side: #334155;
-  --key-depth: #0f172a;
-  --accent-emerald: #10b981;
-  --accent-emerald-deep: #047857;
-  --accent-emerald-edge: #34d399;
-  --accent-emerald-depth: #064e3b;
+  --text-muted: #93a7b8;
+  --key-face-top: #3d5566;
+  --key-face-bottom: #1b2836;
+  --key-top-edge: #52687c;
+  --key-side: #3d5566;
+  --key-depth: #0e1620;
+  --accent-emerald: #5ccfe6;
+  --accent-emerald-deep: #1f7e96;
+  --accent-emerald-edge: #8fe3ee;
+  --accent-emerald-depth: #0f3d4c;
 }
 
 body {
@@ -56,12 +56,12 @@ body {
   top: 0;
 
   /* Keycap Dimensions & Default Coloring (Dark-Grey Switch Case) */
-  background: linear-gradient(to bottom, #334155 0%, #1e293b 100%);
-  color: #f1f5f9;
-  border-top: 2px solid #475569;
-  border-left: 2px solid #334155;
-  border-right: 2px solid #1e293b;
-  border-bottom: 5px solid #0f172a; /* Keycap depth travel distance */
+  background: linear-gradient(to bottom, #3d5566 0%, #1b2836 100%);
+  color: #d8eef6;
+  border-top: 2px solid #52687c;
+  border-left: 2px solid #3d5566;
+  border-right: 2px solid #1b2836;
+  border-bottom: 5px solid #0e1620; /* Keycap depth travel distance */
 
   /* Workspace desk shadows */
   box-shadow:
@@ -71,18 +71,18 @@ body {
 
 /* Hover State (Slight Key Depression) */
 .keyboard-key:hover {
-  background: linear-gradient(to bottom, #384558 0%, #243044 100%);
+  background: linear-gradient(to bottom, #47637a 0%, #22374a 100%);
   border-bottom-width: 4px;
   top: 1px;
 }
 
 /* Active State (Switch Bottomed Out / Pushed Fully Down) */
 .keyboard-key:active {
-  background: #1e293b;
-  border-top: 2px solid #0f172a;
-  border-left: 2px solid #0f172a;
-  border-right: 2px solid #1e293b;
-  border-bottom: 1px solid #0f172a; /* Keycap compressed down */
+  background: #1b2836;
+  border-top: 2px solid #0e1620;
+  border-left: 2px solid #0e1620;
+  border-right: 2px solid #1b2836;
+  border-bottom: 1px solid #0e1620; /* Keycap compressed down */
   top: 4px; /* Matches travel distance drop */
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.5),
@@ -91,40 +91,40 @@ body {
 
 /* Accent Modifiers for Special Actions (Claims, Connect, Mint) */
 .keyboard-key-accent {
-  background: linear-gradient(to bottom, #10b981 0%, #047857 100%);
-  border-top: 2px solid #34d399;
-  border-left: 2px solid #10b981;
-  border-right: 2px solid #047857;
-  border-bottom: 5px solid #064e3b;
+  background: linear-gradient(to bottom, #5ccfe6 0%, #1f7e96 100%);
+  border-top: 2px solid #8fe3ee;
+  border-left: 2px solid #5ccfe6;
+  border-right: 2px solid #1f7e96;
+  border-bottom: 5px solid #0f3d4c;
   color: #ffffff;
 }
 
 .keyboard-key-accent:hover {
-  background: linear-gradient(to bottom, #12c78b 0%, #058561 100%);
+  background: linear-gradient(to bottom, #67d8e8 0%, #2489a1 100%);
 }
 
 /* Danger modifier (destructive / breach actions) — same travel kinematics */
 .keyboard-key-danger {
-  background: linear-gradient(to bottom, #ef4444 0%, #dc2626 100%);
-  border-top: 2px solid #fca5a5;
-  border-left: 2px solid #ef4444;
-  border-right: 2px solid #dc2626;
-  border-bottom: 5px solid #7f1d1d;
+  background: linear-gradient(to bottom, #a84048 0%, #7e2a31 100%);
+  border-top: 2px solid #c96b72;
+  border-left: 2px solid #a84048;
+  border-right: 2px solid #7e2a31;
+  border-bottom: 5px solid #47161b;
   color: #ffffff;
 }
 
 .keyboard-key-danger:hover {
-  background: linear-gradient(to bottom, #f05252 0%, #e23333 100%);
+  background: linear-gradient(to bottom, #b34a52 0%, #8b323a 100%);
   border-bottom-width: 4px;
   top: 1px;
 }
 
 .keyboard-key-danger:active {
-  background: #dc2626;
-  border-top: 2px solid #7f1d1d;
-  border-left: 2px solid #7f1d1d;
-  border-right: 2px solid #dc2626;
-  border-bottom: 1px solid #7f1d1d;
+  background: #7e2a31;
+  border-top: 2px solid #47161b;
+  border-left: 2px solid #47161b;
+  border-right: 2px solid #7e2a31;
+  border-bottom: 1px solid #47161b;
   top: 4px;
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.5),
@@ -157,11 +157,11 @@ body {
 }
 
 .keyboard-key-accent:active {
-  background: #047857;
-  border-top: 2px solid #064e3b;
-  border-left: 2px solid #064e3b;
-  border-right: 2px solid #047857;
-  border-bottom: 1px solid #064e3b;
+  background: #1f7e96;
+  border-top: 2px solid #0f3d4c;
+  border-left: 2px solid #0f3d4c;
+  border-right: 2px solid #1f7e96;
+  border-bottom: 1px solid #0f3d4c;
   top: 4px;
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.5),
@@ -169,7 +169,7 @@ body {
 }
 
 button:focus-visible {
-  outline: 3px solid #3b82f6;
+  outline: 3px solid #5ccfe6;
   outline-offset: 2px;
 }
 
@@ -179,11 +179,11 @@ button:focus-visible {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0b0f19;
+  background: #0b1219;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f2937;
+  background: #1e2c3a;
   border-radius: 2px;
 }
 
@@ -728,13 +728,13 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     color: #dce6f3;
     font-size: 10px;
     font-weight: 700;
-    border: 1px solid rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(92, 207, 230, 0.16);
     border-bottom: none;
     background: #09141e;
   }
 
   .mobile-vault-countdown {
-    color: #10b981;
+    color: #5ccfe6;
     font-size: 8px;
     white-space: nowrap;
   }
@@ -744,7 +744,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     grid-template-columns: 116px minmax(0, 1fr);
     gap: 8px;
     padding: 8px;
-    border: 1px solid rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(92, 207, 230, 0.16);
     background: #09141e;
   }
 
@@ -789,7 +789,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     min-width: 0;
     padding: 4px 6px;
     background: #13212c;
-    border-left: 2px solid #10b981;
+    border-left: 2px solid #5ccfe6;
   }
 
   .mobile-vault-stats span {
@@ -802,7 +802,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .mobile-vault-stats strong {
     overflow: hidden;
-    color: #10b981;
+    color: #5ccfe6;
     font-size: 10px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -810,7 +810,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .mobile-vault-claim {
     padding: 7px 9px 8px;
-    border: 1px solid rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(92, 207, 230, 0.16);
     border-top: none;
     background: #09141e;
   }
@@ -878,7 +878,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   .mobile-menu-button span {
     width: 16px;
     height: 2px;
-    background: #10b981;
+    background: #5ccfe6;
     border-radius: 2px;
   }
 
@@ -899,7 +899,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     overflow-y: auto;
     padding: 10px 8px 0 !important;
     border-right: none !important;
-    border-bottom: 1px solid rgba(16, 185, 129, 0.08);
+    border-bottom: 1px solid rgba(92, 207, 230, 0.08);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
   }
 
@@ -1022,9 +1022,9 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   height: 120px;
   max-height: 45%;
   /* Side-mounted mechanical key: keycap face + 5px travel depth */
-  background: linear-gradient(to bottom, #334155 0%, #1e293b 100%);
-  border: 1px solid #1f2937;
-  border-right: 5px solid #0f172a;
+  background: linear-gradient(to bottom, #3d5566 0%, #1b2836 100%);
+  border: 1px solid #1e2c3a;
+  border-right: 5px solid #0e1620;
   border-radius: 6px 0 0 6px;
   display: flex;
   flex-direction: column;
@@ -1033,26 +1033,26 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   gap: 8px;
   cursor: pointer;
   z-index: 22;
-  color: #10b981;
+  color: #5ccfe6;
   user-select: none;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 10px rgba(92, 207, 230, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease;
   animation: gliderPulse 2.6s ease-in-out infinite;
 }
 
 @keyframes gliderPulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
-  50% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+  0%, 100% { box-shadow: 0 0 8px rgba(92, 207, 230, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+  50% { box-shadow: 0 0 16px rgba(92, 207, 230, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
 }
 
 .heist-drawer-key:hover {
-  background: linear-gradient(to bottom, #384558 0%, #243044 100%);
-  color: #6ee7b7;
+  background: linear-gradient(to bottom, #47637a 0%, #22374a 100%);
+  color: #9fe9f2;
 }
 
 .heist-drawer-key:active {
   transform: translateY(-50%);
-  background: #1e293b;
+  background: #1b2836;
   border-right-width: 1px;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
 }
@@ -1062,7 +1062,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   text-orientation: mixed;
   font-size: 6.5px;
   letter-spacing: 0.15em;
-  color: #94a3b8;
+  color: #93a7b8;
   font-weight: 700;
 }
 

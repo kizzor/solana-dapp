@@ -1529,3 +1529,10 @@ RawContentLength  : 701
 - **Wired:** 13 emerald accent keycaps (all MINT CTAs, ENTER THE MATRIX, claim/lock buttons), 4 red danger keycaps (ENTER MATRIX ×4), compact keys on caliber ▲/▼, WalletMultiButton normalized to theme.
 - **Files:** `app/page.tsx`, `app/globals.css`. Committed `85085eb` (recall_1 `c41ed6e` untouched, one commit back).
 - **Verified:** tsc 0 errors; production build passes (dev stopped first); 8/8 headless checks incl. computed-style keycap physics (hover 1px → press 4px bottom-out) and behavior regression (caliber keys, glider slide, matrix entry). Screenshots: `redesign-lobby.png`, `redesign-matrix.png`, `redesign-mobile.png` (repo root, untracked — delete after review).
+
+### Session: 2026-09-19 — Image-Tune Round 2: match reference photo palette
+- **Reference:** user added `Desktop/extrasmark/image_c61b4181.jpg` (1408×768, screen + mechanical keyboard photo). Extracted palette programmatically (sharp pixel histograms, screen-vs-keyboard region split).
+- **Image findings:** deck `#081018`/`#101820`, cyan accent family `#58C8D8`/`#70D0D8` (legends/glows), steel-blue keycap faces `#607888`→`#405868`, muted red key `#902B30`.
+- **Retune applied (reskin-only, no structure):** body `#0b0f19`→`#0b1219` + `#090d16`→`#080e14`; panels `#111827`→`#111c26`, borders `#1f2937`→`#1e2c3a`; keycap faces `#334155/#1e293b`→`#3d5566/#1b2836`, depth `#0f172a`→`#0e1620`; emerald accents → cyan `#5ccfe6` family (`rgba(92,207,230,x)` glows); text → `#f8fafc`/`#93a7b8` cool slate; danger keys → muted crimson `#a84048→#7e2a31`; keycap legends → `#d8eef6`; semantic LED greens → teal `#2dd4bf`.
+- **Keycap physics unchanged:** 5px travel, hover 1px dip, active 4px bottom-out — verified 1px→4px/1px via headless mousedown.
+- Committed next commit; recall_1 still intact two commits back. tsc 0 errors, build passes, 7/7 headless checks, fresh screenshots at repo root.
