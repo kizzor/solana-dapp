@@ -1519,3 +1519,13 @@ RawContentLength  : 701
   3. `rm -rf .next && npm run dev` (fresh build dir)
   4. Recover WIP later with `git stash pop` if wanted.
 - Do NOT move or delete this tag; if a second checkpoint is needed, name it `recall_2`.
+
+### Session: 2026-09-19 — Major Redesign Round 1: Cyber-Deck Reskin (recall_1 intact)
+- **Source:** user-provided redesign sample (`Desktop/extrasmark/n3.md`) — cyber-deck dark theme + skeuomorphic mechanical keycaps.
+- **Rule honored:** reskin ONLY — zero content/layout/DOM/logic changes, structure untouched, all recall_1 behaviors preserved (verified by e2e).
+- **Palette remap (~600 occurrences across page.tsx + globals.css):** navy wash → slate deck (`#0b0f19` body, `#111827` panels, `#1f2937` borders), neon green `#00e5a0` → emerald `#10b981` family, blue `#00b8ff` → sky `#38bdf8`, text → `#f8fafc`/`#94a3b8` slate scale, muted teals → slate grays. Semantic LEDs (win colors, red danger, amber warning) kept.
+- **Keycaps ported verbatim from sample:** `.keyboard-key` (slate face, 5px bottom depth, hover 1px dip, active 4px bottom-out w/ inset shadow, SF Mono uppercase legends) + `.keyboard-key-accent` (emerald). Added `.keyboard-key-danger` (red) and `.keyboard-key-sm` (compact) modifiers in the same pattern.
+- **Safe global travel kinematics:** `button:where(:hover/:active)` (zero-specificity) gives every button the switch feel WITHOUT overriding inline colors — the `!important` global from the sample was deliberately NOT ported (that collapsed the UI before).
+- **Wired:** 13 emerald accent keycaps (all MINT CTAs, ENTER THE MATRIX, claim/lock buttons), 4 red danger keycaps (ENTER MATRIX ×4), compact keys on caliber ▲/▼, WalletMultiButton normalized to theme.
+- **Files:** `app/page.tsx`, `app/globals.css`. Committed `85085eb` (recall_1 `c41ed6e` untouched, one commit back).
+- **Verified:** tsc 0 errors; production build passes (dev stopped first); 8/8 headless checks incl. computed-style keycap physics (hover 1px → press 4px bottom-out) and behavior regression (caliber keys, glider slide, matrix entry). Screenshots: `redesign-lobby.png`, `redesign-matrix.png`, `redesign-mobile.png` (repo root, untracked — delete after review).
