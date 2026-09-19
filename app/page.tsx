@@ -1600,6 +1600,9 @@ function LobbyMapWithOverlays({
   setMintToken,
   onQuickMint,
   mintCostLabel,
+  chatRooms,
+  onCreateRoom,
+  onCloseRoom,
 }: {
   nickname: string;
   currentHour: number;
@@ -1613,6 +1616,9 @@ function LobbyMapWithOverlays({
   setMintToken?: (t: string) => void;
   onQuickMint?: (count: number) => void;
   mintCostLabel?: string;
+  chatRooms: ChatRoom[];
+  onCreateRoom: (room: ChatRoom) => void;
+  onCloseRoom: (id: string) => void;
 }) {
   const [activeDmUser, setActiveDmUser] = useState<string | null>(null)
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())
@@ -1620,8 +1626,13 @@ function LobbyMapWithOverlays({
   const [showConsolesModal, setShowConsolesModal] = useState(false)
   const [selectedColor, setSelectedColor] = useState('#00e5a0')
   const [quickMintCount, setQuickMintCount] = useState(1)
-  const [heistPanelOpen, setHeistPanelOpen] = useState(true)
-  const [mobileHeistOpen, setMobileHeistOpen] = useState(false)
+  const [heistPanelOpen, setHeistPanelOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth > 600 : true)
+  const [hudMenuOpen, setHudMenuOpen] = useState(false)
+  const [hudColourOpen, setHudColourOpen] = useState(false)
+  const [createRoomOpen, setCreateRoomOpen] = useState(false)
+  const [roomName, setRoomName] = useState('')
+  const [roomPasskey, setRoomPasskey] = useState('')
+  const [roomMembers, setRoomMembers] = useState<Set<string>>(new Set())
 
   // Laser animations and Mint Notifications
   const [mintNotifications, setMintNotifications] = useState<MintNotification[]>([
@@ -1881,8 +1892,6 @@ function LobbyMapWithOverlays({
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00e5a0', animation: 'ledBlink 1.5s infinite', boxShadow: '0 0 8px #00e5a0' }} />
                 <span style={{ fontSize: 10, color: '#00e5a0', fontWeight: 700 }}>TERMINAL://GLOBAL_HEIST_HUD</span>
               </div>
-              <span style={{ fontSize: 8, color: '#4a7fa5' }}>· TARGET: {BANKS[liveBank].name}</span>
-              <span style={{ fontSize: 8, color: '#ef4444', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>LIVE</span>
             </div>
 
             {/* Center: Live Mint Notification Ticker */}
@@ -1906,50 +1915,77 @@ function LobbyMapWithOverlays({
 
             {/* Right: Arranged Top Action Icons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              {/* VBGIOR Neon Color Band Palette Strip */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(0,229,160,0.2)' }}>
-                <span style={{ fontSize: 6.5, color: '#4a7fa5', fontWeight: 700 }}>COLOR:</span>
-                {NEON_PALETTE.map(p => (
-                  <div
-                    key={p.hex}
-                    onClick={() => setSelectedColor(p.hex)}
-                    title={`${p.name} (${p.hex})`}
-                    style={{
-                      width: 11,
-                      height: 11,
-                      borderRadius: 2,
-                      background: p.hex,
-                      cursor: 'pointer',
-                      border: selectedColor === p.hex ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.15)',
-                      boxShadow: selectedColor === p.hex ? `0 0 6px ${p.hex}` : 'none',
-                      transform: selectedColor === p.hex ? 'scale(1.2)' : 'scale(1)',
-                      transition: 'all 0.12s ease',
-                    }}
-                  />
-                ))}
+              {/* ⚙ OPTIONS Dropdown: Colour / Consoles / Create Room */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setHudMenuOpen(o => !o)}
+                  style={{
+                    padding: '3px 8px',
+                    background: hudMenuOpen ? 'rgba(0,229,160,0.2)' : 'rgba(0,229,160,0.12)',
+                    border: '1px solid #00e5a0',
+                    borderRadius: 4,
+                    color: '#00e5a0',
+                    fontSize: 7.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontFamily: 'DM Mono, monospace',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                  title="HUD options"
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: 2, background: selectedColor, display: 'inline-block', boxShadow: `0 0 4px ${selectedColor}` }} />
+                  ⚙ OPTIONS {hudMenuOpen ? '▴' : '▾'}
+                </button>
+                {hudMenuOpen && (
+                  <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', minWidth: 172, background: 'rgba(3,14,28,0.97)', border: '1px solid rgba(0,229,160,0.4)', borderRadius: 6, boxShadow: '0 10px 30px rgba(0,0,0,0.7)', zIndex: 40, padding: 5, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {/* Colour */}
+                    <div
+                      onClick={() => setHudColourOpen(o => !o)}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 7px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 700, color: '#00e5a0', background: hudColourOpen ? 'rgba(0,229,160,0.1)' : 'transparent' }}
+                    >
+                      <span>🎨 COLOUR</span><span style={{ fontSize: 7 }}>{hudColourOpen ? '▴' : '▾'}</span>
+                    </div>
+                    {hudColourOpen && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '5px 7px', background: 'rgba(0,0,0,0.4)', borderRadius: 4 }}>
+                        {NEON_PALETTE.map(p => (
+                          <div
+                            key={p.hex}
+                            onClick={() => setSelectedColor(p.hex)}
+                            title={`${p.name} (${p.hex})`}
+                            style={{
+                              width: 13,
+                              height: 13,
+                              borderRadius: 3,
+                              background: p.hex,
+                              cursor: 'pointer',
+                              border: selectedColor === p.hex ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.15)',
+                              boxShadow: selectedColor === p.hex ? `0 0 6px ${p.hex}` : 'none',
+                              transform: selectedColor === p.hex ? 'scale(1.15)' : 'scale(1)',
+                              transition: 'all 0.12s ease',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {/* Consoles */}
+                    <div
+                      onClick={() => { setShowConsolesModal(true); setHudMenuOpen(false) }}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 7px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 700, color: '#00b8ff' }}
+                    >
+                      <span>📟 CONSOLES</span><span style={{ fontSize: 7, color: '#4a7fa5' }}>{devices.length}</span>
+                    </div>
+                    {/* Create Room */}
+                    <div
+                      onClick={() => { setCreateRoomOpen(true); setHudMenuOpen(false) }}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 7px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 700, color: '#a855f7' }}
+                    >
+                      <span>🔒 CREATE ROOM</span><span style={{ fontSize: 7 }}>+</span>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              {/* View Consoles Button */}
-              <button
-                onClick={() => setShowConsolesModal(true)}
-                style={{
-                  padding: '3px 7px',
-                  background: 'rgba(0,229,160,0.12)',
-                  border: '1px solid #00e5a0',
-                  borderRadius: 4,
-                  color: '#00e5a0',
-                  fontSize: 7.5,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontFamily: 'DM Mono, monospace',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 3,
-                }}
-                title="View Minted Consoles"
-              >
-                📟 CONSOLES ({devices.length})
-              </button>
 
               {/* ⚡ ENTER THE MATRIX Button */}
               <button
@@ -1976,13 +2012,13 @@ function LobbyMapWithOverlays({
 
               {/* Mobile toggle for Heist List */}
               <button
-                onClick={() => setMobileHeistOpen(o => !o)}
+                onClick={() => setHeistPanelOpen(o => !o)}
                 style={{
                   padding: '3px 7px',
-                  background: mobileHeistOpen ? 'rgba(236,72,153,0.2)' : 'rgba(0,184,255,0.12)',
-                  border: `1px solid ${mobileHeistOpen ? '#ec4899' : '#00b8ff'}`,
+                  background: heistPanelOpen ? 'rgba(236,72,153,0.2)' : 'rgba(0,184,255,0.12)',
+                  border: `1px solid ${heistPanelOpen ? '#ec4899' : '#00b8ff'}`,
                   borderRadius: 4,
-                  color: mobileHeistOpen ? '#ec4899' : '#00b8ff',
+                  color: heistPanelOpen ? '#ec4899' : '#00b8ff',
                   fontSize: 7.5,
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -2000,6 +2036,7 @@ function LobbyMapWithOverlays({
             {/* Transparent Chat Log Area (Map is fully visible through here) */}
             <div
               ref={scrollRef}
+              className={`hud-chatlog${heistPanelOpen ? '' : ' heist-closed'}`}
               style={{
                 flex: 1,
                 overflowY: 'auto',
@@ -2008,7 +2045,6 @@ function LobbyMapWithOverlays({
                 flexDirection: 'column',
                 gap: 8,
                 background: 'transparent',
-                marginRight: mobileHeistOpen ? 0 : 240,
               }}
             >
               {visibleLines.map((l, i) => (
@@ -2055,6 +2091,7 @@ function LobbyMapWithOverlays({
 
             {/* ── Extreme Right: Heist List Section with Quick Mint Tab above ── */}
             <div
+              className={`heist-panel${heistPanelOpen ? '' : ' heist-closed'}`}
               style={{
                 position: 'absolute',
                 right: 12,
@@ -2114,11 +2151,11 @@ function LobbyMapWithOverlays({
                     <span>MINT {quickMintCount}×</span>
                   </button>
 
-                  {/* Caliber Roller Selector */}
+                  {/* Caliber Keys — keyboard-key steppers (scroll wheel still works) */}
                   <div
                     onWheel={handleRollerWheel}
                     style={{
-                      width: 40,
+                      width: 46,
                       background: '#0a1628',
                       border: '1px solid #00e5a040',
                       borderLeft: 'none',
@@ -2127,26 +2164,57 @@ function LobbyMapWithOverlays({
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      cursor: 'ns-resize',
+                      gap: 3,
+                      padding: '4px 2px',
                       userSelect: 'none'
                     }}
-                    title="Scroll to change amount"
+                    title="▲ / ▼ keys or scroll to change amount"
                   >
-                    {/* Visual Caliber Marks */}
-                    <div style={{ position: 'absolute', top: 0, left: 2, bottom: 0, width: 4, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '4px 0', opacity: 0.4 }}>
-                      {[...Array(6)].map((_, i) => <div key={i} style={{ width: i % 2 === 0 ? 4 : 2, height: 1, background: '#00e5a0' }} />)}
-                    </div>
-
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#00e5a0', zIndex: 2 }}>{quickMintCount}</div>
-                    
-                    {/* Faded neighbors for "roller" look */}
-                    <div style={{ fontSize: 8, color: '#00e5a0', opacity: 0.2, marginBottom: -2 }}>{quickMintCount + 1}</div>
-                    <div style={{ fontSize: 8, color: '#00e5a0', opacity: 0.2, marginTop: -2 }}>{quickMintCount > 1 ? quickMintCount - 1 : ''}</div>
-                    
-                    {/* Subtle cylindrical shadow/gradient */}
-                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.4) 100%)', pointerEvents: 'none' }} />
+                    <button
+                      aria-label="Increase mint amount"
+                      onClick={() => setQuickMintCount(c => Math.min(20, c + 1))}
+                      disabled={quickMintCount >= 20}
+                      style={{
+                        width: 28,
+                        height: 16,
+                        padding: 0,
+                        background: 'linear-gradient(180deg,#1e3a5c,#0d1e33)',
+                        border: '1px solid #00e5a055',
+                        borderTop: '1px solid #00e5a0aa',
+                        borderRadius: 4,
+                        color: '#00e5a0',
+                        fontSize: 8,
+                        fontWeight: 800,
+                        lineHeight: 1,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >▲</button>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#00e5a0', fontFamily: 'DM Mono,monospace', lineHeight: 1 }}>{quickMintCount}</div>
+                    <button
+                      aria-label="Decrease mint amount"
+                      onClick={() => setQuickMintCount(c => Math.max(1, c - 1))}
+                      disabled={quickMintCount <= 1}
+                      style={{
+                        width: 28,
+                        height: 16,
+                        padding: 0,
+                        background: 'linear-gradient(180deg,#1e3a5c,#0d1e33)',
+                        border: '1px solid #00e5a055',
+                        borderBottom: '1px solid #00e5a0aa',
+                        borderRadius: 4,
+                        color: '#00e5a0',
+                        fontSize: 8,
+                        fontWeight: 800,
+                        lineHeight: 1,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >▼</button>
                   </div>
                 </div>
               </div>
@@ -2230,6 +2298,28 @@ function LobbyMapWithOverlays({
                 DECENTERILZIED VAULT HUNTERS
               </div>
             </div>
+
+            {/* ── Vertical Drawer Key (glides on the list's left edge — press » to slide the list away & widen chat) ── */}
+            <div
+              className="heist-drawer-key"
+              onClick={() => setHeistPanelOpen(o => !o)}
+              style={{ right: heistPanelOpen ? 234 : 2 }}
+              title={heistPanelOpen ? 'Slide heist list away — widen chat' : 'Draw heist list out'}
+            >
+              <span style={{ fontSize: 12, fontWeight: 800 }}>{heistPanelOpen ? '»' : '«'}</span>
+              <span className="vertical-label">HEIST LIST</span>
+            </div>
+
+            {/* ── Private Room Windows (cascade next to main chat) ── */}
+            {chatRooms.map((room, i) => (
+              <RoomChatTerminal
+                key={room.id}
+                room={room}
+                nickname={nickname}
+                posStyle={{ position: 'absolute', top: 12 + i * 16, right: (heistPanelOpen ? 252 : 46) + i * 16, zIndex: 30 }}
+                onClose={() => onCloseRoom(room.id)}
+              />
+            ))}
 
             {/* ── Active Small DM Terminal Window (Floating) ── */}
             {activeDmUser && (
@@ -2317,6 +2407,77 @@ function LobbyMapWithOverlays({
           onClose={() => setShowConsolesModal(false)}
         />
       )}
+
+      {/* ── CREATE ROOM Modal ── */}
+      {createRoomOpen && (() => {
+        const canCreate = roomName.trim().length >= 2 && /^[A-Za-z0-9]{4}$/.test(roomPasskey) && roomMembers.size > 0
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(1,8,16,0.9)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setCreateRoomOpen(false) }}>
+            <div style={{ background: '#020d1a', border: '1px solid rgba(168,85,247,0.5)', borderRadius: 14, padding: 18, width: '100%', maxWidth: 380, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 0 40px rgba(168,85,247,0.25)', fontFamily: 'DM Mono, monospace' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#a855f7' }}>🔒 CREATE PRIVATE ROOM</span>
+                <button onClick={() => setCreateRoomOpen(false)} style={{ background: '#0a1628', border: '1px solid #1e3a5f', color: '#4a7fa5', borderRadius: 5, padding: '3px 8px', fontSize: 8, cursor: 'pointer' }}>✕</button>
+              </div>
+              <div style={{ fontSize: 8, color: '#4a7fa5', marginBottom: 14 }}>Seperate chat window for invited operatives only. Rooms persist until the game ends.</div>
+
+              <div style={{ fontSize: 8, color: '#00e5a0', fontWeight: 700, marginBottom: 5 }}>ROOM NAME</div>
+              <input
+                value={roomName}
+                onChange={e => setRoomName(e.target.value)}
+                placeholder="e.g. VAULT_CREW"
+                maxLength={16}
+                style={{ width: '100%', boxSizing: 'border-box', background: '#0a1628', border: '1px solid #1e3a5f', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: '#a855f7', outline: 'none', marginBottom: 10 }}
+              />
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                <span style={{ fontSize: 8, color: '#00e5a0', fontWeight: 700 }}>PASSKEY (4 CHARS)</span>
+                <span style={{ fontSize: 7, color: '#4a7fa5' }}>{roomPasskey.length}/4</span>
+              </div>
+              <input
+                value={roomPasskey}
+                onChange={e => setRoomPasskey(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4))}
+                placeholder="e.g. X9K2"
+                style={{ width: '100%', boxSizing: 'border-box', background: '#0a1628', border: '1px solid #1e3a5f', borderRadius: 8, padding: '10px 12px', fontSize: 14, letterSpacing: '0.35em', color: '#ffd166', outline: 'none', marginBottom: 4 }}
+              />
+              {!/^[A-Za-z0-9]{4}$/.test(roomPasskey) && roomPasskey.length > 0 && (
+                <div style={{ fontSize: 7, color: '#ef4444', marginBottom: 8 }}>Exactly 4 letters/numbers required</div>
+              )}
+
+              <div style={{ fontSize: 8, color: '#00e5a0', fontWeight: 700, margin: '10px 0 5px' }}>ALLOWED OPERATIVES ({roomMembers.size} selected)</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 150, overflowY: 'auto', marginBottom: 12 }}>
+                {operatives.filter(op => !blockedUsers.has(op.name)).map(op => (
+                  <div
+                    key={op.id}
+                    onClick={() => setRoomMembers(prev => {
+                      const n = new Set(prev)
+                      if (n.has(op.name)) n.delete(op.name)
+                      else n.add(op.name)
+                      return n
+                    })}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: 5, cursor: 'pointer', background: roomMembers.has(op.name) ? 'rgba(168,85,247,0.14)' : 'rgba(10,22,38,0.6)', border: `1px solid ${roomMembers.has(op.name) ? '#a855f7' : 'rgba(30,58,95,0.4)'}` }}
+                  >
+                    <span style={{ fontSize: 8, color: roomMembers.has(op.name) ? '#d8b4fe' : '#dce6f3', fontWeight: 700 }}>{op.name}</span>
+                    <span style={{ fontSize: 8, color: roomMembers.has(op.name) ? '#a855f7' : '#4a7fa5' }}>{roomMembers.has(op.name) ? '✓ IN' : '+ ADD'}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => {
+                  if (!canCreate) return
+                  onCreateRoom({ id: Math.random().toString(36).slice(2), name: roomName.trim().toUpperCase(), passkey: roomPasskey, members: Array.from(roomMembers) })
+                  setRoomName(''); setRoomPasskey(''); setRoomMembers(new Set()); setCreateRoomOpen(false)
+                  setHeistPanelOpen(false)
+                }}
+                disabled={!canCreate}
+                style={{ width: '100%', padding: 12, background: canCreate ? 'linear-gradient(135deg,#a855f7,#6d28d9)' : '#0a1628', color: canCreate ? '#fff' : '#1e3a5f', border: `1px solid ${canCreate ? '#a855f7' : '#1e3a5f'}`, borderRadius: 10, fontSize: 11, fontWeight: 800, cursor: canCreate ? 'pointer' : 'default', fontFamily: 'Syne, sans-serif' }}
+              >
+                🔒 LAUNCH PRIVATE ROOM
+              </button>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -2465,6 +2626,129 @@ function NicknameModal({ onConfirm }: { onConfirm: (name: string) => void }) {
         {err && <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#ef4444', marginBottom: 8 }}>{err}</div>}
         <button onClick={go} style={{ width: '100%', background: 'linear-gradient(135deg,#00e5a0,#00b8ff)', color: '#000', border: 'none', borderRadius: 10, padding: '14px', fontFamily: 'Syne,sans-serif', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 6 }}>ENTER THE MATRIX →</button>
       </div>
+    </div>
+  )
+}
+
+// ─── Private Room Chat (create-room feature) ──────────────────────────────
+// Module-level store so room messages survive lobby→matrix phase switches.
+// Rooms live in main-component state and are wiped when the game ends.
+type ChatRoom = { id: string; name: string; passkey: string; members: string[] }
+type RoomMsg = { sender: string; text: string; color?: string; img?: string; audio?: string }
+const roomMsgStore = new Map<string, RoomMsg[]>()
+
+function RoomChatTerminal({
+  room,
+  nickname,
+  onClose,
+  posStyle,
+  cascadeIndex = 0,
+  fixed = false,
+}: {
+  room: ChatRoom
+  nickname: string
+  onClose: () => void
+  posStyle?: React.CSSProperties
+  cascadeIndex?: number
+  fixed?: boolean
+}) {
+  const [minimized, setMinimized] = useState(false)
+  const [messages, setMessages] = useState<RoomMsg[]>(() => roomMsgStore.get(room.id) ?? [
+    { sender: 'SYSTEM', text: `PRIVATE ROOM // ${room.name} // KEY: ${room.passkey}`, color: '#a855f7' },
+    { sender: 'SYSTEM', text: `ALLOWED: ${room.members.join(', ')}`, color: '#4a7fa5' },
+  ])
+  const [roomInput, setRoomInput] = useState('')
+  const [roomColor, setRoomColor] = useState('#a855f7')
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { roomMsgStore.set(room.id, messages.slice(-80)) }, [messages, room.id])
+  useEffect(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight }, [messages, minimized])
+
+  const sendRoom = () => {
+    if (!roomInput.trim()) return
+    const sender = (nickname || 'OPERATIVE').toUpperCase()
+    setMessages(p => [...p, { sender, text: roomInput.trim(), color: roomColor }])
+    setRoomInput('')
+    const others = room.members.filter(m => m !== sender)
+    if (others.length > 0) {
+      const responder = others[Math.floor(Math.random() * others.length)]
+      setTimeout(() => setMessages(p => [...p, { sender: responder, text: `[SECURE] Copy that — room "${room.name}" synced.`, color: '#00b8ff' }]), 1100)
+    }
+  }
+
+  const pos: React.CSSProperties = posStyle ?? (fixed
+    ? { position: 'fixed', top: 60 + cascadeIndex * 16, right: 12 + cascadeIndex * 16, zIndex: 900 }
+    : { position: 'absolute', top: 12 + cascadeIndex * 16, right: 12 + cascadeIndex * 16, zIndex: 30 })
+
+  return (
+    <div style={{
+      ...pos,
+      width: 300,
+      maxWidth: 'calc(100vw - 60px)',
+      background: 'rgba(3,10,20,0.96)',
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+      border: '1px solid #a855f7',
+      borderRadius: 8,
+      boxShadow: '0 0 24px rgba(168,85,247,0.35)',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      fontFamily: 'DM Mono, monospace',
+    }}>
+      {/* Header */}
+      <div style={{ padding: '6px 10px', background: 'rgba(168,85,247,0.15)', borderBottom: '1px solid rgba(168,85,247,0.35)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <span style={{ fontSize: 9, color: '#a855f7', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>🔒 TERM://ROOM/{room.name}</span>
+          <span style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 4px', borderRadius: 3 }}>🔑 {room.passkey}</span>
+          <span style={{ fontSize: 7, color: '#4a7fa5' }}>👥 {room.members.length}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => setMinimized(m => !m)} style={{ background: 'transparent', border: 'none', color: '#00e5a0', fontSize: 11, cursor: 'pointer', fontWeight: 700 }} title="Minimize">{minimized ? '□' : '—'}</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: 11, cursor: 'pointer', fontWeight: 700 }} title="Close room">✕</button>
+        </div>
+      </div>
+
+      {!minimized && (
+        <>
+          {/* Allowed members strip */}
+          <div style={{ padding: '3px 8px', fontSize: 7, color: '#4a7fa5', background: 'rgba(5,15,25,0.9)', borderBottom: '1px solid rgba(168,85,247,0.2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            ALLOWED: {room.members.join(' · ')}
+          </div>
+
+          {/* Messages */}
+          <div ref={listRef} style={{ height: 170, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, background: '#020712' }}>
+            {messages.map((m, i) => (
+              <div key={i} style={{ fontSize: 8, lineHeight: 1.4 }}>
+                <span style={{ color: m.color || '#a855f7', fontWeight: 700 }}>[{m.sender}]: </span>
+                <span style={{ color: m.color || '#dce6f3' }}>{m.text}</span>
+                {m.img && <img src={m.img} alt="" style={{ maxWidth: '100%', maxHeight: 80, borderRadius: 4, marginTop: 4, display: 'block', border: '1px solid #a855f7' }} />}
+                {m.audio && <audio controls src={m.audio} style={{ width: '100%', height: 26, marginTop: 4 }} />}
+              </div>
+            ))}
+          </div>
+
+          {/* Colour strip */}
+          <div style={{ display: 'flex', gap: 4, padding: '4px 8px', background: 'rgba(5,15,25,0.9)', borderTop: '1px solid rgba(168,85,247,0.2)', alignItems: 'center' }}>
+            <span style={{ fontSize: 7, color: '#4a7fa5' }}>COLOR:</span>
+            {NEON_PALETTE.map(p => (
+              <div key={p.hex} onClick={() => setRoomColor(p.hex)} title={p.name} style={{ width: 10, height: 10, borderRadius: 2, background: p.hex, cursor: 'pointer', border: roomColor === p.hex ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.15)' }} />
+            ))}
+          </div>
+
+          {/* Input */}
+          <div style={{ display: 'flex', borderTop: '1px solid rgba(168,85,247,0.3)' }}>
+            <input
+              value={roomInput}
+              onChange={e => setRoomInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && sendRoom()}
+              placeholder={`MESSAGE #${room.name}...`}
+              style={{ flex: 1, background: 'transparent', border: 'none', padding: '7px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, color: roomColor, outline: 'none', minWidth: 0 }}
+            />
+            <button onClick={sendRoom} style={{ background: 'rgba(168,85,247,0.25)', border: 'none', borderLeft: '1px solid rgba(168,85,247,0.35)', padding: '7px 12px', color: '#d8b4fe', cursor: 'pointer', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700 }}>SEND</button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -2964,6 +3248,7 @@ function Ransome() {
   const liveBank = getLiveBank(currentHour)
   const [navTab, setNavTab] = useState<'operative' | 'vault' | 'missions'>('operative')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([])  // private rooms — persist lobby→matrix, wiped when game ends
   const [devClock, setDevClock] = useState(0)             // dev: jump the 59-min clock
   const lobbyCountdown = useLobbyCountdown(devClock)    // 59-min cycle countdown
   const lobbyFill = Math.min(1 - (lobbyCountdown / LOBBY_CYCLE), 1)  // 0→1 as vault fills
@@ -3161,6 +3446,7 @@ function Ransome() {
     setTimeout(() => {
       pendingAnnounce.current = []
       setDevices([])  // trash NFT devices — session ended
+      setChatRooms([])  // game over — rooms are wiped
       setPhase('lobby'); setBankHacked(false); setCalledNums(new Set()); setCalledOrder([])
       setWinStates(defaultWinStates()); setWinRecords([]); setRoundNum(0); setBankruptCount(0)
     }, 8000)
@@ -3327,6 +3613,7 @@ function Ransome() {
         setWinRecords([])
         setRoundNum(0)
         setBankruptCount(0)
+        setChatRooms([])  // game over — rooms are wiped
         setPhase('lobby')
         try { localStorage.removeItem('ransome_state_v1') } catch { }
       }, 60000)
@@ -3353,6 +3640,7 @@ function Ransome() {
       setWinRecords([])
       setRoundNum(0)
       setBankruptCount(0)
+      setChatRooms([])  // game over — rooms are wiped
       setPhase('lobby')
       try { localStorage.removeItem('ransome_state_v1') } catch { }
     }, 60000)
@@ -3630,7 +3918,7 @@ function Ransome() {
   }
 
   const enterGame = () => {
-    // Clear all previous game state — fresh session
+    // Clear all previous game state — fresh session (rooms persist)
     setCalledNums(new Set()); setCalledOrder([])
     setWinStates(defaultWinStates()); setWinRecords([]); setRoundNum(0); setBankruptCount(0)
     setBankHacked(false); setClickWindowOpen(false); setShowEndScreen(false)
@@ -3643,6 +3931,7 @@ function Ransome() {
     stopMaster(); stopSessionClock()
     try { localStorage.removeItem('ransome_state_v1') } catch { }
     setDevices([]); setCalledNums(new Set()); setCalledOrder([]); setWinStates(defaultWinStates()); setWinRecords([]); setBankHacked(false); setPreGameSecs(0)
+    setChatRooms([])  // game over — rooms are wiped
     setShowTerminate(false); setPhase('lobby')
   }
 
@@ -3767,6 +4056,24 @@ function Ransome() {
             <div style={{ width: 32, height: 32, background: '#13212c', border: '1px solid rgba(0,229,160,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎭</div>
             <div><div style={{ color: '#00e5a0', fontWeight: 700, fontSize: 10 }}>OPERATIVE</div><div style={{ color: '#4a6a7a', fontSize: 9 }}>{nickname.slice(0, 10).toUpperCase()}</div></div>
           </div>
+          {/* Decentralized Vault — mobile only: listed under OPERATIVE (desktop shows the right-extreme vault panel) */}
+          <div className="sidebar-vault-card" onClick={() => { setNavTab('vault'); setMobileMenuOpen(false) }} style={{ margin: '0 12px 10px', padding: '8px 10px', cursor: 'pointer', background: '#0d1a26', border: '1px solid rgba(0,229,160,0.14)', borderRadius: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <span style={{ fontSize: 11 }}>💎</span>
+              <span style={{ fontSize: 8.5, fontWeight: 700, color: '#dce6f3' }}>DECENTERILZIED VAULT</span>
+            </div>
+            <div style={{ position: 'relative', height: 54, background: '#050f17', border: '1px solid rgba(63,73,83,0.2)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#2ff3ad,#00658e)', opacity: 0.2, transition: 'height 1s linear' }} />
+              <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill * 1000000)} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+              <span style={{ fontSize: 7, color: '#4a7fa5' }}>OPERATIVES <strong style={{ color: '#00e5a0' }}>2,104</strong></span>
+              <span style={{ fontSize: 7, color: '#4a7fa5' }}>NEXT <strong style={{ color: '#fff' }}>{fmtTime(lobbyCountdown)}</strong></span>
+            </div>
+            <div style={{ marginTop: 6, borderTop: '1px solid rgba(255,209,102,0.15)', paddingTop: 5 }}>
+              <VaultClaimPanel wallet={wallet} announce={announce} />
+            </div>
+          </div>
           {(['OPERATIVE', 'VAULT', 'MISSIONS'] as const).map((item, i) => {
             const tab = (['operative', 'vault', 'missions'] as const)[i]
             const active = navTab === tab
@@ -3796,35 +4103,34 @@ function Ransome() {
                 }, 100)
               }}
               mintCostLabel={mintCostLabel}
+              chatRooms={chatRooms}
+              onCreateRoom={r => setChatRooms(p => [...p, r])}
+              onCloseRoom={id => setChatRooms(p => p.filter(r => r.id !== id))}
             />
           </div>
-          <div className="lobby-vault-panel"  style={{ background: '#09141e', border: '1px solid rgba(63,73,83,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 14 }}>💎</span><span style={{ fontSize: 14, fontWeight: 700, color: '#dce6f3' }}>DECENTERILZIED VAULT</span></div>
-            <div style={{ position: 'relative', background: '#050f17', border: '1px solid rgba(63,73,83,0.15)', minHeight: 180 }}>
+          {/* Right-extreme Decentralized Vault panel (desktop) */}
+          <div className="lobby-vault-panel" style={{ background: '#09141e', border: '1px solid rgba(63,73,83,0.2)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 13 }}>💎</span><span style={{ fontSize: 11, fontWeight: 700, color: '#dce6f3' }}>DECENTERILZIED VAULT</span></div>
+            <div style={{ position: 'relative', background: '#050f17', border: '1px solid rgba(63,73,83,0.15)', height: 120, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#2ff3ad,#00658e)', opacity: 0.2, transition: 'height 1s linear' }} />
               <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill * 1000000)} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#4a6a7a' }}>Operatives</div><div style={{ fontSize: 18, fontWeight: 700, color: '#00e5a0' }}>2,104</div></div>
-              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#4a6a7a' }}>Success</div><div style={{ fontSize: 18, fontWeight: 700, color: '#00b6fd' }}>92.4%</div></div>
+              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#4a6a7a' }}>Operatives</div><div style={{ fontSize: 16, fontWeight: 700, color: '#00e5a0' }}>2,104</div></div>
+              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#4a6a7a' }}>Success</div><div style={{ fontSize: 16, fontWeight: 700, color: '#00b6fd' }}>92.4%</div></div>
             </div>
-            {[{ l: 'LAST BREACH', v: '+450 SOL', c: '#00e5a0' }, { l: 'STABILITY', v: 'OPTIMAL', c: '#00b6fd' }, { l: 'THREAT', v: 'LOW', c: '#ff6daf' }].map(r => (<div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: '#13212c', borderLeft: '2px solid ' + r.c }}><span style={{ fontSize: 8, color: '#4a7fa5' }}>{r.l}</span><span style={{ fontSize: 9, color: r.c, fontWeight: 700 }}>{r.v}</span></div>))}
-            {/* Small display reflecting mints acquired value */}
-            <div style={{ padding: '6px 8px', background: 'rgba(0,229,160,0.08)', border: '1px solid rgba(0,229,160,0.25)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {[{ l: 'LAST BREACH', v: '+450 SOL', c: '#00e5a0' }, { l: 'THREAT', v: 'LOW', c: '#ff6daf' }].map(r => (<div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: '#13212c', borderLeft: '2px solid ' + r.c }}><span style={{ fontSize: 8, color: '#4a7fa5' }}>{r.l}</span><span style={{ fontSize: 9, color: r.c, fontWeight: 700 }}>{r.v}</span></div>))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'rgba(0,229,160,0.08)', border: '1px solid rgba(0,229,160,0.25)', borderRadius: 6, alignItems: 'center' }}>
               <span style={{ fontSize: 8, color: '#4a7fa5', fontWeight: 700 }}>VALUE ACQUIRED:</span>
               <span style={{ fontSize: 9, color: '#00e5a0', fontWeight: 800 }}>+${(devices.length * 0.50).toFixed(2)} USD</span>
             </div>
-            <div style={{ borderTop: '1px solid rgba(255,209,102,0.15)', paddingTop: 8, marginTop: 4 }}>
+            <div style={{ borderTop: '1px solid rgba(255,209,102,0.15)', paddingTop: 8 }}>
               <VaultClaimPanel wallet={wallet} announce={announce} />
             </div>
-            <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + (lobbyCountdown <= 60 ? 'rgba(239,68,68,0.4)' : 'rgba(10,58,90,0.6)'), animation: lobbyCountdown <= 60 ? 'ledBlink 0.8s infinite' : 'none' }}>
-              <div style={{ fontSize: 8, color: lobbyCountdown <= 60 ? '#ef4444' : '#2a5a7a', marginBottom: 2 }}>{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : '⏳ NEXT BATCH'}</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: lobbyCountdown <= 60 ? '#ef4444' : '#fff' }}>{fmtTime(lobbyCountdown)}</div>
+            <div style={{ textAlign: 'center', padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + (lobbyCountdown <= 60 ? 'rgba(239,68,68,0.4)' : 'rgba(10,58,90,0.6)'), animation: lobbyCountdown <= 60 ? 'ledBlink 0.8s infinite' : 'none' }}>
+              <div style={{ fontSize: 7.5, color: lobbyCountdown <= 60 ? '#ef4444' : '#2a5a7a', marginBottom: 2 }}>{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : '⏳ NEXT BATCH'}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: lobbyCountdown <= 60 ? '#ef4444' : '#fff' }}>{fmtTime(lobbyCountdown)}</div>
             </div>
-            <div style={{ textAlign: 'center', fontSize: 8, color: '#1e4a6a' }}>{devices.length > 0 ? (<span style={{ color: '#00e5a0' }}>⚡ {devices.length} DEVICE{devices.length > 1 ? 'S' : ''} READY</span>) : (<span>MINT TO JOIN</span>)}</div>
-            {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 && (<button onClick={enterGame} style={{ width: '100%', padding: '9px 0', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer', animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>🚀 ENTER HACK MATRIX</button>)}
-            {DEV_MODE && !devices.length && (<button onClick={enterGame} style={{ width: '100%', padding: '9px 0', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>🚀 ENTER HACK MATRIX (DEV)</button>)}
-            {lobbyCountdown > 60 && devices.length > 0 && (<div style={{ textAlign: 'center', fontSize: 8, color: '#1e4a6a' }}>Entry in {fmtTime(lobbyCountdown - 60)}</div>)}
           </div>
         </div>}
         {navTab === 'missions' && <MissionsDemo />}
@@ -3908,6 +4214,10 @@ function Ransome() {
         </div>
       )}
 
+      {/* Private room windows persist lobby→matrix until the game ends */}
+      {chatRooms.map((room, i) => (
+        <RoomChatTerminal key={room.id} room={room} nickname={nickname} fixed cascadeIndex={i} onClose={() => setChatRooms(p => p.filter(r => r.id !== room.id))} />
+      ))}
       {announcement && (
         <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: '#020d1a', border: '1px solid #00e5a040', borderRadius: 10, padding: '10px 18px', fontFamily: 'DM Mono,monospace', fontSize: 10, color: '#00e5a0', zIndex: 999, whiteSpace: 'pre', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', maxWidth: '90vw' }}>
           {announcement}
@@ -4025,6 +4335,10 @@ function Ransome() {
         </div>
       </div>
 
+      {/* Private room windows remain through the matrix until the game ends */}
+      {chatRooms.map((room, i) => (
+        <RoomChatTerminal key={room.id} room={room} nickname={nickname} fixed cascadeIndex={i} onClose={() => setChatRooms(p => p.filter(r => r.id !== room.id))} />
+      ))}
       {announcement && (
         <div style={{ position: 'fixed', top: 52, left: '50%', transform: 'translateX(-50%)', background: '#020d1a', border: '1px solid #00e5a040', borderRadius: 10, padding: '9px 16px', fontFamily: 'DM Mono,monospace', fontSize: 10, color: '#00e5a0', zIndex: 999, whiteSpace: 'pre', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', animation: 'slideDown 0.3s ease', maxWidth: '90vw' }}>
           {announcement}

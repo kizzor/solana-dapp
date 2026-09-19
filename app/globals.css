@@ -786,3 +786,151 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   display: none !important;
 }
 }
+
+/* ── Mobile vault menu panel: mobile-only ─────────────────────────────── */
+.mobile-vault-menu-panel {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .mobile-vault-menu-panel {
+    display: block;
+  }
+
+  /* Matrix-only visibility: lobby header chrome + HUD appear only once the
+     user enters the matrix (game screen uses .app-header, not .lobby-topbar) */
+  .lobby-topbar {
+    background: transparent !important;
+    border-bottom: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+
+  .lobby-hud-container {
+    display: none !important;
+  }
+}
+
+/* ── Vault placement: right-extreme panel on desktop, sidebar card on mobile ── */
+.lobby-vault-panel {
+  display: flex;
+}
+
+.sidebar-vault-card {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .lobby-vault-panel {
+    display: none !important;
+  }
+
+  .sidebar-vault-card {
+    display: block;
+  }
+}
+
+/* ── Heist list glider: long vertical key riding the list's LEFT edge (all sizes) ── */
+.heist-panel {
+  right: 32px;
+  transition: right 0.25s ease;
+}
+
+.heist-panel.heist-closed {
+  right: -224px !important;
+}
+
+.hud-chatlog {
+  transition: margin-right 0.25s ease;
+}
+
+@media (min-width: 601px) {
+  .hud-chatlog {
+    margin-right: 240px;
+  }
+}
+
+.hud-chatlog.heist-closed {
+  margin-right: 0;
+}
+
+@media (max-width: 600px) {
+  .hud-chatlog {
+    margin-right: 0;
+  }
+}
+
+.heist-drawer-key {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 120px;
+  max-height: 45%;
+  background: linear-gradient(180deg, #0d2436, #071523);
+  border: 1px solid rgba(0, 229, 160, 0.4);
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  z-index: 22;
+  color: #00e5a0;
+  user-select: none;
+  box-shadow: 0 0 10px rgba(0, 229, 160, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease;
+  animation: gliderPulse 2.6s ease-in-out infinite;
+}
+
+@keyframes gliderPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 229, 160, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+  50% { box-shadow: 0 0 16px rgba(0, 229, 160, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+}
+
+.heist-drawer-key:hover {
+  background: linear-gradient(180deg, #123249, #0a1d2e);
+  color: #7dffd4;
+}
+
+.heist-drawer-key:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+.heist-drawer-key .vertical-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 6.5px;
+  letter-spacing: 0.15em;
+  color: #4a7fa5;
+  font-weight: 700;
+}
+
+/* ── Global keyboard-key treatment: every button reads as a pressable keycap ──
+   NOTE: deliberately NO !important and NO background/border overrides —
+   inline-styled buttons keep their gradients; this only adds key depth
+   (bottom shadow lip) and the physical "pressed" motion on :active. */
+button {
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.55), 0 3px 6px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+  transition: transform 0.05s ease, box-shadow 0.05s ease, filter 0.15s ease;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(2px) scale(0.98);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  filter: brightness(0.95);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}

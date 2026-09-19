@@ -1432,6 +1432,35 @@ RawContentLength  : 701
 
 ---
 
+### Session: 2026-09-19 (2nd) — LOBBY/MATRIX UX: MOBILE MATRIX-ONLY HUD, VAULT→SIDEBAR, DRAWER KEY, OPTIONS DROPDOWN, PRIVATE ROOMS
+**Task:** 6-part UI request — all implemented + headless-verified (8/8 PASS, 0 page errors, tsc=0, build ✅ with dev stopped first).
+
+1. ✅ **Mobile matrix-only HUD:** on phones (≤600px) the lobby header chrome is transparent + HUD (`LobbyMapWithOverlays`) hidden in lobby; both appear when entering the matrix (game screen uses `.app-header`, room windows fixed-position).
+2. ✅ **Vault detached:** `DECENTERILZIED VAULT` card (fill graphic + operatives/countdown + VaultClaimPanel) moved into the sidebar under the OPERATIVE block; the old right-column vault panel is a hidden stub; the VAULT nav tab still shows the full panel.
+3. ✅ **Vertical drawer key** (`.heist-drawer-key`, ~24px wide × 96px tall ≤1in-class) on the right edge of the heist list — collapses the panel off-canvas (`.heist-closed` → right:-224px) to widen the chat; works on ALL screen sizes; chat log margin animates; panel defaults closed on mobile, open on desktop.
+4. ✅ **LIVE + TARGET removed** from the HUD header (identity dot + TERMINAL://GLOBAL_HEIST_HUD kept).
+5. ✅ **⚙ OPTIONS dropdown** replaces the palette strip: 🎨 COLOUR (expandable neon palette), 📟 CONSOLES (opens consoles modal), 🔒 CREATE ROOM. Palette strip also gone from the header.
+6. ✅ **Create Room:** modal with room name (≥2 chars), 4-char alphanumeric passkey (auto-uppercase/strip), operative invite multi-select (blocked users excluded); launches a `RoomChatTerminal` — purple-themed floating window beside the main chat (cascade offsets) showing passkey chip + ALLOWED members; per-room colour + file/audio sharing; rooms persist lobby→matrix (fixed-position in game screen) and are wiped at game end (terminate / session-expiry / all-claimed / bank-hacked all call setChatRooms([])). Messages survive phase switches via module-level `roomMsgStore`.
+
+**Files:** app/page.tsx (ChatRoom/RoomChatTerminal module block; HUD + lobby edits), app/globals.css (drawer key, heist-panel offsets, mobile matrix-only rules). No contract/env/secret changes.
+**Next:** user visual pass (desktop + phone width); commit if approved.
+
+---
+
+### Session: 2026-09-19 — ENTER MATRIX BLOCKED → ROOT-CAUSED: CORRUPTED .next (dev+build collision), FIXED VIA DEV RESTART
+**Task:** User reported ENTER MATRIX not working in a fresh browser tab. End-to-end diagnosis performed (read-only UI flow, no secrets touched).
+
+**Findings (all read-only):**
+1. ❌ Symptom: page froze at the NicknameModal (phase='setup') — clicking "ENTER THE MATRIX →" did nothing. Confirmed via headless Chrome (puppeteer-core + installed Chrome, no repo changes).
+2. 🔴 ROOT CAUSE: `/api/draw` route 500s on dev (SESSION_OBJECT_ID unset locally — env stays only in Vercel, expected). Separately, a previous `npm run build` ran while the dev server was LIVE → both wrote to `.next` → Next dev served 404s for `main-app.js` + `app-pages-internals.js` → React never hydrated → ALL buttons dead (no event handlers). The 'collapsed UI' the user saw earlier was the same class of issue (CSS/JS not loading), not the reverted CSS WIP.
+3. ✅ FIX APPLIED: killed stale dev server (PID 44212), `rm -rf .next`, restarted `npm run dev` (nohup, logs → `dev-server.log`). React hydrates again.
+4. ✅ Headless E2E now passes: NicknameModal → lobby (topbar/sidebar/DEV badge) → dev mint → **ENTER MATRIX → game phase reached** ('HACK MATRIX | LIVE', pre-game countdown 00:58 running). No pageerrors; `/api/session-state` 500s are expected locally (no SESSION_OBJECT_ID) and don't block dev-mode UI.
+5. ⚠️ RULE LEARNED: NEVER run `npm run build` while `npm run dev` is live on the same `.next` — stop dev, build, then restart dev. (Next 14.2.5 shares the dir; no isolated distDir configured.)
+
+**State:** working tree CLEAN (reverted CSS WIP remains reverted — global `button { !important }` rule was the collapse culprit). Dev server running from `0a103fa`. Next: user visual confirmation in browser, then resume lobby-feedback / draw-automation tasks.
+
+---
+
 ### Session: 2026-09-17 — LOBBY TRANSPARENT TERMINAL HUD, EVM INTEGRATION & LOBBY FIXATION CHECKPOINT
 
 **Tag Checkpoint:** `lobbyfixation` (Commit: `0bfcd6e`)
@@ -1469,3 +1498,14 @@ RawContentLength  : 701
 #### Next Steps for Upcoming Session:
 - User feedback review on the transparent lobby terminal HUD and DM workflows.
 - Finalizing on-chain draw automation testing (Chainlink Keeper vs Arbitrum Lazy Seed) on Robinhood Chain / Sepolia.
+
+### Session: 2026-09-19 — UI Refinement Round 2 (vault split, glider, keycaps)
+- **Vault responsive split:** Desktop shows the full Decentralized Vault panel back at the **right extreme** of the operative layout (fill graphic, stats, value-acquired, claim panel, countdown). Mobile (≤600px) hides it and instead shows the compact vault card under OPERATIVE in the sidebar (`.sidebar-vault-card`), replacing the dead `.mobile-vault-status` block.
+- **Glider key repositioned:** `.heist-drawer-key` now rides the **left edge** of the Heist List (right:234px when open, 2px when closed, ~22px wide) with a **»** arrow pointing toward the slide direction; press to slide the list away (`.heist-closed` → right:-224px) and widen chat (`.hud-chatlog.heist-closed { margin-right: 0 }`), press **«** to draw it back out. Works on all screen sizes; glow pulse animation; keycap press feel on :active.
+- **Caliber roller → keyboard keys:** Wheel-roller replaced with ▲/▼ keycap steppers (1–20 clamp, disabled at bounds, scroll wheel still works, aria-labels).
+- **Global keyboard-key treatment (safe version):** `button { box-shadow: keycap lip; transition transform/box-shadow; } button:active { translateY(2px) scale(0.98); inset shadow }` — NO `!important`, no background/border overrides, so inline-styled buttons keep their gradients. Plus hover brightness and disabled opacity/dim.
+- **Bug fixed:** `.hud-chatlog.heist-closed` rule was missing entirely (chat never widened on collapse) — added.
+- Files: `app/page.tsx`, `app/globals.css`.
+- Verified: `npx tsc --noEmit` 0 errors; `npm run build` passes (dev stopped first); 10/10 headless Chrome checks pass (vault placement both breakpoints, glider geometry/arrows, slide + chat-widen both directions, caliber keys increment/decrement, keycap press styling, mobile card visibility).
+- Note: `/api/session-state` returns HTTP 500 locally (upstream registry unreachable from dev box) — pre-existing, non-blocking, handled by UI fallbacks.
+- Working tree left uncommitted for user visual pass; dev server live on `http://localhost:3000`.
