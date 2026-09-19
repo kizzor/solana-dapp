@@ -14,30 +14,31 @@ html {
 
 /* ─── Cyber Deck Redesign Theme (recall_1 reskin — structure unchanged) ─── */
 :root {
-  --bg-main: #0b1219;
-  --bg-panel: #111c26;
-  --border-glow: #1e2c3a;
+  --bg-main: #0e0819;
+  --bg-panel: #150d24;
+  --border-glow: #241538;
   --text-primary: #f8fafc;
-  --text-muted: #93a7b8;
-  --key-face-top: #3d5566;
-  --key-face-bottom: #1b2836;
-  --key-top-edge: #52687c;
-  --key-side: #3d5566;
-  --key-depth: #0e1620;
-  --accent-emerald: #5ccfe6;
-  --accent-emerald-deep: #1f7e96;
-  --accent-emerald-edge: #8fe3ee;
-  --accent-emerald-depth: #0f3d4c;
+  --text-muted: #a99bc4;
+  --key-face-top: #2d1f4a;
+  --key-face-bottom: #1f1330;
+  --key-top-edge: #453071;
+  --key-side: #2d1f4a;
+  --key-depth: #120a1f;
+  --accent-emerald: #b26bff;
+  --accent-emerald-deep: #7c3aed;
+  --accent-emerald-edge: #d3b0ff;
+  --accent-emerald-depth: #3b1580;
 }
 
 body {
-  /* Reference-photo backdrop: blue-black deck with ambient cyan screen-glow pools */
-  background-color: #080e14;
+  /* Full-neon ambient: purple wash + white core halo over the void deck */
+  background-color: #0a0612;
   background-image:
-    radial-gradient(ellipse 85% 55% at 50% -12%, rgba(92, 207, 230, 0.09), transparent 62%),
-    radial-gradient(ellipse 55% 45% at 88% 108%, rgba(70, 140, 175, 0.11), transparent 62%),
-    radial-gradient(ellipse 65% 50% at 8% 102%, rgba(45, 95, 130, 0.09), transparent 62%),
-    linear-gradient(180deg, #080e14 0%, #0b1219 52%, #0d1620 100%);
+    radial-gradient(ellipse 70% 45% at 50% 36%, rgba(255, 255, 255, 0.05), transparent 60%),
+    radial-gradient(ellipse 85% 55% at 50% -12%, rgba(168, 85, 247, 0.16), transparent 62%),
+    radial-gradient(ellipse 55% 45% at 88% 108%, rgba(124, 58, 237, 0.20), transparent 62%),
+    radial-gradient(ellipse 65% 50% at 8% 102%, rgba(139, 92, 246, 0.16), transparent 62%),
+    linear-gradient(180deg, #0a0612 0%, #0e0819 52%, #150d24 100%);
   background-attachment: fixed;
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -46,7 +47,7 @@ body {
   overflow-x: hidden;
 }
 
-/* ─── Mechanical Keycap Archetype — photoreal backlit build (per reference image) ─── */
+/* ─── Neon Key Archetype — the whole key is a glowing purple tube with a white core ─── */
 .keyboard-key {
   display: inline-flex;
   align-items: center;
@@ -62,158 +63,154 @@ body {
   transition: all 0.06s ease-in-out;
   top: 0;
 
-  /* Concave keycap face: top gloss sheen over a dish-shaped steel-blue surface */
+  /* Neon cap face: white-hot sheen over a luminous purple body */
   background:
-    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(215, 240, 250, 0.13), transparent 55%),
-    linear-gradient(to bottom, #47637a 0%, #2c4254 55%, #22364a 100%);
-  color: #9fe9f2;
+    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(255, 255, 255, 0.13), transparent 55%),
+    linear-gradient(to bottom, #3b2465 0%, #2c1a52 55%, #241345 100%);
+  color: #ffffff;
 
-  /* Side walls: catch-light on top edges, shadow toward the sides, deep front wall */
-  border-top: 1px solid rgba(185, 225, 240, 0.30);
-  border-left: 1px solid rgba(140, 185, 210, 0.18);
-  border-right: 1px solid rgba(15, 30, 45, 0.65);
-  border-bottom: 6px solid #101c28; /* keycap side wall = travel distance */
+  /* Glowing tube edges */
+  border-top: 1px solid rgba(240, 220, 255, 0.35);
+  border-left: 1px solid rgba(200, 160, 255, 0.22);
+  border-right: 1px solid rgba(30, 10, 60, 0.7);
+  border-bottom: 6px solid #1a0b33; /* neon base / travel distance */
 
-  /* Desk shadow + backlit underglow bleeding around the cap */
+  /* Purple neon halo + white-violet inner light */
   box-shadow:
-    0 6px 12px rgba(0, 0, 0, 0.55),
-    0 2px 4px rgba(0, 0, 0, 0.5),
-    0 0 16px rgba(92, 207, 230, 0.12),
-    inset 0 1px 0 rgba(205, 240, 250, 0.12);
+    0 0 18px rgba(168, 85, 247, 0.45),
+    0 0 36px rgba(168, 85, 247, 0.18),
+    inset 0 0 12px rgba(216, 180, 254, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 
-  /* Backlit legend: cyan LED shining through the keycap */
+  /* White light inside the cap */
   text-shadow:
-    0 0 7px rgba(92, 207, 230, 0.80),
-    0 0 2px rgba(92, 207, 230, 0.55);
+    0 0 8px rgba(255, 255, 255, 0.9),
+    0 0 14px rgba(216, 180, 254, 0.6);
 }
 
-/* Hover State (Slight Key Depression) — gloss tightens, underglow strengthens */
+/* Hover State — neon tube brightens and the halo expands */
 .keyboard-key:hover {
   background:
-    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(215, 240, 250, 0.17), transparent 55%),
-    linear-gradient(to bottom, #4d6c85 0%, #314a5e 55%, #263c50 100%);
+    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(255, 255, 255, 0.17), transparent 55%),
+    linear-gradient(to bottom, #48307c 0%, #362060 55%, #2b1852 100%);
   border-bottom-width: 5px;
   top: 1px;
   box-shadow:
-    0 5px 10px rgba(0, 0, 0, 0.55),
-    0 2px 3px rgba(0, 0, 0, 0.5),
-    0 0 22px rgba(92, 207, 230, 0.20),
-    inset 0 1px 0 rgba(205, 240, 250, 0.14);
+    0 0 26px rgba(192, 132, 252, 0.60),
+    0 0 52px rgba(168, 85, 247, 0.25),
+    inset 0 0 14px rgba(216, 180, 254, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
-/* Active State (Switch Bottomed Out) — cap sinks flush, LED fully exposed */
+/* Active State — cap bottoms out, core flares white */
 .keyboard-key:active {
   background:
-    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(215, 240, 250, 0.10), transparent 55%),
-    linear-gradient(to bottom, #2c4254 0%, #22364a 100%);
-  border-top: 1px solid rgba(15, 30, 45, 0.6);
-  border-left: 1px solid rgba(15, 30, 45, 0.5);
-  border-right: 1px solid rgba(15, 30, 45, 0.6);
-  border-bottom: 1px solid #101c28; /* cap pressed flat onto the plate */
-  top: 5px; /* full travel drop */
+    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(255, 255, 255, 0.10), transparent 55%),
+    linear-gradient(to bottom, #2c1a52 0%, #241345 100%);
+  border-top: 1px solid rgba(30, 10, 60, 0.6);
+  border-left: 1px solid rgba(30, 10, 60, 0.5);
+  border-right: 1px solid rgba(30, 10, 60, 0.6);
+  border-bottom: 1px solid #1a0b33;
+  top: 5px;
   box-shadow:
-    inset 0 3px 8px rgba(0, 0, 0, 0.6) !important,
-    0 0 26px rgba(92, 207, 230, 0.30) !important,
-    0 1px 1px rgba(0, 0, 0, 0.3) !important;
+    inset 0 0 18px rgba(216, 180, 254, 0.35),
+    0 0 40px rgba(192, 132, 252, 0.65),
+    0 0 80px rgba(168, 85, 247, 0.30);
   text-shadow:
-    0 0 10px rgba(140, 230, 245, 0.95),
-    0 0 3px rgba(140, 230, 245, 0.7);
+    0 0 10px rgba(255, 255, 255, 1),
+    0 0 22px rgba(216, 180, 254, 0.85);
 }
 
-/* Accent Modifiers for Special Actions (Claims, Connect, Mint) — fully-lit cap */
+/* Accent — fully lit neon cap: white-hot core in a purple tube */
 .keyboard-key-accent {
   background:
-    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(240, 255, 255, 0.22), transparent 55%),
-    linear-gradient(to bottom, #5ccfe6 0%, #35a8c4 55%, #1f7e96 100%);
-  color: #06282f;
-  border-top: 1px solid rgba(230, 252, 255, 0.5);
-  border-left: 1px solid rgba(190, 240, 250, 0.3);
-  border-right: 1px solid rgba(10, 60, 75, 0.7);
-  border-bottom: 6px solid #0b2e3a;
+    radial-gradient(ellipse 130% 80% at 50% 30%, rgba(255, 255, 255, 0.32), transparent 60%),
+    linear-gradient(to bottom, #a855f7 0%, #7c3aed 55%, #5b21b6 100%);
+  color: #ffffff;
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+  border-left: 1px solid rgba(240, 220, 255, 0.35);
+  border-right: 1px solid rgba(40, 10, 80, 0.7);
+  border-bottom: 6px solid #2e1065;
   box-shadow:
-    0 6px 12px rgba(0, 0, 0, 0.55),
-    0 2px 4px rgba(0, 0, 0, 0.5),
-    0 0 22px rgba(92, 207, 230, 0.35),
-    inset 0 1px 0 rgba(240, 255, 255, 0.25);
+    0 0 20px rgba(168, 85, 247, 0.65),
+    0 0 44px rgba(168, 85, 247, 0.30),
+    inset 0 0 14px rgba(255, 255, 255, 0.25);
   text-shadow:
-    0 0 6px rgba(230, 255, 255, 0.55),
-    0 1px 0 rgba(255, 255, 255, 0.25);
+    0 0 8px rgba(255, 255, 255, 0.95),
+    0 0 18px rgba(255, 255, 255, 0.5);
 }
 
 .keyboard-key-accent:hover {
   background:
-    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(240, 255, 255, 0.26), transparent 55%),
-    linear-gradient(to bottom, #67d8e8 0%, #3cb2ce 55%, #2489a1 100%);
+    radial-gradient(ellipse 130% 80% at 50% 30%, rgba(255, 255, 255, 0.38), transparent 60%),
+    linear-gradient(to bottom, #b967fb 0%, #8b5cf6 55%, #6d28d9 100%);
   border-bottom-width: 5px;
   top: 1px;
   box-shadow:
-    0 5px 10px rgba(0, 0, 0, 0.55),
-    0 2px 3px rgba(0, 0, 0, 0.5),
-    0 0 30px rgba(92, 207, 230, 0.45),
-    inset 0 1px 0 rgba(240, 255, 255, 0.28);
+    0 0 30px rgba(192, 132, 252, 0.75),
+    0 0 60px rgba(168, 85, 247, 0.38),
+    inset 0 0 16px rgba(255, 255, 255, 0.3);
 }
 
 .keyboard-key-accent:active {
   background:
-    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(240, 255, 255, 0.16), transparent 55%),
-    linear-gradient(to bottom, #35a8c4 0%, #1f7e96 100%);
-  border-top: 1px solid rgba(10, 60, 75, 0.6);
-  border-left: 1px solid rgba(10, 60, 75, 0.5);
-  border-right: 1px solid rgba(10, 60, 75, 0.6);
-  border-bottom: 1px solid #0b2e3a;
+    radial-gradient(ellipse 130% 80% at 50% 30%, rgba(255, 255, 255, 0.26), transparent 60%),
+    linear-gradient(to bottom, #7c3aed 0%, #5b21b6 100%);
+  border-top: 1px solid rgba(40, 10, 80, 0.6);
+  border-left: 1px solid rgba(40, 10, 80, 0.5);
+  border-right: 1px solid rgba(40, 10, 80, 0.6);
+  border-bottom: 1px solid #2e1065;
   top: 5px;
   box-shadow:
-    inset 0 3px 8px rgba(0, 0, 0, 0.5) !important,
-    0 0 34px rgba(92, 207, 230, 0.5) !important,
-    0 1px 1px rgba(0, 0, 0, 0.3) !important;
+    inset 0 0 20px rgba(255, 255, 255, 0.4),
+    0 0 48px rgba(192, 132, 252, 0.8),
+    0 0 95px rgba(168, 85, 247, 0.4);
 }
 
-/* Danger modifier (destructive / breach actions) — crimson backlit cap */
+/* Danger — neon magenta-pink tube with white core */
 .keyboard-key-danger {
   background:
-    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(255, 220, 220, 0.14), transparent 55%),
-    linear-gradient(to bottom, #b34a52 0%, #93353d 55%, #7e2a31 100%);
-  color: #ffd9dc;
-  border-top: 1px solid rgba(255, 200, 205, 0.35);
-  border-left: 1px solid rgba(230, 160, 165, 0.2);
-  border-right: 1px solid rgba(50, 10, 15, 0.65);
-  border-bottom: 6px solid #3a1216;
+    radial-gradient(ellipse 130% 80% at 50% 30%, rgba(255, 255, 255, 0.20), transparent 60%),
+    linear-gradient(to bottom, #ff5c8a 0%, #e0246a 55%, #be185d 100%);
+  color: #ffffff;
+  border-top: 1px solid rgba(255, 220, 235, 0.5);
+  border-left: 1px solid rgba(255, 180, 205, 0.3);
+  border-right: 1px solid rgba(80, 5, 40, 0.7);
+  border-bottom: 6px solid #4a0d26;
   box-shadow:
-    0 6px 12px rgba(0, 0, 0, 0.55),
-    0 2px 4px rgba(0, 0, 0, 0.5),
-    0 0 18px rgba(179, 74, 82, 0.25),
-    inset 0 1px 0 rgba(255, 220, 220, 0.15);
+    0 0 20px rgba(255, 92, 138, 0.5),
+    0 0 44px rgba(255, 92, 138, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.18);
   text-shadow:
-    0 0 7px rgba(255, 130, 140, 0.7),
-    0 0 2px rgba(255, 130, 140, 0.45);
+    0 0 8px rgba(255, 255, 255, 0.9),
+    0 0 16px rgba(255, 180, 205, 0.6);
 }
 
 .keyboard-key-danger:hover {
   background:
-    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(255, 220, 220, 0.18), transparent 55%),
-    linear-gradient(to bottom, #bd545c 0%, #a83e46 55%, #8b323a 100%);
+    radial-gradient(ellipse 130% 80% at 50% 30%, rgba(255, 255, 255, 0.25), transparent 60%),
+    linear-gradient(to bottom, #ff7099 0%, #eb3378 55%, #d61f69 100%);
   border-bottom-width: 5px;
   top: 1px;
   box-shadow:
-    0 5px 10px rgba(0, 0, 0, 0.55),
-    0 2px 3px rgba(0, 0, 0, 0.5),
-    0 0 24px rgba(179, 74, 82, 0.35),
-    inset 0 1px 0 rgba(255, 220, 220, 0.18);
+    0 0 28px rgba(255, 92, 138, 0.65),
+    0 0 58px rgba(255, 92, 138, 0.3),
+    inset 0 0 16px rgba(255, 255, 255, 0.22);
 }
 
 .keyboard-key-danger:active {
   background:
-    radial-gradient(ellipse 130% 75% at 50% 0%, rgba(255, 220, 220, 0.10), transparent 55%),
-    linear-gradient(to bottom, #93353d 0%, #7e2a31 100%);
-  border-top: 1px solid rgba(50, 10, 15, 0.6);
-  border-left: 1px solid rgba(50, 10, 15, 0.5);
-  border-right: 1px solid rgba(50, 10, 15, 0.6);
-  border-bottom: 1px solid #3a1216;
+    radial-gradient(ellipse 130% 80% at 50% 30%, rgba(255, 255, 255, 0.16), transparent 60%),
+    linear-gradient(to bottom, #e0246a 0%, #be185d 100%);
+  border-top: 1px solid rgba(80, 5, 40, 0.6);
+  border-left: 1px solid rgba(80, 5, 40, 0.5);
+  border-right: 1px solid rgba(80, 5, 40, 0.6);
+  border-bottom: 1px solid #4a0d26;
   top: 5px;
   box-shadow:
-    inset 0 3px 8px rgba(0, 0, 0, 0.55) !important,
-    0 0 28px rgba(200, 90, 100, 0.4) !important,
-    0 1px 1px rgba(0, 0, 0, 0.3) !important;
+    inset 0 0 20px rgba(255, 255, 255, 0.3),
+    0 0 45px rgba(255, 92, 138, 0.7),
+    0 0 90px rgba(255, 92, 138, 0.35);
 }
 
 /* Compact modifier: keeps keycap feel at mini sizes (in-panel action keys) */
@@ -235,8 +232,22 @@ body {
   top: 2px;
 }
 
+/* ─── Site-wide neon panel glow: every major surface radiates purple light ─── */
+.lobby-sidebar,
+.lobby-vault-panel,
+.sidebar-vault-card,
+.heist-panel,
+.hud-chatlog,
+.matrix-right-panel,
+.lobby-hud-container,
+.mobile-vault-menu-panel {
+  box-shadow:
+    0 0 22px rgba(168, 85, 247, 0.10),
+    0 0 60px rgba(168, 85, 247, 0.05);
+}
+
 button:focus-visible {
-  outline: 3px solid #5ccfe6;
+  outline: 3px solid #b26bff;
   outline-offset: 2px;
 }
 
@@ -246,11 +257,11 @@ button:focus-visible {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0b1219;
+  background: #0e0819;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e2c3a;
+  background: #241538;
   border-radius: 2px;
 }
 
@@ -500,11 +511,11 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   0%,
   100% {
-    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.4), 0 0 16px rgba(239, 68, 68, 0.5), 0 0 32px rgba(239, 68, 68, 0.2);
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.4), 0 0 16px rgba(255, 92, 138, 0.5), 0 0 32px rgba(255, 92, 138, 0.2);
   }
 
   50% {
-    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.4), 0 0 24px rgba(239, 68, 68, 0.8), 0 0 48px rgba(239, 68, 68, 0.4);
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.4), 0 0 24px rgba(255, 92, 138, 0.8), 0 0 48px rgba(255, 92, 138, 0.4);
   }
 }
 
@@ -700,22 +711,22 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
 /* ── Responsive game layout ───────────────────────────────────────────────── */
 .game-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 200px) minmax(0, 220px) !important;
-  grid-template-areas: "matrix stats chat" !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 200px) minmax(0, 220px);
+  grid-template-areas: "matrix stats chat";
 }
 
 @media (max-width: 900px) {
   .game-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 180px) !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 180px);
     grid-template-areas:
       "matrix matrix"
-      "stats  chat" !important;
+      "stats  chat";
   }
 }
 
 @media (max-width: 600px) {
   .app-header {
-    align-items: flex-start !important;
+    align-items: flex-start;
     flex-wrap: wrap;
     gap: 7px;
   }
@@ -723,7 +734,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   .app-header>div:nth-child(2) {
     order: 3;
     flex-basis: 100%;
-    margin: 0 !important;
+    margin: 0;
   }
 
   .app-header>div:nth-child(3) {
@@ -733,21 +744,21 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 
   .game-grid {
-    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "matrix"
       "stats"
-      "chat" !important;
+      "chat";
   }
 
   .device-grid {
-    grid-template-columns: minmax(0, 1fr) !important;
-    gap: 12px !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
 
   .devices-section {
-    padding-left: 8px !important;
-    padding-right: 8px !important;
+    padding-left: 8px;
+    padding-right: 8px;
   }
 }
 
@@ -761,19 +772,19 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .matrix-right-panel,
   .matrix-right-divider {
-    display: none !important;
+    display: none;
   }
 }
 
 /* ── Lobby 3-col grid ─────────────────────────────────────────────────────── */
 .lobby-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 200px) minmax(0, 300px) !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 200px) minmax(0, 300px);
 }
 
 @media (max-width: 900px) {
   .lobby-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 180px) !important;
-    grid-template-areas: "map vault" "mint mint" !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 180px);
+    grid-template-areas: "map vault" "mint mint";
     }
     }
 
@@ -783,7 +794,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
     @media (max-width: 600px) {
     .mobile-vault-status {
-  display: none !important;
+  display: none;
 }
 
   .mobile-vault-heading {
@@ -795,13 +806,13 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     color: #dce6f3;
     font-size: 10px;
     font-weight: 700;
-    border: 1px solid rgba(92, 207, 230, 0.16);
+    border: 1px solid rgba(178, 107, 255, 0.16);
     border-bottom: none;
-    background: #09141e;
+    background: #150d24;
   }
 
   .mobile-vault-countdown {
-    color: #5ccfe6;
+    color: #b26bff;
     font-size: 8px;
     white-space: nowrap;
   }
@@ -811,15 +822,15 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     grid-template-columns: 116px minmax(0, 1fr);
     gap: 8px;
     padding: 8px;
-    border: 1px solid rgba(92, 207, 230, 0.16);
-    background: #09141e;
+    border: 1px solid rgba(178, 107, 255, 0.16);
+    background: #150d24;
   }
 
   .mobile-vault-graphic {
     position: relative;
     height: 82px;
     overflow: hidden;
-    background: #050f17;
+    background: #0e0819;
     border: 1px solid rgba(63, 73, 83, 0.25);
   }
 
@@ -837,7 +848,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     bottom: 0;
     left: 0;
     z-index: 0;
-    background: linear-gradient(180deg, #2ff3ad, #00658e);
+    background: linear-gradient(180deg, #2ff3ad, #5b21b6);
     opacity: 0.22;
     transition: height 1s linear;
   }
@@ -856,7 +867,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     min-width: 0;
     padding: 4px 6px;
     background: #13212c;
-    border-left: 2px solid #5ccfe6;
+    border-left: 2px solid #b26bff;
   }
 
   .mobile-vault-stats span {
@@ -869,7 +880,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .mobile-vault-stats strong {
     overflow: hidden;
-    color: #5ccfe6;
+    color: #b26bff;
     font-size: 10px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -877,9 +888,9 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .mobile-vault-claim {
     padding: 7px 9px 8px;
-    border: 1px solid rgba(92, 207, 230, 0.16);
+    border: 1px solid rgba(178, 107, 255, 0.16);
     border-top: none;
-    background: #09141e;
+    background: #150d24;
   }
 
   .mobile-vault-status+.lobby-debug-panel {
@@ -887,31 +898,31 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 
   .lobby-live-now {
-    display: none !important;
+    display: none;
   }
   .lobby-operative-layout {
-    padding: 0 !important;
-    display: block !important;
+    padding: 0;
+    display: block;
   }
   .lobby-hud-container {
-    gap: 0 !important;
+    gap: 0;
   }
   .lobby-vault-panel {
     display: none !important;
   }
 
   .lobby-sidebar+div {
-    padding-top: 10px !important;
+    padding-top: 10px;
   }
 
   .lobby-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr;
   }
 
   .lobby-topbar {
-    height: auto !important;
+    height: auto;
     min-height: 56px;
-    padding: 8px 12px !important;
+    padding: 8px 12px;
   }
 
   .lobby-topbar>div:first-child {
@@ -924,7 +935,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 
   .lobby-topbar-actions>*:not(.mobile-menu-button) {
-    display: none !important;
+    display: none;
   }
 
   .mobile-menu-button {
@@ -937,7 +948,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     gap: 4px;
     padding: 0;
     background: #0a1628;
-    border: 1px solid #1e3a5f;
+    border: 1px solid #241538;
     border-radius: 6px;
     cursor: pointer;
   }
@@ -945,33 +956,33 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   .mobile-menu-button span {
     width: 16px;
     height: 2px;
-    background: #5ccfe6;
+    background: #b26bff;
     border-radius: 2px;
   }
 
   .lobby-sidebar {
-    display: none !important;
+    display: none;
   }
 
   .lobby-sidebar.mobile-open {
-    display: flex !important;
+    display: flex;
     position: fixed;
     top: 56px;
     left: 0;
     right: 0;
     z-index: 45;
-    width: 100% !important;
-    min-height: auto !important;
+    width: 100%;
+    min-height: auto;
     max-height: calc(100vh - 56px);
     overflow-y: auto;
-    padding: 10px 8px 0 !important;
-    border-right: none !important;
-    border-bottom: 1px solid rgba(92, 207, 230, 0.08);
+    padding: 10px 8px 0;
+    border-right: none;
+    border-bottom: 1px solid rgba(178, 107, 255, 0.08);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
   }
 
   .lobby-operative {
-    padding: 0 8px 10px !important;
+    padding: 0 8px 10px;
   }
 
   .lobby-nav-item {
@@ -980,18 +991,18 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .lobby-nav-item.is-open {
     display: block;
-    border-right: none !important;
+    border-right: none;
     border-left: 2px solid transparent;
   }
 
   .lobby-sidebar>div:last-child {
-    margin-top: 8px !important;
-    padding: 0 4px 10px !important;
+    margin-top: 8px;
+    padding: 0 4px 10px;
   }
 
   .lobby-sidebar+div {
     min-width: 0;
-    padding: 14px 10px !important;
+    padding: 14px 10px;
   }
 }
 
@@ -1003,7 +1014,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
 @media (min-width: 601px) {
   .mobile-vault-status {
-  display: none !important;
+  display: none;
 }
 }
 
@@ -1020,15 +1031,15 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   /* Matrix-only visibility: lobby header chrome + HUD appear only once the
      user enters the matrix (game screen uses .app-header, not .lobby-topbar) */
   .lobby-topbar {
-    background: transparent !important;
-    border-bottom: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    box-shadow: none !important;
+    background: transparent;
+    border-bottom: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
   }
 
   .lobby-hud-container {
-    display: none !important;
+    display: none;
   }
 }
 
@@ -1089,9 +1100,9 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   height: 120px;
   max-height: 45%;
   /* Side-mounted mechanical key: keycap face + 5px travel depth */
-  background: linear-gradient(to bottom, #3d5566 0%, #1b2836 100%);
-  border: 1px solid #1e2c3a;
-  border-right: 5px solid #0e1620;
+  background: linear-gradient(to bottom, #2d1f4a 0%, #1f1330 100%);
+  border: 1px solid #241538;
+  border-right: 5px solid #120a1f;
   border-radius: 6px 0 0 6px;
   display: flex;
   flex-direction: column;
@@ -1100,26 +1111,26 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   gap: 8px;
   cursor: pointer;
   z-index: 22;
-  color: #5ccfe6;
+  color: #b26bff;
   user-select: none;
-  box-shadow: 0 0 10px rgba(92, 207, 230, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 10px rgba(178, 107, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease;
   animation: gliderPulse 2.6s ease-in-out infinite;
 }
 
 @keyframes gliderPulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(92, 207, 230, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
-  50% { box-shadow: 0 0 16px rgba(92, 207, 230, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+  0%, 100% { box-shadow: 0 0 8px rgba(178, 107, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+  50% { box-shadow: 0 0 16px rgba(178, 107, 255, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
 }
 
 .heist-drawer-key:hover {
-  background: linear-gradient(to bottom, #47637a 0%, #22374a 100%);
+  background: linear-gradient(to bottom, #362459 0%, #22374a 100%);
   color: #9fe9f2;
 }
 
 .heist-drawer-key:active {
   transform: translateY(-50%);
-  background: #1b2836;
+  background: #1f1330;
   border-right-width: 1px;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
 }
@@ -1129,7 +1140,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   text-orientation: mixed;
   font-size: 6.5px;
   letter-spacing: 0.15em;
-  color: #93a7b8;
+  color: #a99bc4;
   font-weight: 700;
 }
 
