@@ -1509,3 +1509,13 @@ RawContentLength  : 701
 - Verified: `npx tsc --noEmit` 0 errors; `npm run build` passes (dev stopped first); 10/10 headless Chrome checks pass (vault placement both breakpoints, glider geometry/arrows, slide + chat-widen both directions, caliber keys increment/decrement, keycap press styling, mobile card visibility).
 - Note: `/api/session-state` returns HTTP 500 locally (upstream registry unreachable from dev box) — pre-existing, non-blocking, handled by UI fallbacks.
 - Working tree left uncommitted for user visual pass; dev server live on `http://localhost:3000`.
+
+#### 🏷️ RECALL POINT `recall_1` (2026-09-19):
+- Committed as `c41ed6e` and tagged **`recall_1`** = the last verified-good lobby state (private rooms, vault split, glider key, caliber keys, keycap buttons; 10/10 e2e, tsc clean, build passes).
+- Purpose: safety checkpoint BEFORE the major styling redesign.
+- **To land exactly here if the redesign goes wrong:**
+  1. `git stash -u` (save any WIP)
+  2. `git reset --hard recall_1`
+  3. `rm -rf .next && npm run dev` (fresh build dir)
+  4. Recover WIP later with `git stash pop` if wanted.
+- Do NOT move or delete this tag; if a second checkpoint is needed, name it `recall_2`.
