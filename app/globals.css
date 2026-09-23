@@ -1028,6 +1028,33 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     display: block;
   }
 
+  .mobile-vault-status {
+    display: none !important;
+  }
+
+  .lobby-hud-container {
+    display: flex !important;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .global-heist-hud {
+    width: 100vw !important;
+    min-height: calc(100vh - 56px);
+    margin-left: calc(50% - 50vw);
+    display: flex !important; /* Visible by default on all other screens */
+  }
+
+  .dev-jump-controls {
+    display: none !important;
+  }
+
+  @media (min-width: 601px) {
+    .global-heist-hud {
+      display: none !important; /* Hidden strictly on desktop */
+    }
+  }
+
   /* Matrix-only visibility: lobby header chrome + HUD appear only once the
      user enters the matrix (game screen uses .app-header, not .lobby-topbar) */
   .lobby-topbar {
@@ -1040,6 +1067,10 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .lobby-hud-container {
     display: none;
+  }
+
+  .world-map-sketch, .laser-beams {
+    display: none !important;
   }
 }
 

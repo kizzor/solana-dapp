@@ -228,7 +228,7 @@ function MiniStopwatch({ seconds, total }: { seconds: number; total: number }) {
 }
 
 // ─── Outline World Map with bank sketches ────────────────────────────────────
-function WorldMapSketch({ currentHour, onSelectBank, style }: { currentHour: number; onSelectBank?: (id: number) => void; style?: React.CSSProperties }) {
+function WorldMapSketch({ currentHour, onSelectBank, style, className }: { currentHour: number; onSelectBank?: (id: number) => void; style?: React.CSSProperties; className?: string }) {
   const live = getLiveBank(currentHour)
   const hourCd = useHourCountdown()
   const [hov, setHov] = useState<number | null>(null)
@@ -1806,10 +1806,10 @@ function LobbyMapWithOverlays({
       <div style={{ position: 'relative', flex: 1, minHeight: 560, width: '100%', height: '100%', overflow: 'hidden' }}>
         
         {/* The World Map Background (100% full view underneath) */}
-        <WorldMapSketch currentHour={currentHour} onSelectBank={setSelectedBank} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+        <WorldMapSketch className="world-map-sketch" currentHour={currentHour} onSelectBank={setSelectedBank} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
 
         {/* ── Laser Beam SVG Overlay on Map ── */}
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 8 }}>
+        <svg className="laser-beams" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 8 }}>
           <defs>
             <filter id="laserGlow" x="-30%" y="-30%" width="160%" height="160%">
               <feGaussianBlur stdDeviation="4" result="blur" />
@@ -1855,7 +1855,7 @@ function LobbyMapWithOverlays({
         </svg>
 
         {/* ── FULL MAP TRANSPARENT CHAT INTERFACE HUD ── */}
-        <div
+        <div className="global-heist-hud"
           style={{
             position: 'absolute',
             inset: 0,
@@ -2483,6 +2483,7 @@ function ChatTerminal({ nickname }: { nickname: string }) {
   const [lines, setLines] = useState<ChatLine[]>([
     { t: 'sys', m: 'HACKING MATRIX v3.7.1 INITIALIZED' },
     { t: 'sys', m: `AGENT ${nickname.toUpperCase()} CONNECTED` },
+    { t: 'sys', m: 'TIP: /ai <question> — CONSULT THE ORACLE (OMNIROUTE UPLINK)' },
   ])
   const [input, setInput] = useState('')
   const [mediaQueue, setMediaQueue] = useState<MediaItem[]>([])
@@ -2506,10 +2507,34 @@ function ChatTerminal({ nickname }: { nickname: string }) {
     else { setPlaying(false); setPlayIdx(0); setMediaQueue([]) }
   }
 
-  const send = () => {
-    if (!input.trim()) return
-    setLines(p => [...p, { t: 'user', m: `${nickname}: ${input}` }])
+  const [aiBusy, setAiBusy] = useState(false)
+
+  // /ai <question> — ask the ORACLE through the local OmniRoute gateway (/api/chat)
+  const send = async () => {
+    if (!input.trim() || aiBusy) return
+    const text = input
+    setLines(p => [...p, { t: 'user', m: `${nickname}: ${text}` }])
     setInput('')
+    if (text.startsWith('/ai ')) {
+      const q = text.slice(4).trim()
+      if (q) {
+        setAiBusy(true)
+        setLines(p => [...p, { t: 'sys', m: 'ORACLE IS CONSULTING THE GATEWAY...' }])
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: [{ role: 'user', content: q }], stream: false, maxTokens: 1024 }),
+          })
+          const data = await res.json()
+          setLines(p => [...p, { t: 'sys', m: `ORACLE: ${data.content || data.error || '[no response]'}` }])
+        } catch (e) {
+          setLines(p => [...p, { t: 'sys', m: `ORACLE OFFLINE: ${String(e)}` }])
+        } finally {
+          setAiBusy(false)
+        }
+      }
+    }
   }
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3242,7 +3267,7 @@ function Ransome() {
   const [walletDebug, setWalletDebug] = useState<string[]>([]) // wallet detection debug logs
   const currentHour = new Date().getUTCHours()
   const liveBank = getLiveBank(currentHour)
-  const [navTab, setNavTab] = useState<'operative' | 'vault' | 'missions'>('operative')
+  const [navTab, setNavTab] = useState<'operative' | 'vault' | 'missions' | 'heist'>('operative')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([])  // private rooms — persist lobby→matrix, wiped when game ends
   const [devClock, setDevClock] = useState(0)             // dev: jump the 59-min clock
@@ -3982,7 +4007,7 @@ function Ransome() {
           </button>
           <div style={{ background: 'rgba(24,39,51,0.5)', padding: '4px 10px', border: '1px solid rgba(47,243,173,0.2)', fontSize: 12, color: '#b26bff', fontWeight: 700 }}>{fmtTime(lobbyCountdown)}</div>
           <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Light / dark mode" style={{ background: '#150d24', border: '1px solid #241538', borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer' }}>{theme === 'dark' ? '☀️' : '🌙'}</button>
-          {DEV_MODE && <div style={{ display: 'flex', gap: 3 }}>
+          {DEV_MODE && <div className="dev-jump-controls" style={{ display: 'flex', gap: 3 }}>
             <button onClick={() => devJump(0)} title="Launch now" style={{ background: '#150d24', border: '1px solid #f59e0b55', borderRadius: 6, padding: '4px 6px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>🚀 NOW</button>
             <button onClick={() => devJump(30)} title="Jump +30 min" style={{ background: '#150d24', border: '1px solid #f59e0b55', borderRadius: 6, padding: '4px 6px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>+30M</button>
             <button onClick={() => devJump(59)} title="Jump +59 min (round boundary)" style={{ background: '#150d24', border: '1px solid #f59e0b55', borderRadius: 6, padding: '4px 6px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>+59M</button>
@@ -4070,10 +4095,10 @@ function Ransome() {
               <VaultClaimPanel wallet={wallet} announce={announce} />
             </div>
           </div>
-          {(['OPERATIVE', 'VAULT', 'MISSIONS'] as const).map((item, i) => {
-            const tab = (['operative', 'vault', 'missions'] as const)[i]
+          {(['OPERATIVE', 'VAULT', 'MISSIONS', 'HEIST LIST'] as const).map((item, i) => {
+            const tab = (['operative', 'vault', 'missions', 'heist'] as const)[i]
             const active = navTab === tab
-            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#b26bff' : '#7d6b99', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #b26bff' : 'none', background: active ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🎯 ', '💎 ', '📋 '][i]}{item}</div>)
+            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#b26bff' : '#7d6b99', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #b26bff' : 'none', background: active ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🎯 ', '💎 ', '📋 ', '🕵️ '][i]}{item}</div>)
           })}
           <div style={{ marginTop: 'auto', padding: '0 12px 16px' }}>
             {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>ENTER MATRIX</button>) : DEV_MODE ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX (DEV)</button>) : (<div style={{ padding: '8px', background: 'rgba(178,107,255,0.06)', border: '1px solid rgba(178,107,255,0.2)', color: '#b26bff', fontSize: 9, textAlign: 'center' }}>INITIALIZE_HEIST</div>)}
@@ -4130,6 +4155,29 @@ function Ransome() {
           </div>
         </div>}
         {navTab === 'missions' && <MissionsDemo />}
+        {navTab === 'heist' && (
+          <div style={{ flex: 1, padding: '20px 16px', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 14 }}>🕵️</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>OPERATIVES / HEIST LIST</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {INITIAL_OPERATIVES.map(op => (
+                  <div key={op.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#1f1330', border: '1px solid rgba(178,107,255,0.1)', borderRadius: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 14 }}>🕵️</span>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>{op.name}</div>
+                        <div style={{ fontSize: 8, color: '#7d6b99' }}>{op.status.toUpperCase()} • LEVEL {op.level} • {op.devices} DEVICES</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         {navTab === 'vault' && (
           <div style={{ flex: 1, padding: '20px 16px', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="lobby-vault-panel" style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
