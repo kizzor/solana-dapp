@@ -703,7 +703,7 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
       ) : (
         <div style={{ margin: '3px 5px 0', background: '#070310', border: '1px solid #150d24', borderRadius: 5, padding: '4px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
           <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>Disconnected</span>
-          <button className="keyboard-key keyboard-key-accent" onClick={() => onActivate(device.id)} style={{ borderRadius: 4, padding: '3px 7px', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, cursor: 'pointer' }}>ACTIVATE ⚡</button>
+          <button className="keyboard-key keyboard-key-accent" onClick={() => onActivate(device.id)} style={{ borderRadius: 4, padding: '3px 7px', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, cursor: 'pointer' }}>ACTIVATE</button>
         </div>
       )}
       {/* Grid */}
@@ -2007,7 +2007,7 @@ function LobbyMapWithOverlays({
                 }}
                 title="Enter Hack Matrix"
               >
-                <span>⚡</span> MATRIX →
+                <span style={{ fontSize: 8 }}>ENTER</span> MATRIX →
               </button>
 
               {/* Mobile toggle for Heist List */}
@@ -2120,7 +2120,7 @@ function LobbyMapWithOverlays({
                 gap: 5,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 8, fontWeight: 800, color: '#b26bff', letterSpacing: '0.05em' }}>⚡ QUICK MINT CONSOLE</span>
+                  <span style={{ fontSize: 8, fontWeight: 700, color: '#b26bff', letterSpacing: '0.05em' }}>QUICK MINT</span>
                   <span style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 4px', borderRadius: 3 }}>
                     {mintToken || 'ETH'}
                   </span>
@@ -2132,14 +2132,16 @@ function LobbyMapWithOverlays({
                     onClick={() => onQuickMint ? onQuickMint(quickMintCount) : null}
                     style={{
                       flex: 1,
-                      padding: '8px 14px',
-                      fontSize: 10,
-                      borderRadius: '6px 0 0 6px',
+                      padding: '12px 20px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      borderRadius: 10,
                       whiteSpace: 'nowrap',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 6
+                      gap: 6,
+                      boxShadow: '0 4px 20px rgba(178,107,255,0.3)'
                     }}
                   >
                     <span>MINT {quickMintCount}×</span>
@@ -3267,7 +3269,7 @@ function Ransome() {
   const [walletDebug, setWalletDebug] = useState<string[]>([]) // wallet detection debug logs
   const currentHour = new Date().getUTCHours()
   const liveBank = getLiveBank(currentHour)
-  const [navTab, setNavTab] = useState<'operative' | 'vault' | 'missions' | 'heist'>('operative')
+  const [navTab, setNavTab] = useState<'operative' | 'vault' | 'missions' | 'heist' | 'quick-mint'>('operative')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([])  // private rooms — persist lobby→matrix, wiped when game ends
   const [devClock, setDevClock] = useState(0)             // dev: jump the 59-min clock
@@ -4095,11 +4097,135 @@ function Ransome() {
               <VaultClaimPanel wallet={wallet} announce={announce} />
             </div>
           </div>
-          {(['VAULT', 'MISSIONS', 'HEIST LIST'] as const).map((item, i) => {
-            const tab = (['vault', 'missions', 'heist'] as const)[i]
+          {(['💎 VAULT', '📋 MISSIONS', '🕵️ HEIST LIST', '💰 QUICK MINT'] as const).map((item, i) => {
+            const tab = (['vault', 'missions', 'heist', 'quick-mint'] as const)[i]
             const active = navTab === tab
-            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#b26bff' : '#7d6b99', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #b26bff' : 'none', background: active ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['💎 ', '📋 ', '🕵️ '][i]}{item}</div>)
+            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#b26bff' : '#7d6b99', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #b26bff' : 'none', background: active ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['💎 ', '📋 ', '🕵️ ', '💰 '][i]}{item}</div>)
           })}
+          {/* Quick Mint Panel */}
+          {navTab === 'quick-mint' && (
+            <div style={{
+              padding: '12px',
+              background: 'rgba(17,24,39, 0.88)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              border: '1px solid rgba(178,107,255,0.3)',
+              borderRadius: 8,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+              zIndex: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}>
+              <div style={{
+                padding: '8px 10px',
+                background: 'linear-gradient(180deg, rgba(178,107,255,0.14), rgba(4,18,34,0.95))',
+                borderBottom: '1px solid rgba(178,107,255,0.25)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+                <span style={{ fontSize: 8, fontWeight: 700, color: '#b26bff', letterSpacing: '0.05em' }}>QUICK MINT</span>
+                <span style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 4px', borderRadius: 3 }}>
+                  {mintToken || 'ETH'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  className="keyboard-key keyboard-key-accent"
+                  onClick={() => {
+                    mintDevices()
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px 20px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    borderRadius: 10,
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    boxShadow: '0 4px 20px rgba(178,107,255,0.3)'
+                  }}
+                >
+                  <span>MINT {mintCount}×</span>
+                </button>
+
+                {/* Caliber Keys — keyboard-key steppers (scroll wheel still works) */}
+                <div
+                  onWheel={e => {
+                    if (e.deltaY < 0) setMintCount(c => Math.min(20, c + 1))
+                    else setMintCount(c => Math.max(1, c - 1))
+                  }}
+                  style={{
+                    width: 46,
+                    background: '#150d24',
+                    border: '1px solid #b26bff40',
+                    borderRadius: 6,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 3,
+                    padding: '4px 2px',
+                    userSelect: 'none'
+                  }}
+                  title="▲ / ▼ keys or scroll to change amount"
+                >
+                  <button
+                    className="keyboard-key keyboard-key-sm"
+                    aria-label="Increase mint amount"
+                    onClick={() => setMintCount(c => Math.min(20, c + 1))}
+                    disabled={mintCount >= 20}
+                    style={{
+                      width: 28,
+                      height: 16,
+                      padding: 0,
+                      background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
+                      border: '1px solid #b26bff55',
+                      borderTop: '1px solid #b26bffaa',
+                      borderRadius: 4,
+                      color: '#b26bff',
+                      fontSize: 8,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >▲</button>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#b26bff', fontFamily: 'DM Mono,monospace', lineHeight: 1 }}>{mintCount}</div>
+                  <button
+                    className="keyboard-key keyboard-key-sm"
+                    aria-label="Decrease mint amount"
+                    onClick={() => setMintCount(c => Math.max(1, c - 1))}
+                    disabled={mintCount <= 1}
+                    style={{
+                      width: 28,
+                      height: 16,
+                      padding: 0,
+                      background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
+                      border: '1px solid #b26bff55',
+                      borderBottom: '1px solid #b26bffaa',
+                      borderRadius: 4,
+                      color: '#b26bff',
+                      fontSize: 8,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >▼</button>
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ marginTop: 'auto', padding: '0 12px 16px' }}>
             {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>ENTER MATRIX</button>) : DEV_MODE ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX (DEV)</button>) : (<div style={{ padding: '8px', background: 'rgba(178,107,255,0.06)', border: '1px solid rgba(178,107,255,0.2)', color: '#b26bff', fontSize: 9, textAlign: 'center' }}>INITIALIZE_HEIST</div>)}
           </div>
