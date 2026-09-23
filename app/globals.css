@@ -1089,7 +1089,14 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 
   .sidebar-vault-card {
-    display: block;
+    display: block !important;
+  }
+}
+
+/* Hide operative layout, show only HUD on mobile */
+@media (max-width: 600px) {
+  .lobby-operative-layout {
+    display: none !important;
   }
 }
 

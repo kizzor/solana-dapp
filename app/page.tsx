@@ -4095,10 +4095,10 @@ function Ransome() {
               <VaultClaimPanel wallet={wallet} announce={announce} />
             </div>
           </div>
-          {(['OPERATIVE', 'VAULT', 'MISSIONS', 'HEIST LIST'] as const).map((item, i) => {
-            const tab = (['operative', 'vault', 'missions', 'heist'] as const)[i]
+          {(['VAULT', 'MISSIONS', 'HEIST LIST'] as const).map((item, i) => {
+            const tab = (['vault', 'missions', 'heist'] as const)[i]
             const active = navTab === tab
-            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#b26bff' : '#7d6b99', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #b26bff' : 'none', background: active ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🎯 ', '💎 ', '📋 ', '🕵️ '][i]}{item}</div>)
+            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#b26bff' : '#7d6b99', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #b26bff' : 'none', background: active ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['💎 ', '📋 ', '🕵️ '][i]}{item}</div>)
           })}
           <div style={{ marginTop: 'auto', padding: '0 12px 16px' }}>
             {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>ENTER MATRIX</button>) : DEV_MODE ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX (DEV)</button>) : (<div style={{ padding: '8px', background: 'rgba(178,107,255,0.06)', border: '1px solid rgba(178,107,255,0.2)', color: '#b26bff', fontSize: 9, textAlign: 'center' }}>INITIALIZE_HEIST</div>)}
