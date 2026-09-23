@@ -4100,7 +4100,7 @@ function Ransome() {
           {(['💎 VAULT', '📋 MISSIONS', '🕵️ HEIST LIST', '💰 QUICK MINT'] as const).map((item, i) => {
             const tab = (['vault', 'missions', 'heist', 'quick-mint'] as const)[i]
             const active = navTab === tab
-            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#b26bff' : '#7d6b99', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #b26bff' : 'none', background: active ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['💎 ', '📋 ', '🕵️ ', '💰 '][i]}{item}</div>)
+            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#b26bff' : '#7d6b99', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #b26bff' : 'none', background: active ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{item}</div>)
           })}
           {/* Quick Mint Panel */}
           {navTab === 'quick-mint' && (
@@ -4292,7 +4292,6 @@ function Ransome() {
                 {INITIAL_OPERATIVES.map(op => (
                   <div key={op.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#1f1330', border: '1px solid rgba(178,107,255,0.1)', borderRadius: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 14 }}>🕵️</span>
                       <div>
                         <div style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>{op.name}</div>
                         <div style={{ fontSize: 8, color: '#7d6b99' }}>{op.status.toUpperCase()} • LEVEL {op.level} • {op.devices} DEVICES</div>

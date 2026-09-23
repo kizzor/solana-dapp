@@ -423,11 +423,11 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 /* ─── Mobile Utilities ─── */
 @media (max-width: 768px) {
   .hide-on-mobile,
-  .heist-panel {
+  .heist-panel,
+  .lobby-sidebar,
+  .lobby-vault-panel,
+  .lobby-operative-layout > :not(.lobby-hud-container) {
     display: none !important;
-  }
-  .lobby-operative-layout {
-    display: block !important;
   }
 }
 
