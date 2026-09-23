@@ -4227,7 +4227,7 @@ function Ransome() {
             </div>
           )}
           <div style={{ marginTop: 'auto', padding: '0 12px 16px' }}>
-            {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>ENTER MATRIX</button>) : DEV_MODE ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX (DEV)</button>) : (<div style={{ padding: '8px', background: 'rgba(178,107,255,0.06)', border: '1px solid rgba(178,107,255,0.2)', color: '#b26bff', fontSize: 9, textAlign: 'center' }}>INITIALIZE_HEIST</div>)}
+            <button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX</button>
           </div>
         </div>
         {navTab === 'operative' && <div className="lobby-operative-layout" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: 16, alignItems: 'start' }}>
