@@ -4256,7 +4256,7 @@ function Ransome() {
             />
           </div>
           {/* Right-extreme Decentralized Vault panel (desktop) */}
-          <div className="lobby-vault-panel" style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="lobby-vault-panel hide-on-mobile" style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 13 }}>💎</span><span style={{ fontSize: 11, fontWeight: 700, color: '#f8fafc' }}>DECENTERILZIED VAULT</span></div>
             <div style={{ position: 'relative', background: '#0e0819', border: '1px solid rgba(36,21,56,0.15)', height: 120, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#d3b0ff,#5b21b6)', opacity: 0.2, transition: 'height 1s linear' }} />

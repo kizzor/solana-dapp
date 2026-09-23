@@ -420,6 +420,17 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 }
 
+/* ─── Mobile Utilities ─── */
+@media (max-width: 768px) {
+  .hide-on-mobile,
+  .heist-panel {
+    display: none !important;
+  }
+  .lobby-operative-layout {
+    display: block !important;
+  }
+}
+
 /* Cell glitch effects (non-clickable numbers) */
 @keyframes gx0 {
 
@@ -1094,13 +1105,13 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 }
 
 /* Hide operative layout, show only HUD on mobile */
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .lobby-operative-layout {
     display: none !important;
   }
 }
 
-/* ── Heist list glider: long vertical key riding the list's LEFT edge (all sizes) ── */
+/* ─── Heist list glider: long vertical key riding the list's LEFT edge (all sizes) ─── */
 .heist-panel {
   right: 32px;
   transition: right 0.25s ease;
