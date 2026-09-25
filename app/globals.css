@@ -1098,30 +1098,45 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 }
 
-.heist-drawer-key {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 22px;
-  height: 120px;
-  max-height: 45%;
-  /* Side-mounted mechanical key: keycap face + 5px travel depth */
-  background: linear-gradient(to bottom, #2d1f4a 0%, #1f1330 100%);
-  border: 1px solid #241538;
-  border-right: 5px solid #120a1f;
-  border-radius: 6px 0 0 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-  z-index: 22;
-  color: #b26bff;
-  user-select: none;
-  box-shadow: 0 0 10px rgba(178, 107, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease;
-  animation: gliderPulse 2.6s ease-in-out infinite;
+/* ── Mobile HUD-first: only terminal chat visible ── */
+@media (max-width: 600px) {
+  /* Hide all lobby sections */
+  .lobby-topbar,
+  .lobby-hud-container,
+  .lobby-operative-layout,
+  .sidebar-vault-card,
+  .mobile-vault-status,
+  .lobby-vault-panel,
+  .game-grid,
+  .devices-section,
+  .matrix-right-panel {
+    display: none !important;
+  }
+
+  /* Make hud-chatlog full screen overlay on mobile */
+  .hud-chatlog {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999 !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    overflow-y: auto !important;
+    background: rgba(2, 13, 26, 0.95) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+
+  /* Ensure app-header stays on top */
+  .app-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10000 !important;
+  }
 }
 
 @keyframes gliderPulse {
