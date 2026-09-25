@@ -1116,37 +1116,24 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     grid-template-columns: 1fr !important;
   }
 
-  /* Fix heist panel positioning on mobile */
-  .heist-panel {
-    position: fixed !important;
-    right: 8px !important;
-    top: auto !important;
-    bottom: 60px !important;
-    width: 200px !important;
-    max-height: 55vh !important;
-    z-index: 100 !important;
-  }
-
-  .heist-panel.heist-closed {
-    right: -220px !important;
-  }
-
-  /* Make heist list button float over the drawer area */
-  .heist-list-toggle-btn {
-    position: fixed !important;
-    right: 12px !important;
-    bottom: 16px !important;
-    z-index: 110 !important;
-    padding: 10px 14px !important;
-    font-size: 9px !important;
-    border-radius: 8px !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 12px rgba(178,107,255,0.3) !important;
-    animation: floatBtnPulse 2s ease-in-out infinite;
-  }
-
   /* Ensure chat log is fully visible */
   .hud-chatlog {
     background: rgba(2, 13, 26, 0.95) !important;
+  }
+
+  /* Reset heist panel to normal flow on mobile */
+  .heist-panel {
+    position: relative !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-height: 40vh !important;
+    margin-top: 10px !important;
+  }
+
+  .heist-panel.heist-closed {
+    right: auto !important;
   }
 }
 
