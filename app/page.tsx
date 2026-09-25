@@ -4047,13 +4047,13 @@ function Ransome() {
         </div>
       )}
       <div style={{ display: 'flex', paddingTop: 56 }}>
-        <div className={`lobby-sidebar${mobileMenuOpen ? ' mobile-open' : ''}`} style={{ width: 200, minHeight: 'calc(100vh - 56px)', background: '#150d24', borderRight: '1px solid rgba(178,107,255,0.08)', display: 'flex', flexDirection: 'column', padding: '16px 0', flexShrink: 0 }}>
+        <div className={`lobby-sidebar${mobileMenuOpen ? ' mobile-open' : ''}`} style={{ width: 200, minHeight: 'calc(100vh - 56px)', background: '#150d24', borderRight: '1px solid rgba(178,107,255,0.08)', display: mobileMenuOpen ? 'block' : 'none', flexDirection: 'column', padding: '16px 0', flexShrink: 0 }}>
           <div className="lobby-operative" style={{ padding: '0 16px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ width: 32, height: 32, background: '#1f1330', border: '1px solid rgba(178,107,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎭</div>
             <div><div style={{ color: '#b26bff', fontWeight: 700, fontSize: 10 }}>OPERATIVE</div><div style={{ color: '#7d6b99', fontSize: 9 }}>{nickname.slice(0, 10).toUpperCase()}</div></div>
           </div>
           {/* Decentralized Vault — mobile only: listed under OPERATIVE (desktop shows the right-extreme vault panel) */}
-          <div className="sidebar-vault-card" onClick={() => { setNavTab('vault'); setMobileMenuOpen(false) }} style={{ margin: '0 12px 10px', padding: '8px 10px', cursor: 'pointer', background: '#241538', border: '1px solid rgba(178,107,255,0.14)', borderRadius: 6 }}>
+          <div className={`sidebar-vault-card${mobileMenuOpen ? '' : ' is-hidden'}`} onClick={() => { setNavTab('vault'); setMobileMenuOpen(false) }} style={{ margin: '0 12px 10px', padding: '8px 10px', cursor: 'pointer', background: '#241538', border: '1px solid rgba(178,107,255,0.14)', borderRadius: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 11 }}>💎</span>
               <span style={{ fontSize: 8.5, fontWeight: 700, color: '#f8fafc' }}>DECENTERILZIED VAULT</span>

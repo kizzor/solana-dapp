@@ -1053,6 +1053,12 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 }
 
 @media (max-width: 600px) {
+  .sidebar-vault-card:not(.is-hidden) {
+    display: block;
+  }
+}
+
+@media (max-width: 600px) {
   .lobby-vault-panel {
     display: none !important;
   }
