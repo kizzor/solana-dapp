@@ -1098,30 +1098,61 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 }
 
-.heist-drawer-key {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 22px;
-  height: 120px;
-  max-height: 45%;
-  /* Side-mounted mechanical key: keycap face + 5px travel depth */
-  background: linear-gradient(to bottom, #2d1f4a 0%, #1f1330 100%);
-  border: 1px solid #241538;
-  border-right: 5px solid #120a1f;
-  border-radius: 6px 0 0 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-  z-index: 22;
-  color: #b26bff;
-  user-select: none;
-  box-shadow: 0 0 10px rgba(178, 107, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease;
-  animation: gliderPulse 2.6s ease-in-out infinite;
+/* ── Mobile HUD-first: only terminal chat visible ── */
+@media (max-width: 600px) {
+  /* Hide vault panels on mobile */
+  .lobby-vault-panel {
+    display: none !important;
+  }
+  .sidebar-vault-card {
+    display: none !important;
+  }
+  .mobile-vault-status {
+    display: none !important;
+  }
+
+  /* Make lobby-operative-layout fill full width */
+  .lobby-operative-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Fix heist panel positioning on mobile */
+  .heist-panel {
+    position: fixed !important;
+    right: 8px !important;
+    top: auto !important;
+    bottom: 60px !important;
+    width: 200px !important;
+    max-height: 55vh !important;
+    z-index: 100 !important;
+  }
+
+  .heist-panel.heist-closed {
+    right: -220px !important;
+  }
+
+  /* Make heist list button float over the drawer area */
+  .heist-list-toggle-btn {
+    position: fixed !important;
+    right: 12px !important;
+    bottom: 16px !important;
+    z-index: 110 !important;
+    padding: 10px 14px !important;
+    font-size: 9px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 12px rgba(178,107,255,0.3) !important;
+    animation: floatBtnPulse 2s ease-in-out infinite;
+  }
+
+  /* Ensure chat log is fully visible */
+  .hud-chatlog {
+    background: rgba(2, 13, 26, 0.95) !important;
+  }
+}
+
+@keyframes floatBtnPulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 
 @keyframes gliderPulse {
@@ -1177,63 +1208,4 @@ button:disabled {
   cursor: default;
   top: 0;
   filter: none;
-}
-
-/* ── Mobile HUD-First Mode: Only TERMINAL//GLOBAL_HEIST visible ── */
-@media (max-width: 600px) {
-  /* Hide non-essential sections */
-  .lobby-topbar {
-    display: none !important;
-  }
-  .sidebar-vault-card {
-    display: none !important;
-  }
-  .mobile-vault-status {
-    display: none !important;
-  }
-  .lobby-vault-panel {
-    display: none !important;
-  }
-  .game-grid {
-    display: none !important;
-  }
-  .devices-section {
-    display: none !important;
-  }
-  .matrix-right-panel,
-  .matrix-right-divider {
-    display: none !important;
-  }
-
-  /* Hide operative layout by default on mobile */
-  .lobby-operative-layout {
-    display: none !important;
-  }
-
-  /* Show operative layout when mobile menu is open */
-  .lobby-operative-layout.is-visible {
-    display: flex !important;
-    position: fixed !important;
-    top: 56px !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 100vw !important;
-    height: calc(100vh - 56px) !important;
-    z-index: 55 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    background: rgba(10, 6, 18, 0.98) !important;
-  }
-
-  /* Make chat log fill the container when operative is shown */
-  .lobby-operative-layout.is-visible .lobby-hud-container {
-    width: 100% !important;
-    height: 100% !important;
-  }
-
-  .hud-chatlog {
-    background: rgba(2, 13, 26, 0.95) !important;
-  }
 }
