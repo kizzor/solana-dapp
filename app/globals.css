@@ -1205,15 +1205,32 @@ button:disabled {
     display: none !important;
   }
 
-  /* Make operative layout single column so HUD fills screen */
+  /* Hide operative layout by default on mobile */
   .lobby-operative-layout {
-    grid-template-columns: 1fr !important;
+    display: none !important;
   }
 
-  /* Show only the HUD chat container */
-  .lobby-hud-container {
-    flex: 1 !important;
-    min-height: 0 !important;
+  /* Show operative layout when mobile menu is open */
+  .lobby-sidebar.mobile-open ~ div .lobby-operative-layout {
+    display: flex !important;
+    position: fixed !important;
+    top: 56px !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: calc(100vh - 56px) !important;
+    z-index: 55 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: rgba(10, 6, 18, 0.98) !important;
+  }
+
+  /* Make chat log fill the container when operative is shown */
+  .lobby-sidebar.mobile-open ~ div .lobby-hud-container {
+    width: 100% !important;
+    height: 100% !important;
   }
 
   .hud-chatlog {
