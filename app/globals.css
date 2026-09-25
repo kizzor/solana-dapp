@@ -1181,11 +1181,8 @@ button:disabled {
 
 /* ── Mobile HUD-First Mode: Only TERMINAL//GLOBAL_HEIST visible ── */
 @media (max-width: 600px) {
-  /* Hide non-essential sections but keep layout flow */
+  /* Hide non-essential sections */
   .lobby-topbar {
-    display: none !important;
-  }
-  .lobby-operative-layout {
     display: none !important;
   }
   .sidebar-vault-card {
@@ -1206,6 +1203,11 @@ button:disabled {
   .matrix-right-panel,
   .matrix-right-divider {
     display: none !important;
+  }
+
+  /* Make operative layout single column so HUD fills screen */
+  .lobby-operative-layout {
+    grid-template-columns: 1fr !important;
   }
 
   /* Show only the HUD chat container */
