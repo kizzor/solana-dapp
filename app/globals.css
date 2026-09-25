@@ -1114,12 +1114,11 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   /* Make lobby-operative-layout fill full width */
   .lobby-operative-layout {
     grid-template-columns: 1fr !important;
-    width: 100vw !important;
   }
 
-  /* Make lobby-hud-container fill available space */
-  .lobby-hud-container {
-    min-height: 0 !important;
+  /* Ensure chat log is fully visible */
+  .hud-chatlog {
+    background: rgba(2, 13, 26, 0.95) !important;
   }
 }
 
