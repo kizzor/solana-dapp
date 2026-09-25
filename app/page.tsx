@@ -4093,10 +4093,11 @@ function Ransome() {
               mintToken={mintToken}
               setMintToken={setMintToken}
               onQuickMint={(count) => {
-                setMintCount(count)
+                setMintCount(count);
                 setTimeout(() => {
-                  mintDevices()
-                }, 100)
+                  mintDevices();
+                }, 100);
+                announce(`⚡ Quick minting ${count} devices`);
               }}
               mintCostLabel={mintCostLabel}
               chatRooms={chatRooms}
