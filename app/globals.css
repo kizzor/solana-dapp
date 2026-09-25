@@ -1098,48 +1098,30 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 }
 
-/* ── Mobile HUD-first: only terminal chat visible ── */
-@media (max-width: 600px) {
-  /* Hide vault panels on mobile */
-  .lobby-vault-panel {
-    display: none !important;
-  }
-  .sidebar-vault-card {
-    display: none !important;
-  }
-  .mobile-vault-status {
-    display: none !important;
-  }
-
-  /* Make lobby-operative-layout fill full width */
-  .lobby-operative-layout {
-    grid-template-columns: 1fr !important;
-  }
-
-  /* Ensure chat log is fully visible */
-  .hud-chatlog {
-    background: rgba(2, 13, 26, 0.95) !important;
-  }
-
-  /* Reset heist panel to normal flow on mobile */
-  .heist-panel {
-    position: relative !important;
-    right: auto !important;
-    top: auto !important;
-    bottom: auto !important;
-    width: 100% !important;
-    max-height: 40vh !important;
-    margin-top: 10px !important;
-  }
-
-  .heist-panel.heist-closed {
-    right: auto !important;
-  }
-}
-
-@keyframes floatBtnPulse {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+.heist-drawer-key {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 120px;
+  max-height: 45%;
+  /* Side-mounted mechanical key: keycap face + 5px travel depth */
+  background: linear-gradient(to bottom, #2d1f4a 0%, #1f1330 100%);
+  border: 1px solid #241538;
+  border-right: 5px solid #120a1f;
+  border-radius: 6px 0 0 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  z-index: 22;
+  color: #b26bff;
+  user-select: none;
+  box-shadow: 0 0 10px rgba(178, 107, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease;
+  animation: gliderPulse 2.6s ease-in-out infinite;
 }
 
 @keyframes gliderPulse {

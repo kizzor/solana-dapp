@@ -2014,7 +2014,7 @@ function LobbyMapWithOverlays({
               <button
                 onClick={() => setHeistPanelOpen(o => !o)}
                 style={{
-                  padding: '4px 8px',
+                  padding: '3px 7px',
                   background: heistPanelOpen ? 'rgba(236,72,153,0.2)' : 'rgba(0,184,255,0.12)',
                   border: `1px solid ${heistPanelOpen ? '#ec4899' : '#c084fc'}`,
                   borderRadius: 4,
