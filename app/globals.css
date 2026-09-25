@@ -970,7 +970,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     top: 56px;
     left: 0;
     right: 0;
-    z-index: 45;
+    z-index: 60;
     width: 100%;
     min-height: auto;
     max-height: calc(100vh - 56px);
