@@ -4047,7 +4047,7 @@ function Ransome() {
         </div>
       )}
       <div style={{ display: 'flex', paddingTop: 56 }}>
-        <div className={`lobby-sidebar${mobileMenuOpen ? ' mobile-open' : ''}`} style={{ width: 200, minHeight: 'calc(100vh - 56px)', background: '#150d24', borderRight: '1px solid rgba(178,107,255,0.08)', display: mobileMenuOpen ? 'block' : 'none', flexDirection: 'column', padding: '16px 0', flexShrink: 0 }}>
+        <div className={`lobby-sidebar${mobileMenuOpen ? ' mobile-open' : ''}`} style={{ width: 200, minHeight: 'calc(100vh - 56px)', background: '#150d24', borderRight: '1px solid rgba(178,107,255,0.08)', display: 'flex', flexDirection: 'column', padding: '16px 0', flexShrink: 0 }}>
           <div className="lobby-operative" style={{ padding: '0 16px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ width: 32, height: 32, background: '#1f1330', border: '1px solid rgba(178,107,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎭</div>
             <div><div style={{ color: '#b26bff', fontWeight: 700, fontSize: 10 }}>OPERATIVE</div><div style={{ color: '#7d6b99', fontSize: 9 }}>{nickname.slice(0, 10).toUpperCase()}</div></div>
