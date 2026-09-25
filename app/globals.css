@@ -1100,49 +1100,26 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
 /* ── Mobile HUD-first: only terminal chat visible ── */
 @media (max-width: 600px) {
-  /* Hide only the vault/operative sections, keep lobby-hud-container */
-  .lobby-vault-panel,
-  .sidebar-vault-card,
-  .mobile-vault-status,
-  .game-grid,
-  .devices-section,
-  .matrix-right-panel {
+  /* Hide vault panels on mobile */
+  .lobby-vault-panel {
+    display: none !important;
+  }
+  .sidebar-vault-card {
+    display: none !important;
+  }
+  .mobile-vault-status {
     display: none !important;
   }
 
-  /* Make lobby-hud-container fill the entire viewport */
+  /* Make lobby-operative-layout fill full width */
+  .lobby-operative-layout {
+    grid-template-columns: 1fr !important;
+    width: 100vw !important;
+  }
+
+  /* Make lobby-hud-container fill available space */
   .lobby-hud-container {
-    position: fixed !important;
-    top: 56px !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 100vw !important;
-    height: calc(100vh - 56px) !important;
-    z-index: 9998 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    background: rgba(2, 13, 26, 0.95) !important;
-  }
-
-  /* Make hud-chatlog full screen and opaque */
-  .hud-chatlog {
-    position: relative !important;
-    width: 100vw !important;
-    height: 100% !important;
-    padding: 10px !important;
-    overflow-y: auto !important;
-    background: rgba(2, 13, 26, 0.95) !important;
-  }
-
-  /* Ensure app-header stays on top */
-  .app-header {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    z-index: 9999 !important;
+    min-height: 0 !important;
   }
 }
 
