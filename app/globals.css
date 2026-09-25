@@ -1116,6 +1116,21 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     grid-template-columns: 1fr !important;
   }
 
+  /* Fix heist panel positioning on mobile */
+  .heist-panel {
+    position: fixed !important;
+    right: 8px !important;
+    top: auto !important;
+    bottom: 40px !important;
+    width: 200px !important;
+    max-height: 60vh !important;
+    z-index: 100 !important;
+  }
+
+  .heist-panel.heist-closed {
+    right: -220px !important;
+  }
+
   /* Ensure chat log is fully visible */
   .hud-chatlog {
     background: rgba(2, 13, 26, 0.95) !important;
