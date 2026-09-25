@@ -2013,16 +2013,18 @@ function LobbyMapWithOverlays({
               {/* Mobile toggle for Heist List */}
               <button
                 onClick={() => setHeistPanelOpen(o => !o)}
+                className="heist-list-toggle-btn"
                 style={{
-                  padding: '3px 7px',
-                  background: heistPanelOpen ? 'rgba(236,72,153,0.2)' : 'rgba(0,184,255,0.12)',
+                  padding: '6px 10px',
+                  background: heistPanelOpen ? 'rgba(236,72,153,0.25)' : 'rgba(0,184,255,0.15)',
                   border: `1px solid ${heistPanelOpen ? '#ec4899' : '#c084fc'}`,
-                  borderRadius: 4,
+                  borderRadius: 6,
                   color: heistPanelOpen ? '#ec4899' : '#c084fc',
-                  fontSize: 7.5,
+                  fontSize: 8,
                   fontWeight: 700,
                   cursor: 'pointer',
                   fontFamily: 'DM Mono, monospace',
+                  boxShadow: heistPanelOpen ? '0 0 12px rgba(236,72,153,0.4)' : '0 0 8px rgba(0,184,255,0.3)',
                 }}
               >
                 👥 HEIST LIST ({operatives.length})
