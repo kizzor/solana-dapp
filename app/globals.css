@@ -1181,52 +1181,40 @@ button:disabled {
 
 /* ── Mobile HUD-First Mode: Only TERMINAL//GLOBAL_HEIST visible ── */
 @media (max-width: 600px) {
-  /* Hide all non-essential sections */
-  .lobby-topbar,
-  .lobby-operative-layout,
-  .sidebar-vault-card,
-  .mobile-vault-status,
-  .lobby-vault-panel,
-  .game-grid,
-  .devices-section,
+  /* Hide non-essential sections but keep layout flow */
+  .lobby-topbar {
+    display: none !important;
+  }
+  .lobby-operative-layout {
+    display: none !important;
+  }
+  .sidebar-vault-card {
+    display: none !important;
+  }
+  .mobile-vault-status {
+    display: none !important;
+  }
+  .lobby-vault-panel {
+    display: none !important;
+  }
+  .game-grid {
+    display: none !important;
+  }
+  .devices-section {
+    display: none !important;
+  }
   .matrix-right-panel,
   .matrix-right-divider {
     display: none !important;
   }
 
-  /* Make lobby-hud-container fill the screen */
+  /* Show only the HUD chat container */
   .lobby-hud-container {
-    position: fixed !important;
-    top: 56px !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 100vw !important;
-    height: calc(100vh - 56px) !important;
-    z-index: 50 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    background: #0a0612 !important;
+    flex: 1 !important;
+    min-height: 0 !important;
   }
 
-  /* Make chat log fill the container */
   .hud-chatlog {
-    position: relative !important;
-    width: 100% !important;
-    height: 100% !important;
-    padding: 10px !important;
-    overflow-y: auto !important;
     background: rgba(2, 13, 26, 0.95) !important;
-    margin: 0 !important;
-  }
-
-  /* Keep header on top */
-  .app-header {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    z-index: 60 !important;
   }
 }
