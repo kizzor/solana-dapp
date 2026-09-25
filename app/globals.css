@@ -1211,7 +1211,7 @@ button:disabled {
   }
 
   /* Show operative layout when mobile menu is open */
-  .lobby-sidebar.mobile-open ~ div .lobby-operative-layout {
+  .lobby-operative-layout.is-visible {
     display: flex !important;
     position: fixed !important;
     top: 56px !important;
@@ -1228,7 +1228,7 @@ button:disabled {
   }
 
   /* Make chat log fill the container when operative is shown */
-  .lobby-sidebar.mobile-open ~ div .lobby-hud-container {
+  .lobby-operative-layout.is-visible .lobby-hud-container {
     width: 100% !important;
     height: 100% !important;
   }

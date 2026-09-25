@@ -4079,7 +4079,8 @@ function Ransome() {
             {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>ENTER MATRIX</button>) : DEV_MODE ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX (DEV)</button>) : (<div style={{ padding: '8px', background: 'rgba(178,107,255,0.06)', border: '1px solid rgba(178,107,255,0.2)', color: '#b26bff', fontSize: 9, textAlign: 'center' }}>INITIALIZE_HEIST</div>)}
           </div>
         </div>
-        {navTab === 'operative' && <div className="lobby-operative-layout" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: 16, alignItems: 'start' }}>
+        {/* Operative layout - always render but control visibility with CSS */}
+        <div className={`lobby-operative-layout${mobileMenuOpen ? ' is-visible' : ''}`} style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: 16, alignItems: 'start' }}>
           <div className="lobby-hud-container" style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
             <LobbyMapWithOverlays
               nickname={nickname}
@@ -4129,7 +4130,7 @@ function Ransome() {
               <div style={{ fontSize: 20, fontWeight: 800, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#fff' }}>{fmtTime(lobbyCountdown)}</div>
             </div>
           </div>
-        </div>}
+        </div>
         {navTab === 'missions' && <MissionsDemo />}
         {navTab === 'vault' && (
           <div style={{ flex: 1, padding: '20px 16px', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
