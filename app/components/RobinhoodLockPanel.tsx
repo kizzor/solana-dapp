@@ -82,7 +82,7 @@ export function RobinhoodLockPanel({
     }
     try {
       setLoading(true);
-      setMsg(`⚡ Minting ${consoleCount} console(s) via ${selectedToken}...`);
+      setMsg(`◈ Minting ${consoleCount} console(s) via ${selectedToken}...`);
       
       const grids: number[][][] = [];
       for (let i = 0; i < consoleCount; i++) {
@@ -117,7 +117,7 @@ export function RobinhoodLockPanel({
       setLoading(true);
       setMsg(`Minting Test X with ${testEthInput} Test ETH...`);
       await mintTestXWithEth(testEthInput);
-      setMsg('⚡ Test X tokens minted successfully!');
+      setMsg('◈ Test X tokens minted successfully!');
     } catch (e: any) {
       setMsg(`❌ Mint failed: ${e?.shortMessage || e?.message || e}`);
     } finally {
@@ -432,7 +432,7 @@ export function RobinhoodLockPanel({
                   cursor: 'pointer',
                 }}
               >
-                ⚡ MINT WITH TEST ETH
+                MINT WITH TEST ETH
               </button>
             </div>
             {onSkipLobby && (

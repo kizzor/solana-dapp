@@ -348,7 +348,7 @@ function DemoPanel() {
           const nc = flat.filter(c => c.clicked).length
           setDemoWinStates(ws => {
             const nw = { ...ws }
-            if (nc >= 5 && !nw.EARLY_FIVE.claimable) { nw.EARLY_FIVE = { ...nw.EARLY_FIVE, claimable: true }; setMsgs(m => [...m, '⚡ EARLY FIVE READY!']) }
+            if (nc >= 5 && !nw.EARLY_FIVE.claimable) { nw.EARLY_FIVE = { ...nw.EARLY_FIVE, claimable: true }; setMsgs(m => [...m, '◈ EARLY FIVE READY!']) }
             if (nd.grid[0].filter(c => c.num).every(c => c.clicked) && !nw.TOP_LINE.claimable) { nw.TOP_LINE = { ...nw.TOP_LINE, claimable: true }; setMsgs(m => [...m, '🔵 TOP LINE READY!']) }
             if (nd.grid[1].filter(c => c.num).every(c => c.clicked) && !nw.MIDDLE_LINE.claimable) { nw.MIDDLE_LINE = { ...nw.MIDDLE_LINE, claimable: true }; setMsgs(m => [...m, '🟢 MIDDLE LINE READY!']) }
             if (nd.grid[2].filter(c => c.num).every(c => c.clicked) && !nw.BOTTOM_LINE.claimable) { nw.BOTTOM_LINE = { ...nw.BOTTOM_LINE, claimable: true }; setMsgs(m => [...m, '🟡 BOTTOM LINE READY!']) }
@@ -703,7 +703,7 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
       ) : (
         <div style={{ margin: '3px 5px 0', background: '#070310', border: '1px solid #150d24', borderRadius: 5, padding: '4px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
           <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>Disconnected</span>
-          <button className="keyboard-key keyboard-key-accent" onClick={() => onActivate(device.id)} style={{ borderRadius: 4, padding: '3px 7px', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, cursor: 'pointer' }}>ACTIVATE ⚡</button>
+          <button className="keyboard-key keyboard-key-accent" onClick={() => onActivate(device.id)} style={{ borderRadius: 4, padding: '3px 7px', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, cursor: 'pointer' }}>ACTIVATE</button>
         </div>
       )}
       {/* Grid */}
@@ -1275,6 +1275,9 @@ const INITIAL_OPERATIVES: OperativeUser[] = [
 ]
 
 // VBGIOR Neon Color Band Palette
+// A–Z rail letters for the heist list quick-jump
+const AZ_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+
 const NEON_PALETTE = [
   { name: 'Violet', hex: '#a855f7' },
   { name: 'Blue', hex: '#c084fc' },
@@ -1302,12 +1305,18 @@ function SmallDmTerminal({
   nickname,
   isBlocked,
   onToggleBlock,
+  posStyle,
+  active,
+  onFocus,
 }: {
   targetUser: string;
   onClose: () => void;
   nickname: string;
   isBlocked: boolean;
   onToggleBlock: (name: string) => void;
+  posStyle: React.CSSProperties;
+  active: boolean;
+  onFocus: () => void;
 }) {
   const [minimized, setMinimized] = useState(false)
   const [messages, setMessages] = useState<Array<{ sender: string; text: string; color?: string; img?: string; audio?: string }>>([
@@ -1369,18 +1378,17 @@ function SmallDmTerminal({
 
   return (
     <div
+      onClick={onFocus}
       style={{
-        position: 'absolute',
-        right: 230,
-        bottom: 12,
-        width: 320,
+        ...posStyle,
+        width: 'min(270px, calc(100vw - 32px))',
         background: 'rgba(3,10,20,0.96)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
-        border: '1px solid #ec4899',
+        border: active ? '1px solid #ec4899' : '1px solid rgba(236,72,153,0.35)',
         borderRadius: 8,
-        boxShadow: '0 0 24px rgba(236,72,153,0.35)',
-        zIndex: 50,
+        boxShadow: active ? '0 0 24px rgba(236,72,153,0.35)' : 'none',
+        zIndex: active ? 52 : 50,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -1428,7 +1436,7 @@ function SmallDmTerminal({
       {!minimized && (
         <>
           {/* Chat Messages */}
-          <div ref={listRef} style={{ height: 160, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, background: '#0a0612' }}>
+          <div ref={listRef} style={{ height: 96, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 5, background: '#0a0612' }}>
             {messages.map((m, i) => (
               <div key={i} style={{ fontSize: 8, lineHeight: 1.4 }}>
                 <span style={{ color: m.color || '#b26bff', fontWeight: 700 }}>[{m.sender}]: </span>
@@ -1440,15 +1448,14 @@ function SmallDmTerminal({
           </div>
 
           {/* Color strip for DM */}
-          <div style={{ display: 'flex', gap: 4, padding: '4px 8px', background: 'rgba(5,15,25,0.9)', borderTop: '1px solid rgba(236,72,153,0.2)', alignItems: 'center' }}>
-            <span style={{ fontSize: 7, color: '#a99bc4' }}>COLOR:</span>
+          <div style={{ display: 'flex', gap: 4, padding: '3px 8px', background: 'rgba(5,15,25,0.9)', borderTop: '1px solid rgba(236,72,153,0.2)', alignItems: 'center' }}>
             {NEON_PALETTE.map(p => (
               <div
                 key={p.hex}
                 onClick={() => setDmColor(p.hex)}
                 style={{
-                  width: 10,
-                  height: 10,
+                  width: 9,
+                  height: 9,
                   borderRadius: 2,
                   background: p.hex,
                   cursor: 'pointer',
@@ -1464,7 +1471,7 @@ function SmallDmTerminal({
             <input ref={fileInputRef} type="file" accept="image/*,audio/*" multiple onChange={handleFileUpload} style={{ display: 'none' }} />
             <button
               onClick={() => fileInputRef.current?.click()}
-              style={{ background: 'transparent', border: 'none', borderRight: '1px solid rgba(236,72,153,0.2)', padding: '6px 8px', color: '#ec4899', cursor: 'pointer', fontSize: 10 }}
+              style={{ background: 'transparent', border: 'none', borderRight: '1px solid rgba(236,72,153,0.2)', padding: '4px 8px', color: '#ec4899', cursor: 'pointer', fontSize: 10 }}
               title="Insert Image/Audio"
             >
               📎
@@ -1475,12 +1482,12 @@ function SmallDmTerminal({
               onKeyDown={e => e.key === 'Enter' && sendDm()}
               placeholder={isBlocked ? "USER BLOCKED" : "SEND ENCRYPTED DM..."}
               disabled={isBlocked}
-              style={{ flex: 1, background: 'transparent', border: 'none', padding: '6px 8px', fontFamily: 'DM Mono,monospace', fontSize: 8, color: dmColor, outline: 'none' }}
+              style={{ flex: 1, background: 'transparent', border: 'none', padding: '4px 8px', fontFamily: 'DM Mono,monospace', fontSize: 8, color: dmColor, outline: 'none' }}
             />
             <button
               onClick={sendDm}
               disabled={isBlocked}
-              style={{ background: 'rgba(236,72,153,0.2)', border: 'none', borderLeft: '1px solid rgba(236,72,153,0.3)', padding: '6px 10px', color: '#ec4899', cursor: isBlocked ? 'default' : 'pointer', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700 }}
+              style={{ background: 'rgba(236,72,153,0.2)', border: 'none', borderLeft: '1px solid rgba(236,72,153,0.3)', padding: '4px 8px', color: '#ec4899', cursor: isBlocked ? 'default' : 'pointer', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700 }}
             >
               TX
             </button>
@@ -1500,7 +1507,7 @@ function MintedConsolesModal({
   onClose: () => void;
 }) {
   return (
-    <div style={{
+    <div className="fmk-overlay" style={{
       position: 'fixed',
       inset: 0,
       background: 'rgba(1,8,16,0.88)',
@@ -1620,7 +1627,9 @@ function LobbyMapWithOverlays({
   onCreateRoom: (room: ChatRoom) => void;
   onCloseRoom: (id: string) => void;
 }) {
-  const [activeDmUser, setActiveDmUser] = useState<string | null>(null)
+  const [activeDmUsers, setActiveDmUsers] = useState<string[]>([])
+  const [focusedDmUser, setFocusedDmUser] = useState<string | null>(null)
+  const [dmPositions, setDmPositions] = useState<Record<string, React.CSSProperties>>({})
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())
   const [operatives, setOperatives] = useState<OperativeUser[]>(INITIAL_OPERATIVES)
   const [showConsolesModal, setShowConsolesModal] = useState(false)
@@ -1640,9 +1649,41 @@ function LobbyMapWithOverlays({
   ])
   const [lasers, setLasers] = useState<Array<{ id: string; x1: number; y1: number; x2: number; y2: number; color: string; opacity: number }>>([])
 
-  const [selectedOperativeId, setSelectedOperativeId] = useState<string | null>(null)
+  const openDm = (name: string) => {
+    setActiveDmUsers(prev => prev.includes(name) ? prev : [...prev, name])
+    setFocusedDmUser(name)
+    setDmPositions(prev => {
+      if (prev[name]) return prev
+      const container = chatLogRef.current
+      const cw = container?.clientWidth ?? 360
+      const ch = container?.clientHeight ?? 500
+      const boxW = Math.min(270, cw - 24)
+      const boxH = 208
+      const x = 16 + Math.random() * Math.max(1, cw - boxW - 32)
+      const y = 16 + Math.random() * Math.max(1, ch - boxH - 90)
+      return { ...prev, [name]: { left: Math.round(x), top: Math.round(y) } }
+    })
+  }
+  const closeDm = (name: string) => {
+    setActiveDmUsers(prev => prev.filter(u => u !== name))
+    setFocusedDmUser(f => f === name ? null : f)
+  }
+  const [operativeSearchOpen, setOperativeSearchOpen] = useState(false)
+  const [operativeSearch, setOperativeSearch] = useState('')
+  const [mintTokenMenuOpen, setMintTokenMenuOpen] = useState(false)
   const [lastAcquired, setLastAcquired] = useState<number | null>(null)
   const [showAcquiredAnim, setShowAcquiredAnim] = useState(false)
+  const [selectedOperativeId, setSelectedOperativeId] = useState<string | null>(null)
+  const chatLogRef = useRef<HTMLDivElement | null>(null)
+
+  // A–Z rail: scroll the heist list to the first operative starting with the given letter
+  const jumpToLetter = (letter: string) => {
+    const container = chatLogRef.current
+    if (!container) return
+    const list = container.parentElement
+    const target = list?.querySelector(`[data-opname^="${letter}"]`) as HTMLElement | null
+    if (target) target.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }
 
   // Caliber Roller state
   const handleRollerWheel = (e: React.WheelEvent) => {
@@ -1906,7 +1947,7 @@ function LobbyMapWithOverlays({
                 padding: '2px 8px',
                 animation: 'ledBlink 2.5s infinite',
               }}>
-                <span style={{ fontSize: 8 }}>⚡</span>
+                <span style={{ fontSize: 8 }}>◈</span>
                 <span style={{ fontSize: 7.5, color: '#b26bff', fontWeight: 700 }}>
                   [{mintNotifications[0].heistId}] <span style={{ color: '#fff' }}>{mintNotifications[0].username}</span> MINTED <span style={{ color: '#ffd166' }}>{mintNotifications[0].count} CONSOLES</span>!
                 </span>
@@ -1987,7 +2028,7 @@ function LobbyMapWithOverlays({
                 )}
               </div>
 
-              {/* ⚡ ENTER THE MATRIX Button */}
+              {/* ENTER THE MATRIX Button */}
               <button
                 onClick={onEnterGame}
                 style={{
@@ -2007,24 +2048,26 @@ function LobbyMapWithOverlays({
                 }}
                 title="Enter Hack Matrix"
               >
-                <span>⚡</span> MATRIX →
+                <span>◈</span> MATRIX →
               </button>
 
-              {/* Mobile toggle for Heist List */}
+              {/* Heist List toggle — the vertical drawer key on the extreme left edge is the visual control;
+                  this button stays for accessibility but is visually hidden */}
               <button
                 onClick={() => setHeistPanelOpen(o => !o)}
                 className="heist-list-toggle-btn"
+                aria-label={heistPanelOpen ? 'Close heist list' : 'Open heist list'}
+                aria-expanded={heistPanelOpen}
                 style={{
-                  padding: '6px 10px',
-                  background: heistPanelOpen ? 'rgba(236,72,153,0.25)' : 'rgba(0,184,255,0.15)',
-                  border: `1px solid ${heistPanelOpen ? '#ec4899' : '#c084fc'}`,
-                  borderRadius: 6,
-                  color: heistPanelOpen ? '#ec4899' : '#c084fc',
-                  fontSize: 8,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontFamily: 'DM Mono, monospace',
-                  boxShadow: heistPanelOpen ? '0 0 12px rgba(236,72,153,0.4)' : '0 0 8px rgba(0,184,255,0.3)',
+                  position: 'absolute',
+                  width: 1,
+                  height: 1,
+                  padding: 0,
+                  margin: -1,
+                  overflow: 'hidden',
+                  clip: 'rect(0,0,0,0)',
+                  whiteSpace: 'nowrap',
+                  border: 0,
                 }}
               >
                 👥 HEIST LIST ({operatives.length})
@@ -2037,7 +2080,7 @@ function LobbyMapWithOverlays({
             
             {/* Transparent Chat Log Area (Map is fully visible through here) */}
             <div
-              ref={scrollRef}
+              ref={el => { chatLogRef.current = el; scrollRef.current = el }}
               className={`hud-chatlog${heistPanelOpen ? '' : ' heist-closed'}`}
               style={{
                 flex: 1,
@@ -2091,7 +2134,7 @@ function LobbyMapWithOverlays({
               ))}
             </div>
 
-            {/* ── Extreme Right: Heist List Section with Quick Mint Tab above ── */}
+            {/* ── Extreme Right: Quick Mint (compact) + Heist List with A–Z rail ── */}
             <div
               className={`heist-panel${heistPanelOpen ? '' : ' heist-closed'}`}
               style={{
@@ -2099,7 +2142,7 @@ function LobbyMapWithOverlays({
                 right: 12,
                 top: 12,
                 bottom: 12,
-                width: 220,
+                width: 210,
                 background: 'rgba(17,24,39, 0.88)',
                 backdropFilter: 'blur(10px)',
                 WebkitBackdropFilter: 'blur(10px)',
@@ -2122,26 +2165,39 @@ function LobbyMapWithOverlays({
                 gap: 5,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 8, fontWeight: 800, color: '#b26bff', letterSpacing: '0.05em' }}>⚡ QUICK MINT CONSOLE</span>
-                  <span style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 4px', borderRadius: 3 }}>
-                    {mintToken || 'ETH'}
-                  </span>
+                  <span style={{ fontSize: 7.5, fontWeight: 800, color: '#b26bff', letterSpacing: '0.05em' }}>QUICK MINT</span>
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setMintTokenMenuOpen(o => !o)}
+                      aria-expanded={mintTokenMenuOpen}
+                      aria-label="Select mint token"
+                      style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 5px', borderRadius: 3, border: '1px solid rgba(255,209,102,0.25)', cursor: 'pointer', fontFamily: 'DM Mono,monospace' }}
+                    >{mintToken || 'ETH'} ▾</button>
+                    {mintTokenMenuOpen && (
+                      <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 3, background: '#0e0819', border: '1px solid rgba(255,209,102,0.35)', borderRadius: 4, zIndex: 60, minWidth: 64, boxShadow: '0 6px 18px rgba(0,0,0,0.6)' }}>
+                        {(['ETH', 'USDG', 'USDC', 'USDT', 'X'] as const).map(t => (
+                          <div key={t} onClick={() => { if (setMintToken) setMintToken(t); setMintTokenMenuOpen(false) }} style={{ padding: '3px 8px', fontSize: 7.5, cursor: 'pointer', color: (mintToken || 'ETH') === t ? '#ffd166' : '#a99bc4', fontWeight: (mintToken || 'ETH') === t ? 800 : 400, background: (mintToken || 'ETH') === t ? 'rgba(255,209,102,0.1)' : 'transparent' }}>{t}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 4, alignItems: 'stretch' }}>
+                <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
                   <button
                     className="keyboard-key keyboard-key-accent"
                     onClick={() => onQuickMint ? onQuickMint(quickMintCount) : null}
                     style={{
                       flex: 1,
-                      padding: '8px 14px',
-                      fontSize: 10,
-                      borderRadius: '6px 0 0 6px',
+                      height: 26,
+                      padding: '2px 8px',
+                      fontSize: 9,
+                      borderRadius: '5px 0 0 5px',
                       whiteSpace: 'nowrap',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 6
+                      gap: 5
                     }}
                   >
                     <span>MINT {quickMintCount}×</span>
@@ -2151,17 +2207,18 @@ function LobbyMapWithOverlays({
                   <div
                     onWheel={handleRollerWheel}
                     style={{
-                      width: 46,
+                      width: 40,
+                      height: 40,
                       background: '#150d24',
                       border: '1px solid #b26bff40',
                       borderLeft: 'none',
-                      borderRadius: '0 6px 6px 0',
+                      borderRadius: '0 5px 5px 0',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 3,
-                      padding: '4px 2px',
+                      gap: 2,
+                      padding: '2px',
                       userSelect: 'none'
                     }}
                     title="▲ / ▼ keys or scroll to change amount"
@@ -2172,15 +2229,15 @@ function LobbyMapWithOverlays({
                       onClick={() => setQuickMintCount(c => Math.min(20, c + 1))}
                       disabled={quickMintCount >= 20}
                       style={{
-                        width: 28,
-                        height: 16,
+                        width: 22,
+                        height: 13,
                         padding: 0,
                         background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
                         border: '1px solid #b26bff55',
                         borderTop: '1px solid #b26bffaa',
-                        borderRadius: 4,
+                        borderRadius: 3,
                         color: '#b26bff',
-                        fontSize: 8,
+                        fontSize: 7,
                         fontWeight: 800,
                         lineHeight: 1,
                         cursor: 'pointer',
@@ -2189,22 +2246,22 @@ function LobbyMapWithOverlays({
                         justifyContent: 'center'
                       }}
                     >▲</button>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#b26bff', fontFamily: 'DM Mono,monospace', lineHeight: 1 }}>{quickMintCount}</div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#b26bff', fontFamily: 'DM Mono,monospace', lineHeight: 1 }}>{quickMintCount}</div>
                     <button
                       className="keyboard-key keyboard-key-sm"
                       aria-label="Decrease mint amount"
                       onClick={() => setQuickMintCount(c => Math.max(1, c - 1))}
                       disabled={quickMintCount <= 1}
                       style={{
-                        width: 28,
-                        height: 16,
+                        width: 22,
+                        height: 13,
                         padding: 0,
                         background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
                         border: '1px solid #b26bff55',
                         borderBottom: '1px solid #b26bffaa',
-                        borderRadius: 4,
+                        borderRadius: 3,
                         color: '#b26bff',
-                        fontSize: 8,
+                        fontSize: 7,
                         fontWeight: 800,
                         lineHeight: 1,
                         cursor: 'pointer',
@@ -2217,53 +2274,82 @@ function LobbyMapWithOverlays({
                 </div>
               </div>
 
-              {/* Heist List Header */}
-              <div style={{ padding: '6px 8px', background: 'rgba(14,8,25,0.98)', borderBottom: '1px solid rgba(178,107,255,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 8.5, fontWeight: 700, color: '#b26bff' }}>◈ HEIST LIST</span>
-                <span style={{ fontSize: 7, color: '#a78bfa', background: 'rgba(167,139,250,0.12)', padding: '1px 5px', borderRadius: 3 }}>{operatives.length} ACTIVE</span>
+              {/* Heist List Header — search icon swaps the count for an inline search bar */}
+              <div style={{ padding: '4px 6px', background: 'rgba(14,8,25,0.98)', borderBottom: '1px solid rgba(178,107,255,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
+                {operativeSearchOpen ? (
+                  <input
+                    autoFocus
+                    value={operativeSearch}
+                    onChange={e => setOperativeSearch(e.target.value)}
+                    placeholder="SEARCH OPERATIVE..."
+                    onKeyDown={e => { if (e.key === 'Escape') { setOperativeSearchOpen(false); setOperativeSearch('') } }}
+                    style={{ flex: 1, minWidth: 0, background: '#150d24', border: '1px solid #b26bff55', borderRadius: 4, padding: '2px 5px', fontSize: 7.5, fontFamily: 'DM Mono,monospace', color: '#f8fafc', outline: 'none' }}
+                  />
+                ) : (
+                  <span style={{ fontSize: 7.5, fontWeight: 700, color: '#b26bff' }}>◈ HEIST LIST</span>
+                )}
+                {operativeSearchOpen ? (
+                  <button
+                    onClick={() => { setOperativeSearchOpen(false); setOperativeSearch('') }}
+                    aria-label="Close operative search"
+                    style={{ background: 'transparent', border: '1px solid #241538', borderRadius: 3, padding: '1px 4px', fontSize: 7, color: '#a99bc4', cursor: 'pointer' }}
+                  >✕</button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setOperativeSearchOpen(true)}
+                      aria-label="Search operatives"
+                      title="Search operatives"
+                      style={{ background: 'rgba(167,139,250,0.12)', border: 'none', borderRadius: 3, padding: '1px 4px', fontSize: 7, color: '#a78bfa', cursor: 'pointer' }}
+                    >🔍</button>
+                    <span style={{ fontSize: 6.5, color: '#a78bfa', background: 'rgba(167,139,250,0.12)', padding: '1px 4px', borderRadius: 3 }}>{operatives.length} ACTIVE</span>
+                  </>
+                )}
               </div>
 
-              {/* Operatives user list */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '6px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {operatives.map(op => {
+              {/* Operatives user list with A–Z scroll rail */}
+              <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '4px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {operatives.filter(op => op.name.toLowerCase().includes(operativeSearch.trim().toLowerCase())).map(op => {
                   const isBlocked = blockedUsers.has(op.name)
-                  const isTargetingDm = activeDmUser === op.name
+                  const isTargetingDm = activeDmUsers.includes(op.name)
                   return (
                     <div
                       key={op.id}
+                      data-opname={op.name}
                       onClick={() => setSelectedOperativeId(op.id === selectedOperativeId ? null : op.id)}
                       style={{
-                        padding: '5px 7px',
+                        padding: '3px 5px',
                         background: isBlocked ? 'rgba(255,92,138,0.08)' : isTargetingDm ? 'rgba(236,72,153,0.1)' : 'rgba(10,22,38,0.6)',
                         border: `1px solid ${isBlocked ? 'rgba(255,92,138,0.3)' : isTargetingDm ? '#ec4899' : 'rgba(51,65,85,0.4)'}`,
-                        borderRadius: 5,
+                        borderRadius: 4,
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 3,
+                        gap: 2,
                         cursor: 'pointer',
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: op.status === 'online' ? '#a78bfa' : op.status === 'in_heist' ? '#f59e0b' : '#c084fc' }} />
-                          <span style={{ fontSize: 7.5, fontWeight: 700, color: isBlocked ? '#ff5c8a' : '#f8fafc', textDecoration: isBlocked ? 'line-through' : 'none' }}>{op.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <div style={{ width: 3.5, height: 3.5, borderRadius: '50%', background: op.status === 'online' ? '#a78bfa' : op.status === 'in_heist' ? '#f59e0b' : '#c084fc', flexShrink: 0 }} />
+                          <span style={{ fontSize: 6.5, fontWeight: 700, color: isBlocked ? '#ff5c8a' : '#f8fafc', textDecoration: isBlocked ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
                         </div>
-                        <span style={{ fontSize: 7, color: '#a99bc4' }}>{op.devices} devs</span>
+                        <span style={{ fontSize: 6, color: '#a99bc4', flexShrink: 0 }}>{op.devices} devs</span>
                       </div>
 
                       {/* Actions: DM & Block (Only visible if selected) */}
                       {selectedOperativeId === op.id && (
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 1 }}>
+                        <div style={{ display: 'flex', gap: 3, justifyContent: 'flex-end', marginTop: 1 }}>
                           <button
-                            onClick={() => setActiveDmUser(op.name)}
+                            onClick={() => openDm(op.name)}
                             disabled={isBlocked}
                             style={{
-                              padding: '2px 5px',
+                              padding: '1px 4px',
                               background: 'rgba(236,72,153,0.15)',
                               border: '1px solid rgba(236,72,153,0.35)',
                               borderRadius: 3,
                               color: isBlocked ? '#7d6b99' : '#ec4899',
-                              fontSize: 7,
+                              fontSize: 6.5,
                               fontWeight: 700,
                               cursor: isBlocked ? 'default' : 'pointer',
                             }}
@@ -2273,12 +2359,12 @@ function LobbyMapWithOverlays({
                           <button
                             onClick={() => toggleBlock(op.name)}
                             style={{
-                              padding: '2px 5px',
+                              padding: '1px 4px',
                               background: isBlocked ? 'rgba(255,92,138,0.2)' : 'rgba(125,107,153,0.1)',
                               border: `1px solid ${isBlocked ? '#ff5c8a' : 'rgba(125,107,153,0.3)'}`,
                               borderRadius: 3,
                               color: isBlocked ? '#ff5c8a' : '#7d6b99',
-                              fontSize: 7,
+                              fontSize: 6.5,
                               fontWeight: 700,
                               cursor: 'pointer',
                             }}
@@ -2290,22 +2376,56 @@ function LobbyMapWithOverlays({
                     </div>
                   )
                 })}
-              </div>
-
-              <div style={{ padding: '4px 6px', borderTop: '1px solid rgba(178,107,255,0.15)', background: 'rgba(14,8,25,0.98)', textAlign: 'center', fontSize: 6.5, color: '#a99bc4' }}>
-                DECENTERILZIED VAULT HUNTERS
+                {operatives.filter(op => op.name.toLowerCase().includes(operativeSearch.trim().toLowerCase())).length === 0 && (
+                  <div style={{ textAlign: 'center', fontSize: 7, color: '#a99bc4', padding: '8px 0' }}>NO MATCHING OPERATIVES</div>
+                )}
+                </div>
+                {/* A–Z quick-jump rail: hover/click a letter to scroll to the first matching operative */}
+                <div
+                  className="az-rail"
+                  style={{
+                    width: 12,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 0,
+                    background: 'rgba(14,8,25,0.98)',
+                    borderLeft: '1px solid rgba(178,107,255,0.15)',
+                    padding: '2px 0',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {AZ_LETTERS.map(L => (
+                    <span
+                      key={L}
+                      className="az-letter"
+                      onMouseEnter={() => jumpToLetter(L)}
+                      onClick={() => jumpToLetter(L)}
+                      title={`Jump to ${L}`}
+                      style={{
+                        fontSize: 5.5,
+                        lineHeight: 1,
+                        padding: '0.5px 0',
+                        color: '#7d6b99',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        fontFamily: 'DM Mono,monospace',
+                      }}
+                    >{L}</span>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* ── Vertical Drawer Key (glides on the list's left edge — press » to slide the list away & widen chat) ── */}
+            {/* ── Vertical Drawer Key (rides the panel's left edge — arrows only, same size) ── */}
             <div
               className="heist-drawer-key"
               onClick={() => setHeistPanelOpen(o => !o)}
-              style={{ right: heistPanelOpen ? 234 : 2 }}
-              title={heistPanelOpen ? 'Slide heist list away — widen chat' : 'Draw heist list out'}
+              style={{ right: heistPanelOpen ? 224 : 2, left: 'auto' }}
+              title={heistPanelOpen ? 'Slide heist list away' : 'Draw heist list out'}
             >
               <span style={{ fontSize: 12, fontWeight: 800 }}>{heistPanelOpen ? '»' : '«'}</span>
-              <span className="vertical-label">HEIST LIST</span>
             </div>
 
             {/* ── Private Room Windows (cascade next to main chat) ── */}
@@ -2314,25 +2434,30 @@ function LobbyMapWithOverlays({
                 key={room.id}
                 room={room}
                 nickname={nickname}
-                posStyle={{ position: 'absolute', top: 12 + i * 16, right: (heistPanelOpen ? 252 : 46) + i * 16, zIndex: 30 }}
+                posStyle={{ position: 'absolute', top: 12 + i * 16, left: (heistPanelOpen ? 230 : 46) + i * 16, zIndex: 30 }}
                 onClose={() => onCloseRoom(room.id)}
               />
             ))}
 
-            {/* ── Active Small DM Terminal Window (Floating) ── */}
-            {activeDmUser && (
+            {/* ── Active DM Terminal Windows (parallel, random positions, click to focus) ── */}
+            {activeDmUsers.map(name => (
               <SmallDmTerminal
-                targetUser={activeDmUser}
-                onClose={() => setActiveDmUser(null)}
+                key={name}
+                targetUser={name}
+                onClose={() => closeDm(name)}
                 nickname={nickname}
-                isBlocked={blockedUsers.has(activeDmUser)}
+                isBlocked={blockedUsers.has(name)}
                 onToggleBlock={toggleBlock}
+                posStyle={{ position: 'absolute', ...(dmPositions[name] || { left: 24, top: 24 }) }}
+                active={focusedDmUser === name}
+                onFocus={() => setFocusedDmUser(name)}
               />
-            )}
+            ))}
           </div>
 
           {/* ── Bottom Transparent Input Bar with Universal File Upload ── */}
           <div
+            className="hud-chat-inputbar"
             style={{
               display: 'flex',
               borderTop: '1px solid rgba(178,107,255,0.25)',
@@ -2360,7 +2485,7 @@ function LobbyMapWithOverlays({
               }}
               title="Insert Image or Audio File"
             >
-              📎 INSERT FILE
+              📎
             </button>
             <input
               value={input}
@@ -2779,7 +2904,7 @@ function MaximizedDevices({ devices, currentNum, clickWindowOpen, calledNums, on
     <div style={{ position: 'fixed', inset: 0, background: 'linear-gradient(180deg,#0a0612,#0e0819)', zIndex: 100, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', borderBottom: '1px solid #1a1029', background: 'rgba(2,13,26,0.98)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 10px', borderBottom: '1px solid #1a1029', background: 'rgba(2,13,26,0.98)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>◈ DEVICES</span>
           <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071' }}>{devices.filter(d => d.active).length}/{devices.length} active</span>
@@ -3168,6 +3293,9 @@ function Ransome() {
   }
   // ─── Chain selection (solana | sui) ─────────────────────────────────────
   const [chain, setChain] = useState<'solana' | 'evm'>('evm')
+  const [chainMenuOpen, setChainMenuOpen] = useState(false)
+  const [robhinhoodSelected, setRobhinhoodSelected] = useState(false)
+  const [vaultOpen, setVaultOpen] = useState(false)
   // EVM wallet state — reactive via useEvmWallet hook
   const {
     address: evmAddress,
@@ -3709,10 +3837,10 @@ function Ransome() {
           next[wt] = { ...next[wt], claimable: true, flickering: true }
           if (!ann) { announce(msg); ann = true }
         }
-        if (nc.length >= 5) triggerWin('EARLY_FIVE', `⚡ ${d.nftId} — EARLY FIVE! CLAIM NOW`)
-        if (d.grid[0].filter(cl => cl.num).every(cl => cl.clicked)) triggerWin('TOP_LINE', `⚡ ${d.nftId} — TOP LINE! CLAIM NOW`)
-        if (d.grid[1].filter(cl => cl.num).every(cl => cl.clicked)) triggerWin('MIDDLE_LINE', `⚡ ${d.nftId} — MIDDLE LINE! CLAIM NOW`)
-        if (d.grid[2].filter(cl => cl.num).every(cl => cl.clicked)) triggerWin('BOTTOM_LINE', `⚡ ${d.nftId} — BOTTOM LINE! CLAIM NOW`)
+        if (nc.length >= 5) triggerWin('EARLY_FIVE', `◈ ${d.nftId} — EARLY FIVE! CLAIM NOW`)
+        if (d.grid[0].filter(cl => cl.num).every(cl => cl.clicked)) triggerWin('TOP_LINE', `◈ ${d.nftId} — TOP LINE! CLAIM NOW`)
+        if (d.grid[1].filter(cl => cl.num).every(cl => cl.clicked)) triggerWin('MIDDLE_LINE', `◈ ${d.nftId} — MIDDLE LINE! CLAIM NOW`)
+        if (d.grid[2].filter(cl => cl.num).every(cl => cl.clicked)) triggerWin('BOTTOM_LINE', `◈ ${d.nftId} — BOTTOM LINE! CLAIM NOW`)
         if (all.filter(cl => cl.num).every(cl => cl.clicked)) { const fk = `FULL_HOUSE_${Math.min(bankruptCount + 1, 3)}` as WinType; triggerWin(fk, `🔥 ${d.nftId} — FULL HOUSE! CLAIM NOW`) }
       })
       return next
@@ -3800,12 +3928,12 @@ function Ransome() {
   const handleActivate = (devId: number) => {
     setDevices(ds => ds.map(d => d.id !== devId ? d : { ...d, active: true }))
     const dev = devices.find(d => d.id === devId)
-    announce(`⚡ ${dev?.nftId} CONNECTED`)
+    announce(`◈ ${dev?.nftId} CONNECTED`)
   }
 
   const handleActivateAll = () => {
     setDevices(ds => ds.map(d => ({ ...d, active: true })))
-    announce(`⚡ ALL ${devices.length} DEVICES CONNECTED`)
+    announce(`◈ ALL ${devices.length} DEVICES CONNECTED`)
   }
 
   // ─── DEV tools (testnet faucet testing) ────────────────────────────────
@@ -3849,7 +3977,7 @@ function Ransome() {
     if (DEV_MODE && !(chain === 'evm' && evmConnected && evmAddress) && !(chain === 'solana' && connected && publicKey)) {
       const nd = Array.from({ length: count }, (_, i) => ({ ...generateDevice(devices.length + i), walletAddr: wallet || 'DEV_LOCAL' }))
       setDevices(p => [...p, ...nd])
-      announce(`⚡ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED (DEV) — ${devices.length + count} TOTAL`)
+      announce(`◈ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED (DEV) — ${devices.length + count} TOTAL`)
       return
     }
 
@@ -3861,7 +3989,7 @@ function Ransome() {
         
         const tokenForMint = (['USDG', 'USDC', 'USDT', 'ETH', 'X'].includes(mintToken) ? mintToken : 'ETH') as 'USDG' | 'USDC' | 'USDT' | 'ETH' | 'X'
         
-        announce(`⚡ MINTING ${count} DEVICE${count > 1 ? 'S' : ''} WITH ${tokenForMint}...`)
+        announce(`◈ MINTING ${count} DEVICE${count > 1 ? 'S' : ''} WITH ${tokenForMint}...`)
         const result = await mintConsoles(tokenForMint, count, rawGrids)
         const txHash = (result as any)?.receipt?.transactionHash || (result as any)?.mintTx || (result as any)?.tx || 'tx'
 
@@ -3887,7 +4015,7 @@ function Ransome() {
           }
         } catch { }
         setDevices(p => [...p, ...nd])
-        announce(`⚡ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED ON EVM — ${String(txHash).slice(0, 16)}…`)
+        announce(`◈ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED ON EVM — ${String(txHash).slice(0, 16)}…`)
       } catch (e: any) {
         console.error('[EVM] Mint error:', e)
         announce(`⚠ EVM MINT FAILED: ${e?.shortMessage || e?.message || e}`)
@@ -3902,7 +4030,7 @@ function Ransome() {
         const programId = new PublicKey(PROGRAM_ID_STR)
         const nd = Array.from({ length: count }, (_, i) => ({ ...generateDevice(devices.length + i), walletAddr: publicKey.toBase58() }))
         setDevices(p => [...p, ...nd])
-        announce(`⚡ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED — BOUND TO ${publicKey.toBase58().slice(0, 8)}`)
+        announce(`◈ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED — BOUND TO ${publicKey.toBase58().slice(0, 8)}`)
       } catch (e: any) {
         announce(`⚠ SOL MINT FAILED: ${e.message}`)
       }
@@ -3912,7 +4040,7 @@ function Ransome() {
     // No wallet connected — local-only mint
     const nd = Array.from({ length: count }, (_, i) => ({ ...generateDevice(devices.length + i), walletAddr: wallet || 'UNCONNECTED' }))
     setDevices(p => [...p, ...nd])
-    announce(`⚡ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED — BOUND TO ${(wallet || 'WALLET').slice(0, 8)}`)
+    announce(`◈ ${count} DEVICE${count > 1 ? 'S' : ''} MINTED — BOUND TO ${(wallet || 'WALLET').slice(0, 8)}`)
   }
 
   const enterGame = () => {
@@ -3970,25 +4098,47 @@ function Ransome() {
   if (phase === 'lobby') return (
     <div data-theme={theme} style={{ minHeight: '100vh', background: '#0e0819', color: '#f8fafc', overflow: 'hidden' }}>
       <div className="lobby-topbar" style={{ position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 50, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', background: 'rgba(5,10,23,0.9)', borderBottom: '1px solid rgba(178,107,255,0.1)', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <span style={{ fontSize: 20, fontWeight: 800, color: '#b26bff' }}>ROBHIN HEIST</span>
-          <span style={{ fontSize: 10, color: '#b26bff', borderBottom: '2px solid #b26bff', paddingBottom: 2 }}>NETWORK: ONLINE</span>
-          {DEV_MODE && <span style={{ fontSize: 9, color: '#f59e0b', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 4, padding: '2px 6px', marginLeft: 8 }}>⚠ DEV MODE</span>}
-          <span style={{ fontSize: 10, color: 'rgba(178,107,255,0.35)' }}>ENCRYPTION: AES-256</span>
-        </div>
-        <div className="lobby-topbar-actions" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <button className="mobile-menu-button" onClick={() => setMobileMenuOpen(open => !open)} aria-label={mobileMenuOpen ? 'Close lobby menu' : 'Open lobby menu'} aria-expanded={mobileMenuOpen} title={mobileMenuOpen ? 'Close menu' : 'Open menu'}>
             <span />
             <span />
             <span />
           </button>
+          <span className="lobby-logo" style={{ fontSize: 20, fontWeight: 800, color: '#b26bff', whiteSpace: 'nowrap' }}>ROBHIN HEIST</span>
+          <div className="lobby-online-badge" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'ledBlink 2s infinite' }} />
+            <span style={{ fontSize: 9, color: '#22c55e', fontWeight: 700 }}>+59M ONLINE</span>
+          </div>
+          {DEV_MODE && <span style={{ fontSize: 9, color: '#f59e0b', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 4, padding: '2px 6px', marginLeft: 8 }}>⚠ DEV MODE</span>}
+        </div>
+        <div className="lobby-topbar-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ background: 'rgba(24,39,51,0.5)', padding: '4px 10px', border: '1px solid rgba(47,243,173,0.2)', fontSize: 12, color: '#b26bff', fontWeight: 700 }}>{fmtTime(lobbyCountdown)}</div>
           <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Light / dark mode" style={{ background: '#150d24', border: '1px solid #241538', borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer' }}>{theme === 'dark' ? '☀️' : '🌙'}</button>
-          {DEV_MODE && <div style={{ display: 'flex', gap: 3 }}>
-            <button onClick={() => devJump(0)} title="Launch now" style={{ background: '#150d24', border: '1px solid #f59e0b55', borderRadius: 6, padding: '4px 6px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>🚀 NOW</button>
-            <button onClick={() => devJump(30)} title="Jump +30 min" style={{ background: '#150d24', border: '1px solid #f59e0b55', borderRadius: 6, padding: '4px 6px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>+30M</button>
-            <button onClick={() => devJump(59)} title="Jump +59 min (round boundary)" style={{ background: '#150d24', border: '1px solid #f59e0b55', borderRadius: 6, padding: '4px 6px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>+59M</button>
-          </div>}
+          {/* Chain selector dropdown (replaces the old NOW/+30M/+59M dev boxes) */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setChainMenuOpen(o => !o)} aria-expanded={chainMenuOpen} aria-label="Select chain" style={{ background: '#150d24', border: '1px solid #241538', borderRadius: 6, padding: '4px 8px', fontSize: 9, fontWeight: 700, color: robhinhoodSelected ? '#22c55e' : chain === 'evm' ? '#c084fc' : '#b26bff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {robhinhoodSelected ? '◉ ROBHINHOOD' : chain === 'evm' ? '◈ EVM' : '◎ SOL'} ▾
+            </button>
+            {chainMenuOpen && (
+              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#0e0819', border: '1px solid rgba(178,107,255,0.35)', borderRadius: 6, zIndex: 70, minWidth: 140, boxShadow: '0 6px 18px rgba(0,0,0,0.6)' }}>
+                {([
+                  { id: 'robhinhood', label: '◉ ROBHINHOOD', color: '#22c55e', evmLike: true },
+                  { id: 'evm', label: '◈ EVM', color: '#c084fc', evmLike: true },
+                  { id: 'solana', label: '◎ SOL', color: '#b26bff', evmLike: false },
+                ] as const).map(opt => (
+                  <div
+                    key={opt.id}
+                    onClick={() => {
+                      if (opt.id === 'robhinhood') { setChain('evm'); setRobhinhoodSelected(true) }
+                      else { setRobhinhoodSelected(false); setChain(opt.id as 'solana' | 'evm') }
+                      setChainMenuOpen(false)
+                    }}
+                    style={{ padding: '5px 10px', fontSize: 9, cursor: 'pointer', color: opt.color, fontWeight: (chain === 'evm' && opt.id !== 'solana' ? (opt.id === 'robhinhood' ? robhinhoodSelected : !robhinhoodSelected) : chain === opt.id) ? 800 : 400, background: (chain === 'evm' && opt.id !== 'solana' ? (opt.id === 'robhinhood' ? robhinhoodSelected : !robhinhoodSelected) : chain === opt.id) ? 'rgba(178,107,255,0.12)' : 'transparent' }}
+                  >{opt.label}</div>
+                ))}
+              </div>
+            )}
+          </div>
           <div style={{ fontSize: 10, color: '#a99bc4', background: '#150d24', border: '1px solid #241538', borderRadius: 6, padding: '4px 8px' }}>👤 {nickname}</div>
           {/* Governance button */}
           <a href="/governance" style={{ textDecoration: 'none' }}>
@@ -3998,16 +4148,11 @@ function Ransome() {
               {mtrxDelegated && <span style={{ fontSize: 8, color: '#a78bfa', background: 'rgba(167,139,250,0.15)', borderRadius: 3, padding: '1px 4px' }}>MTRX</span>}
             </div>
           </a>
-          {/* Chain selector */}
-          <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid #241538' }}>
-            <button onClick={() => setChain('solana')} style={{ padding: '4px 8px', fontSize: 9, fontWeight: 700, cursor: 'pointer', background: chain === 'solana' ? '#b26bff20' : 'transparent', color: chain === 'solana' ? '#b26bff' : '#a99bc4', border: 'none' }}>SOL</button>
-            <button onClick={() => setChain('evm')} style={{ padding: '4px 8px', fontSize: 9, fontWeight: 700, cursor: 'pointer', background: chain === 'evm' ? '#c084fc20' : 'transparent', color: chain === 'evm' ? '#c084fc' : '#a99bc4', border: 'none', borderLeft: '1px solid #241538' }}>EVM</button>
-          </div>
-          {/* Wallet connect based on chain */}
+          {/* Wallet connect (EVM by default — chain selector removed from header) */}
           {wallet ? (<div style={{ display: 'flex', gap: 6 }}><div style={{ background: '#150d24', border: `1px solid ${chain === 'evm' ? '#c084fc40' : 'rgba(178,107,255,0.25)'}`, borderRadius: 6, padding: '4px 8px', fontSize: 9, color: chain === 'evm' ? '#c084fc' : '#b26bff' }}>{wallet.slice(0, 6)}…{wallet.slice(-4)}</div><button onClick={() => chain === 'evm' ? disconnectEvm() : disconnect()} style={{ background: 'rgba(255,92,138,0.08)', border: '1px solid rgba(255,92,138,0.25)', borderRadius: 6, padding: '4px 8px', fontSize: 9, color: '#ff5c8a', cursor: 'pointer' }}>✕</button></div>) : (
             chain === 'evm' ? (
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button onClick={connectEvm} style={{ background: 'linear-gradient(135deg,#c084fc,#2563eb)', color: '#000', borderRadius: 6, fontSize: 10, fontWeight: 700, height: 'auto', padding: '6px 12px', cursor: 'pointer', border: 'none' }}>CONNECT EVM</button>
+              <div className="evm-connect-wrap" style={{ display: 'flex', gap: 4 }}>
+                <button onClick={connectEvm} className="evm-connect-btn" style={{ background: 'linear-gradient(135deg,#c084fc,#2563eb)', color: '#000', borderRadius: 5, fontSize: 9, fontWeight: 700, lineHeight: 1, height: 24, padding: '0 8px', cursor: 'pointer', border: 'none', whiteSpace: 'nowrap' }}>CONNECT EVM</button>
                 <button onClick={() => setWalletDebug(p => p.length > 0 ? [] : ['Click CONNECT EVM first, then check console (F12)'])} style={{ background: '#150d24', border: '1px solid #c084fc40', borderRadius: 6, padding: '4px 8px', fontSize: 9, color: '#c084fc', cursor: 'pointer', position: 'relative' }} title="Wallet debug">?
                   {walletDebug.length > 0 && <div style={{ position: 'absolute', top: -4, right: -4, width: 8, height: 8, borderRadius: '50%', background: '#c084fc', fontSize: 8, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{walletDebug.length}</div>}
                 </button>
@@ -4050,12 +4195,12 @@ function Ransome() {
       )}
       <div style={{ display: 'flex', paddingTop: 56 }}>
         <div className={`lobby-sidebar${mobileMenuOpen ? ' mobile-open' : ''}`} style={{ width: 200, minHeight: 'calc(100vh - 56px)', background: '#150d24', borderRight: '1px solid rgba(178,107,255,0.08)', display: mobileMenuOpen ? 'block' : 'none', flexDirection: 'column', padding: '16px 0', flexShrink: 0 }}>
-          <div className="lobby-operative" style={{ padding: '0 16px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="lobby-operative" style={{ display: 'none' }}>
             <div style={{ width: 32, height: 32, background: '#1f1330', border: '1px solid rgba(178,107,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎭</div>
             <div><div style={{ color: '#b26bff', fontWeight: 700, fontSize: 10 }}>OPERATIVE</div><div style={{ color: '#7d6b99', fontSize: 9 }}>{nickname.slice(0, 10).toUpperCase()}</div></div>
           </div>
           {/* Decentralized Vault — mobile only: listed under OPERATIVE (desktop shows the right-extreme vault panel) */}
-          <div className={`sidebar-vault-card${mobileMenuOpen ? '' : ' is-hidden'}`} onClick={() => { setNavTab('vault'); setMobileMenuOpen(false) }} style={{ margin: '0 12px 10px', padding: '8px 10px', cursor: 'pointer', background: '#241538', border: '1px solid rgba(178,107,255,0.14)', borderRadius: 6 }}>
+          <div className={`sidebar-vault-card${mobileMenuOpen ? '' : ' is-hidden'}`} onClick={() => { setVaultOpen(true); setMobileMenuOpen(false) }} style={{ margin: '0 12px 10px', padding: '8px 10px', cursor: 'pointer', background: '#241538', border: '1px solid rgba(178,107,255,0.14)', borderRadius: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 11 }}>💎</span>
               <span style={{ fontSize: 8.5, fontWeight: 700, color: '#f8fafc' }}>DECENTERILZIED VAULT</span>
@@ -4072,10 +4217,10 @@ function Ransome() {
               <VaultClaimPanel wallet={wallet} announce={announce} />
             </div>
           </div>
-          {(['HOME', 'OPERATIVE', 'VAULT', 'MISSIONS'] as const).map((item, i) => {
-            const tab = (['operative', 'operative', 'vault', 'missions'] as const)[i]
+          {(['HOME', 'VAULT', 'MISSIONS'] as const).map((item, i) => {
+            const tab = (['operative', 'vault', 'missions'] as const)[i]
             const active = navTab === tab
-            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { setNavTab(tab); setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: active ? '#b26bff' : '#7d6b99', fontWeight: active ? 700 : 400, fontSize: 11, borderRight: active ? '2px solid #b26bff' : 'none', background: active ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🏠 ', '🎯 ', '💎 ', '📋 '][i]}{item}</div>)
+            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { if (tab === 'vault') { setVaultOpen(true) } else { setNavTab(tab); setVaultOpen(false) } setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: (tab === 'vault' ? vaultOpen : navTab === tab) ? '#b26bff' : '#7d6b99', fontWeight: (tab === 'vault' ? vaultOpen : navTab === tab) ? 700 : 400, fontSize: 11, borderRight: (tab === 'vault' ? vaultOpen : navTab === tab) ? '2px solid #b26bff' : 'none', background: (tab === 'vault' ? vaultOpen : navTab === tab) ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🏠 ', '💎 ', '📋 '][i]}{item}</div>)
           })}
           <div style={{ marginTop: 'auto', padding: '0 12px 16px' }}>
             {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>ENTER MATRIX</button>) : DEV_MODE ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX (DEV)</button>) : (<div style={{ padding: '8px', background: 'rgba(178,107,255,0.06)', border: '1px solid rgba(178,107,255,0.2)', color: '#b26bff', fontSize: 9, textAlign: 'center' }}>INITIALIZE_HEIST</div>)}
@@ -4099,7 +4244,7 @@ function Ransome() {
                 setTimeout(() => {
                   mintDevices();
                 }, 100);
-                announce(`⚡ Quick minting ${count} devices`);
+                announce(`◈ Quick minting ${count} devices`);
               }}
               mintCostLabel={mintCostLabel}
               chatRooms={chatRooms}
@@ -4158,7 +4303,7 @@ function Ransome() {
                 <div style={{ fontSize: 8, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#453071', marginBottom: 2 }}>{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : '⏳ NEXT BATCH'}</div>
                 <div style={{ fontSize: 26, fontWeight: 800, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#fff' }}>{fmtTime(lobbyCountdown)}</div>
               </div>
-              <div style={{ textAlign: 'center', fontSize: 8, color: '#2d1f4a' }}>{devices.length > 0 ? (<span style={{ color: '#b26bff' }}>⚡ {devices.length} DEVICE{devices.length > 1 ? 'S' : ''} READY</span>) : (<span>MINT TO JOIN</span>)}</div>
+              <div style={{ textAlign: 'center', fontSize: 8, color: '#2d1f4a' }}>{devices.length > 0 ? (<span style={{ color: '#b26bff' }}>◈ {devices.length} DEVICE{devices.length > 1 ? 'S' : ''} READY</span>) : (<span>MINT TO JOIN</span>)}</div>
               {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>🚀 ENTER HACK MATRIX</button>)}
               {DEV_MODE && !devices.length && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10 }}>🚀 ENTER HACK MATRIX (DEV)</button>)}
               {lobbyCountdown > 60 && devices.length > 0 && (<div style={{ textAlign: 'center', fontSize: 8, color: '#2d1f4a' }}>Entry in {fmtTime(lobbyCountdown - 60)}</div>)}
@@ -4167,7 +4312,50 @@ function Ransome() {
         )}
 
       </div>
-      <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', zIndex: 50, height: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', background: '#000', borderTop: '1px solid rgba(178,107,255,0.15)', boxSizing: 'border-box' }}>
+      {/* ── Decentralized Vault slide-over (slides over the homepage when opened) ── */}
+      {vaultOpen && <div onClick={() => setVaultOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 110 }} />}
+      <div
+        className={`vault-slideover${vaultOpen ? ' vault-open' : ''}`}
+        style={{
+          position: 'fixed', top: 0, right: 0, height: '100vh', width: 'min(380px, 100vw)',
+          background: '#0e0819', borderLeft: '1px solid rgba(178,107,255,0.35)',
+          boxShadow: '-12px 0 40px rgba(0,0,0,0.7)',
+          zIndex: 120, display: 'flex', flexDirection: 'column',
+          transform: vaultOpen ? 'translateX(0)' : 'translateX(105%)',
+          transition: 'transform 0.3s ease',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid rgba(178,107,255,0.15)', flexShrink: 0 }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#b26bff' }}>💎 DECENTERILZIED VAULT</span>
+          <button onClick={() => setVaultOpen(false)} aria-label="Close vault" style={{ background: '#150d24', border: '1px solid #241538', borderRadius: 5, padding: '3px 8px', fontSize: 10, color: '#a99bc4', cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ position: 'relative', background: '#0e0819', border: '1px solid rgba(36,21,56,0.15)', minHeight: 150, overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#d3b0ff,#5b21b6)', opacity: 0.2, transition: 'height 1s linear' }} />
+            <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill * 1000000)} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#7d6b99' }}>Operatives</div><div style={{ fontSize: 16, fontWeight: 700, color: '#b26bff' }}>2,104</div></div>
+            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#7d6b99' }}>Success</div><div style={{ fontSize: 16, fontWeight: 700, color: '#c084fc' }}>92.4%</div></div>
+          </div>
+          {[{ l: 'LAST BREACH', v: '+450 SOL', c: '#b26bff' }, { l: 'STABILITY', v: 'OPTIMAL', c: '#c084fc' }, { l: 'THREAT', v: 'LOW', c: '#ff6daf' }].map(r => (<div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: '#1f1330', borderLeft: '2px solid ' + r.c }}><span style={{ fontSize: 8, color: '#a99bc4' }}>{r.l}</span><span style={{ fontSize: 9, color: r.c, fontWeight: 700 }}>{r.v}</span></div>))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'rgba(178,107,255,0.08)', border: '1px solid rgba(178,107,255,0.25)', borderRadius: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 8, color: '#a99bc4', fontWeight: 700 }}>VALUE ACQUIRED:</span>
+            <span style={{ fontSize: 9, color: '#b26bff', fontWeight: 800 }}>+${(devices.length * 0.50).toFixed(2)} USD</span>
+          </div>
+          <div style={{ borderTop: '1px solid rgba(255,209,102,0.15)', paddingTop: 8 }}>
+            <VaultClaimPanel wallet={wallet} announce={announce} />
+          </div>
+          <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + (lobbyCountdown <= 60 ? 'rgba(255,92,138,0.4)' : 'rgba(36,21,56,0.6)'), animation: lobbyCountdown <= 60 ? 'ledBlink 0.8s infinite' : 'none' }}>
+            <div style={{ fontSize: 7.5, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#453071', marginBottom: 2 }}>{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : '⏳ NEXT BATCH'}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#fff' }}>{fmtTime(lobbyCountdown)}</div>
+          </div>
+          <div style={{ textAlign: 'center', fontSize: 8, color: '#2d1f4a' }}>{devices.length > 0 ? (<span style={{ color: '#b26bff' }}>◈ {devices.length} DEVICE{devices.length > 1 ? 'S' : ''} READY</span>) : (<span>MINT TO JOIN</span>)}</div>
+          {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>🚀 ENTER HACK MATRIX</button>)}
+          {DEV_MODE && !devices.length && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10 }}>🚀 ENTER HACK MATRIX (DEV)</button>)}
+        </div>
+      </div>
+      <div className="lobby-statusbar" style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', zIndex: 50, height: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', background: '#000', borderTop: '1px solid rgba(178,107,255,0.15)', boxSizing: 'border-box' }}>
         <span style={{ fontSize: 9, color: 'rgba(178,107,255,0.6)' }}>SYSTEM_BREACH_LOGS v2.4.0 · ACCESSING_NODE_01...</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#b26bff', animation: 'ledBlink 2s infinite' }} /><span style={{ fontSize: 9, color: '#b26bff' }}>SECURE_TUNNEL_ACTIVE</span></div>
       </div>
@@ -4299,7 +4487,7 @@ function Ransome() {
                 boxShadow: st.claimable && !st.claimed && !st.expired ? `0 0 4px ${LED_COLORS[type]}` : 'none'
               }} />
               <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: st.claimed ? '#a78bfa' : st.claimable ? '#ec4899' : '#2d1f4a', whiteSpace: 'nowrap' }}>
-                {st.claimed ? '✓ ' : st.claimable ? '⚡ ' : '○ '}{label}
+                {st.claimed ? '✓ ' : st.claimable ? '◈ ' : '○ '}{label}
               </span>
             </div>
           )
@@ -4314,7 +4502,7 @@ function Ransome() {
           </div>
           <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
             <button onClick={handleActivateAll} style={{ background: '#150d24', border: '1px solid #b26bff30', color: '#b26bff', borderRadius: 7, padding: '4px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
-              ⚡ ALL ON
+              ◈ ALL ON
             </button>
             <button onClick={() => setDevicesExpanded(true)} style={{ background: '#150d24', border: '1px solid #241538', color: '#453071', borderRadius: 7, padding: '4px 10px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
               ⊞ MAXIMIZE

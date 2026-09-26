@@ -939,8 +939,8 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 
   .mobile-menu-button {
-    width: 38px;
-    height: 34px;
+    width: 36px;
+    height: 32px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -951,6 +951,8 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     border: 1px solid #241538;
     border-radius: 6px;
     cursor: pointer;
+    flex-shrink: 0;
+    margin-right: 6px;
   }
 
   .mobile-menu-button span {
@@ -958,6 +960,47 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     height: 2px;
     background: #b26bff;
     border-radius: 2px;
+  }
+
+  /* Keep the +59M ONLINE badge and the logo visible next to the hamburger on mobile
+     (the generic hide rule above targets spans that are not the first child) */
+  .lobby-topbar>div:first-child>div.lobby-online-badge {
+    display: flex;
+  }
+
+  .lobby-topbar>div:first-child>span.lobby-logo {
+    display: inline-block;
+  }
+
+  .lobby-topbar {
+    padding: 0 10px !important;
+  }
+
+  .lobby-topbar>div:first-child {
+    gap: 8px !important;
+  }
+
+  .lobby-logo {
+    font-size: 15px !important;
+  }
+
+  .lobby-online-badge {
+    padding: 2px 6px !important;
+  }
+
+  .lobby-online-badge span {
+    font-size: 8px !important;
+  }
+
+  /* CONNECT EVM stays reachable in the mobile header */
+  .lobby-topbar-actions .evm-connect-wrap {
+    display: flex;
+  }
+
+  .evm-connect-btn {
+    font-size: 8px !important;
+    height: 22px !important;
+    padding: 0 6px !important;
   }
 
   .lobby-sidebar {
@@ -1068,7 +1111,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 }
 
-/* ── Heist list glider: long vertical key riding the list's LEFT edge (all sizes) ── */
+/* ── Heist list glider: vertical key riding the list's RIGHT edge (all sizes) ── */
 .heist-panel {
   right: 32px;
   transition: right 0.25s ease;
@@ -1084,7 +1127,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
 @media (min-width: 601px) {
   .hud-chatlog {
-    margin-right: 240px;
+    margin-right: 224px;
   }
 }
 
@@ -1097,6 +1140,36 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     margin-right: 0;
   }
 }
+
+/* Base vertical drawer key (purple theme — restored, was lost in a revert) */
+.heist-drawer-key {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 120px;
+  max-height: 45%;
+  background: linear-gradient(180deg, #241538, #0d0819);
+  border: 1px solid rgba(178, 107, 255, 0.4);
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  z-index: 22;
+  color: #b26bff;
+  user-select: none;
+  box-shadow: 0 0 10px rgba(178, 107, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease;
+  animation: gliderPulse 2.6s ease-in-out infinite;
+}
+
+/* A–Z quick-jump rail (heist list) */
+.az-rail:hover .az-letter { color: #b26bff; }
+.az-letter { transition: color 0.1s ease, transform 0.1s ease; }
+.az-letter:hover { color: #ffffff !important; transform: scale(1.4); }
 
 /* ── Mobile HUD-first: only terminal chat visible ── */
 @media (max-width: 600px) {
@@ -1116,32 +1189,32 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     grid-template-columns: 1fr !important;
   }
 
-  /* Fix heist panel positioning on mobile */
+  /* Heist panel (Quick Mint + list) rides the RIGHT edge on mobile */
   .heist-panel {
     position: fixed !important;
     right: 8px !important;
     top: auto !important;
     bottom: 60px !important;
-    width: 200px !important;
-    max-height: 55vh !important;
+    width: 210px !important;
+    max-height: 60vh !important;
     z-index: 100 !important;
   }
 
   .heist-panel.heist-closed {
-    right: -220px !important;
+    right: -224px !important;
   }
 
-  /* Make heist list button float over the drawer area */
+  /* Heist list toggle is visually hidden — the left-edge drawer key is the control */
   .heist-list-toggle-btn {
-    position: fixed !important;
-    right: 12px !important;
-    bottom: 16px !important;
-    z-index: 110 !important;
-    padding: 10px 14px !important;
-    font-size: 9px !important;
-    border-radius: 8px !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 12px rgba(178,107,255,0.3) !important;
-    animation: floatBtnPulse 2s ease-in-out infinite;
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
   }
 
   /* Ensure chat log is fully visible */
@@ -1208,4 +1281,38 @@ button:disabled {
   cursor: default;
   top: 0;
   filter: none;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* ── Lobby status bar: full-width status text on mobile without clipping transport ── */
+@media (max-width: 600px) {
+  .lobby-statusbar {
+    position: static !important;
+    height: auto !important;
+    min-height: 28px;
+    margin-top: 4px;
+    gap: 8px !important;
+    padding: 4px 10px !important;
+  }
+
+  .lobby-statusbar>span:first-child {
+    max-width: 52vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Chat input bar: taller touch targets so text never clips vertically */
+  .hud-chat-inputbar>button,
+  .hud-chat-inputbar>input {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+}
+
+/* Minted consoles modal: keep clear of the fixed mobile header (56px) */
+@media (max-width: 600px) {
+  .fmk-overlay {
+    padding-top: 64px !important;
+  }
 }
