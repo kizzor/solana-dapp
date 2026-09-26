@@ -420,6 +420,18 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 }
 
+/* ─── Mobile Utilities ───
+   NOTE: .heist-panel was removed from this hide list — the Quick Mint + heist
+   list panel must stay reachable on mobile via the drawer key (handled by the
+   @media (max-width: 600px) block further down). */
+@media (max-width: 768px) {
+  .hide-on-mobile,
+  .lobby-vault-panel,
+  .lobby-operative-layout > :not(.lobby-hud-container) {
+    display: none !important;
+  }
+}
+
 /* Cell glitch effects (non-clickable numbers) */
 @keyframes gx0 {
 
@@ -1071,6 +1083,33 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     display: block;
   }
 
+  .mobile-vault-status {
+    display: none !important;
+  }
+
+  .lobby-hud-container {
+    display: flex !important;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .global-heist-hud {
+    width: 100vw !important;
+    min-height: calc(100vh - 56px);
+    margin-left: calc(50% - 50vw);
+    display: flex !important; /* Visible by default on all other screens */
+  }
+
+  .dev-jump-controls {
+    display: none !important;
+  }
+
+  @media (min-width: 601px) {
+    .global-heist-hud {
+      display: none !important; /* Hidden strictly on desktop */
+    }
+  }
+
   /* Matrix-only visibility: lobby header chrome + HUD appear only once the
      user enters the matrix (game screen uses .app-header, not .lobby-topbar) */
   .lobby-topbar {
@@ -1083,6 +1122,10 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .lobby-hud-container {
     display: none;
+  }
+
+  .world-map-sketch, .laser-beams {
+    display: none !important;
   }
 }
 
@@ -1107,9 +1150,10 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 
   .sidebar-vault-card {
-    display: block;
+    display: block !important;
   }
 }
+
 
 /* ── Heist list glider: vertical key riding the list's RIGHT edge (all sizes) ── */
 .heist-panel {

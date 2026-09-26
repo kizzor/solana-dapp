@@ -228,7 +228,7 @@ function MiniStopwatch({ seconds, total }: { seconds: number; total: number }) {
 }
 
 // ─── Outline World Map with bank sketches ────────────────────────────────────
-function WorldMapSketch({ currentHour, onSelectBank, style }: { currentHour: number; onSelectBank?: (id: number) => void; style?: React.CSSProperties }) {
+function WorldMapSketch({ currentHour, onSelectBank, style, className }: { currentHour: number; onSelectBank?: (id: number) => void; style?: React.CSSProperties; className?: string }) {
   const live = getLiveBank(currentHour)
   const hourCd = useHourCountdown()
   const [hov, setHov] = useState<number | null>(null)
@@ -1847,10 +1847,10 @@ function LobbyMapWithOverlays({
       <div style={{ position: 'relative', flex: 1, minHeight: 560, width: '100%', height: '100%', overflow: 'hidden' }}>
         
         {/* The World Map Background (100% full view underneath) */}
-        <WorldMapSketch currentHour={currentHour} onSelectBank={setSelectedBank} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+        <WorldMapSketch className="world-map-sketch" currentHour={currentHour} onSelectBank={setSelectedBank} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
 
         {/* ── Laser Beam SVG Overlay on Map ── */}
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 8 }}>
+        <svg className="laser-beams" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 8 }}>
           <defs>
             <filter id="laserGlow" x="-30%" y="-30%" width="160%" height="160%">
               <feGaussianBlur stdDeviation="4" result="blur" />
@@ -1896,7 +1896,7 @@ function LobbyMapWithOverlays({
         </svg>
 
         {/* ── FULL MAP TRANSPARENT CHAT INTERFACE HUD ── */}
-        <div
+        <div className="global-heist-hud"
           style={{
             position: 'absolute',
             inset: 0,
@@ -2610,6 +2610,7 @@ function ChatTerminal({ nickname }: { nickname: string }) {
   const [lines, setLines] = useState<ChatLine[]>([
     { t: 'sys', m: 'HACKING MATRIX v3.7.1 INITIALIZED' },
     { t: 'sys', m: `AGENT ${nickname.toUpperCase()} CONNECTED` },
+    { t: 'sys', m: 'TIP: /ai <question> — CONSULT THE ORACLE (OMNIROUTE UPLINK)' },
   ])
   const [input, setInput] = useState('')
   const [mediaQueue, setMediaQueue] = useState<MediaItem[]>([])
@@ -2633,10 +2634,34 @@ function ChatTerminal({ nickname }: { nickname: string }) {
     else { setPlaying(false); setPlayIdx(0); setMediaQueue([]) }
   }
 
-  const send = () => {
-    if (!input.trim()) return
-    setLines(p => [...p, { t: 'user', m: `${nickname}: ${input}` }])
+  const [aiBusy, setAiBusy] = useState(false)
+
+  // /ai <question> — ask the ORACLE through the local OmniRoute gateway (/api/chat)
+  const send = async () => {
+    if (!input.trim() || aiBusy) return
+    const text = input
+    setLines(p => [...p, { t: 'user', m: `${nickname}: ${text}` }])
     setInput('')
+    if (text.startsWith('/ai ')) {
+      const q = text.slice(4).trim()
+      if (q) {
+        setAiBusy(true)
+        setLines(p => [...p, { t: 'sys', m: 'ORACLE IS CONSULTING THE GATEWAY...' }])
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: [{ role: 'user', content: q }], stream: false, maxTokens: 1024 }),
+          })
+          const data = await res.json()
+          setLines(p => [...p, { t: 'sys', m: `ORACLE: ${data.content || data.error || '[no response]'}` }])
+        } catch (e) {
+          setLines(p => [...p, { t: 'sys', m: `ORACLE OFFLINE: ${String(e)}` }])
+        } finally {
+          setAiBusy(false)
+        }
+      }
+    }
   }
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3372,7 +3397,7 @@ function Ransome() {
   const [walletDebug, setWalletDebug] = useState<string[]>([]) // wallet detection debug logs
   const currentHour = new Date().getUTCHours()
   const liveBank = getLiveBank(currentHour)
-  const [navTab, setNavTab] = useState<'operative' | 'vault' | 'missions'>('operative')
+  const [navTab, setNavTab] = useState<'operative' | 'vault' | 'missions' | 'heist' | 'quick-mint'>('operative')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([])  // private rooms — persist lobby→matrix, wiped when game ends
   const [devClock, setDevClock] = useState(0)             // dev: jump the 59-min clock
@@ -4222,8 +4247,132 @@ function Ransome() {
             const active = navTab === tab
             return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { if (tab === 'vault') { setVaultOpen(true) } else { setNavTab(tab); setVaultOpen(false) } setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: (tab === 'vault' ? vaultOpen : navTab === tab) ? '#b26bff' : '#7d6b99', fontWeight: (tab === 'vault' ? vaultOpen : navTab === tab) ? 700 : 400, fontSize: 11, borderRight: (tab === 'vault' ? vaultOpen : navTab === tab) ? '2px solid #b26bff' : 'none', background: (tab === 'vault' ? vaultOpen : navTab === tab) ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🏠 ', '💎 ', '📋 '][i]}{item}</div>)
           })}
+          {/* Quick Mint Panel */}
+          {navTab === 'quick-mint' && (
+            <div style={{
+              padding: '12px',
+              background: 'rgba(17,24,39, 0.88)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              border: '1px solid rgba(178,107,255,0.3)',
+              borderRadius: 8,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+              zIndex: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}>
+              <div style={{
+                padding: '8px 10px',
+                background: 'linear-gradient(180deg, rgba(178,107,255,0.14), rgba(4,18,34,0.95))',
+                borderBottom: '1px solid rgba(178,107,255,0.25)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+                <span style={{ fontSize: 8, fontWeight: 700, color: '#b26bff', letterSpacing: '0.05em' }}>QUICK MINT</span>
+                <span style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 4px', borderRadius: 3 }}>
+                  {mintToken || 'ETH'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  className="keyboard-key keyboard-key-accent"
+                  onClick={() => {
+                    mintDevices()
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px 20px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    borderRadius: 10,
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    boxShadow: '0 4px 20px rgba(178,107,255,0.3)'
+                  }}
+                >
+                  <span>MINT {mintCount}×</span>
+                </button>
+
+                {/* Caliber Keys — keyboard-key steppers (scroll wheel still works) */}
+                <div
+                  onWheel={e => {
+                    if (e.deltaY < 0) setMintCount(c => Math.min(20, c + 1))
+                    else setMintCount(c => Math.max(1, c - 1))
+                  }}
+                  style={{
+                    width: 46,
+                    background: '#150d24',
+                    border: '1px solid #b26bff40',
+                    borderRadius: 6,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 3,
+                    padding: '4px 2px',
+                    userSelect: 'none'
+                  }}
+                  title="▲ / ▼ keys or scroll to change amount"
+                >
+                  <button
+                    className="keyboard-key keyboard-key-sm"
+                    aria-label="Increase mint amount"
+                    onClick={() => setMintCount(c => Math.min(20, c + 1))}
+                    disabled={mintCount >= 20}
+                    style={{
+                      width: 28,
+                      height: 16,
+                      padding: 0,
+                      background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
+                      border: '1px solid #b26bff55',
+                      borderTop: '1px solid #b26bffaa',
+                      borderRadius: 4,
+                      color: '#b26bff',
+                      fontSize: 8,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >▲</button>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#b26bff', fontFamily: 'DM Mono,monospace', lineHeight: 1 }}>{mintCount}</div>
+                  <button
+                    className="keyboard-key keyboard-key-sm"
+                    aria-label="Decrease mint amount"
+                    onClick={() => setMintCount(c => Math.max(1, c - 1))}
+                    disabled={mintCount <= 1}
+                    style={{
+                      width: 28,
+                      height: 16,
+                      padding: 0,
+                      background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
+                      border: '1px solid #b26bff55',
+                      borderBottom: '1px solid #b26bffaa',
+                      borderRadius: 4,
+                      color: '#b26bff',
+                      fontSize: 8,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >▼</button>
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ marginTop: 'auto', padding: '0 12px 16px' }}>
-            {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>ENTER MATRIX</button>) : DEV_MODE ? (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX (DEV)</button>) : (<div style={{ padding: '8px', background: 'rgba(178,107,255,0.06)', border: '1px solid rgba(178,107,255,0.2)', color: '#b26bff', fontSize: 9, textAlign: 'center' }}>INITIALIZE_HEIST</div>)}
+            <button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX</button>
           </div>
         </div>
         {navTab === 'operative' && <div className="lobby-operative-layout" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: 16, alignItems: 'start' }}>
@@ -4253,7 +4402,7 @@ function Ransome() {
             />
           </div>
           {/* Right-extreme Decentralized Vault panel (desktop) */}
-          <div className="lobby-vault-panel" style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="lobby-vault-panel hide-on-mobile" style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 13 }}>💎</span><span style={{ fontSize: 11, fontWeight: 700, color: '#f8fafc' }}>DECENTERILZIED VAULT</span></div>
             <div style={{ position: 'relative', background: '#0e0819', border: '1px solid rgba(36,21,56,0.15)', height: 120, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#d3b0ff,#5b21b6)', opacity: 0.2, transition: 'height 1s linear' }} />
@@ -4278,6 +4427,28 @@ function Ransome() {
           </div>
         </div>}
         {navTab === 'missions' && <MissionsDemo />}
+        {navTab === 'heist' && (
+          <div style={{ flex: 1, padding: '20px 16px', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 14 }}>🕵️</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>OPERATIVES / HEIST LIST</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {INITIAL_OPERATIVES.map(op => (
+                  <div key={op.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#1f1330', border: '1px solid rgba(178,107,255,0.1)', borderRadius: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>{op.name}</div>
+                        <div style={{ fontSize: 8, color: '#7d6b99' }}>{op.status.toUpperCase()} • LEVEL {op.level} • {op.devices} DEVICES</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         {navTab === 'vault' && (
           <div style={{ flex: 1, padding: '20px 16px', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="lobby-vault-panel" style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
