@@ -189,7 +189,7 @@ export default function AdminPage() {
       }}>
         <div>
           <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 20, fontWeight: 800, color: '#f59e0b' }}>
-            ⚡ TURBULENT ADMIN
+            ◈ TURBULENT ADMIN
           </div>
           <div style={{ fontSize: 8, color: '#4a7fa5' }}>
             RANSOME NETWORK — Operations Control
