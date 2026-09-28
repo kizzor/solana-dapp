@@ -449,6 +449,25 @@ NEW heist.move v2 (PUBLISHED 2026-08-02): FH1=19.5% FH2=19.5% FH3=40% total=99%
 
 ## SESSION LOG
 
+### Session: 2026-09-27 — recall_pro1 UI/UX fix round (Matrix Arena + lobby HUD)
+**Task:** User-reported UI fixes: drawer-key bug, missing map under chat, map sizing, neon green TRANSMIT, remove Nordic Reserve from Matrix Arena header, quick-mint off-by-one, arena always on top, "All" → "Activate All". Tag `recal_pro1`.
+
+**Done (all GREEN files only — app/page.tsx, app/globals.css):**
+1. ✅ **Drawer key fixed (mobile + desktop):** CSS `right:10px !important` was burying the key (z 22) under the open panel (z 100) → key now `zIndex:120` inline; mobile `top` 56→52px (matches 48px header). Verified tappable with panel OPEN and CLOSED via elementFromPoint smoke test.
+2. ✅ **Map restored under chat (desktop):** `.global-heist-hud` veil softened (bg 0.25→0.35, blur removed) + message chips opacity 0.45→0.55 on ≥601px — continents visible through chat. Mobile keeps the high-contrast override.
+3. ✅ **Map is now self-contained:** external googleusercontent <img> replaced with an inline SVG vector-continents background (no external host dependency, always renders).
+4. ✅ **Map responsive sizing:** fixed 560px stage min-height → `min(74vh, 640px)` (720px cap ≥1600px wide); mobile keeps `calc(100dvh - 82px)` so the composer stays reachable.
+5. ✅ **TRANSMIT neon green:** JSX gradient `#b26bff→#7c3aed` → `#39ff14→#00c853` + green glow (CSS hover/active shadows recolored too). Verified computed gradient rgb(57,255,20).
+6. ✅ **Composer no longer hides behind the heist panel:** `.hud-chat-inputbar` mirrors `.hud-chatlog` margin tracking (224px open / 0 closed, verified computed).
+7. ✅ **Nordic Reserve removed from Matrix Arena header:** deleted from BANKS (id 12, Oslo), renumbered 13–22 → 12–21, `getLiveBank` modulus 23→22 (keeps hourly rotation in bounds), laser sim untouched (random coords). Header chip now rotates among the 22 banks (verified: "🔴 Atlas Treasury").
+8. ✅ **Quick-mint off-by-one FIXED (root cause):** `onQuickMint` did `setMintCount(count)` then `setTimeout(mintDevices)` — the closure captured the STALE mintCount (mints previous count). `mintDevices()` now accepts `overrideCount` and the HUD calls `mintDevices(count)` directly. Selecting 9 now mints 9.
+9. ✅ **Matrix Arena always on top:** game-phase private-room windows now dock LOW (`dock` prop → `bottom:46+i*16`, zIndex 45 < arena 50). Lobby cascade behavior unchanged.
+10. ✅ **"◈ ALL ON" renamed → "◈ ACTIVATE ALL".**
+11. ✅ **Verification:** `tsc --noEmit` = 0, `npm run build` ✓ (7/7 static pages), headless Chrome smoke (puppeteer-core) desktop 1440×900 + mobile 390×844: no horizontal overflow, composer inside viewport, screenshots `ui-verify-r1-*.png`.
+12. 📌 Commit + tag `recal_pro1` created locally. **PRODUCTION PUSH IS A USER MANUAL STEP (Rule 2):** run `git push origin main --tags` — Vercel auto-deploys. User may also delete the leftover `ui-verify-*.png` / `ui-smoke.cjs` artifacts after review.
+
+**Not changed (out of scope this round):** /turbolucent admin panel, SUI/EVM contract logic, claim/settle flows.
+
 ### Session: 2026-08-25 — Mobile lobby composition and production handoff
 **Task:** Make the mobile lobby usable by prioritizing the map, vault, mint terminal, and chat while keeping operative navigation available through a hamburger menu.
 

@@ -47,3 +47,6 @@ __pycache__/
 *.pyc
 *.pyo
 .env*
+
+# Local UI smoke-test screenshots (debug artifacts)
+ui-verify-*.png

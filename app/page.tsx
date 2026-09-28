@@ -107,19 +107,40 @@ const BANKS = [
   { id: 9, name: 'Colosseum Bank', city: 'Rome', tz: 1, x: 50, y: 29, region: 'EUR', vault: '$1.7B' },
   { id: 10, name: 'Rhine Vault', city: 'Frankfurt', tz: 1, x: 50, y: 23, region: 'EUR', vault: '$3.2B' },
   { id: 11, name: 'Thames Capital', city: 'London', tz: 0, x: 46, y: 23, region: 'EUR', vault: '$5.1B' },
-  { id: 12, name: 'Nordic Reserve', city: 'Oslo', tz: 1, x: 49, y: 16, region: 'EUR', vault: '$1.1B' },
-  { id: 13, name: 'Kremlin Bank', city: 'Moscow', tz: 3, x: 58, y: 20, region: 'EUR', vault: '$2.8B' },
-  { id: 14, name: 'Atlas Treasury', city: 'Casablanca', tz: 1, x: 44, y: 35, region: 'AFR', vault: '$0.7B' },
-  { id: 15, name: 'Amazon Reserve', city: 'São Paulo', tz: -3, x: 32, y: 67, region: 'AMER', vault: '$1.6B' },
-  { id: 16, name: 'Andes Vault', city: 'Bogotá', tz: -5, x: 24, y: 54, region: 'AMER', vault: '$0.8B' },
-  { id: 17, name: 'Manhattan Capital', city: 'New York', tz: -5, x: 21, y: 28, region: 'AMER', vault: '$6.7B' },
-  { id: 18, name: 'Silicon Reserve', city: 'San Francisco', tz: -8, x: 10, y: 32, region: 'AMER', vault: '$4.3B' },
-  { id: 19, name: 'Maple Treasury', city: 'Toronto', tz: -5, x: 20, y: 24, region: 'AMER', vault: '$2.2B' },
-  { id: 20, name: 'Red Sea Bank', city: 'Riyadh', tz: 3, x: 59, y: 40, region: 'MENA', vault: '$3.5B' },
-  { id: 21, name: 'Carnival Bank', city: 'Rio', tz: -3, x: 33, y: 68, region: 'AMER', vault: '$1.0B' },
-  { id: 22, name: 'Azores Vault', city: 'Lisbon', tz: 0, x: 43, y: 29, region: 'EUR', vault: '$1.4B' },
+  { id: 12, name: 'Kremlin Bank', city: 'Moscow', tz: 3, x: 58, y: 20, region: 'EUR', vault: '$2.8B' },
+  { id: 13, name: 'Atlas Treasury', city: 'Casablanca', tz: 1, x: 44, y: 35, region: 'AFR', vault: '$0.7B' },
+  { id: 14, name: 'Amazon Reserve', city: 'São Paulo', tz: -3, x: 32, y: 67, region: 'AMER', vault: '$1.6B' },
+  { id: 15, name: 'Andes Vault', city: 'Bogotá', tz: -5, x: 24, y: 54, region: 'AMER', vault: '$0.8B' },
+  { id: 16, name: 'Manhattan Capital', city: 'New York', tz: -5, x: 21, y: 28, region: 'AMER', vault: '$6.7B' },
+  { id: 17, name: 'Silicon Reserve', city: 'San Francisco', tz: -8, x: 10, y: 32, region: 'AMER', vault: '$4.3B' },
+  { id: 18, name: 'Maple Treasury', city: 'Toronto', tz: -5, x: 20, y: 24, region: 'AMER', vault: '$2.2B' },
+  { id: 19, name: 'Red Sea Bank', city: 'Riyadh', tz: 3, x: 59, y: 40, region: 'MENA', vault: '$3.5B' },
+  { id: 20, name: 'Carnival Bank', city: 'Rio', tz: -3, x: 33, y: 68, region: 'AMER', vault: '$1.0B' },
+  { id: 21, name: 'Azores Vault', city: 'Lisbon', tz: 0, x: 43, y: 29, region: 'EUR', vault: '$1.4B' },
 ]
 const REGION_COLORS: { [k: string]: string } = { APAC: '#c084fc', EUR: '#a78bfa', AMER: '#f59e0b', MENA: '#f97316', AFR: '#a855f7', ASIA: '#ec4899' }
+
+// ─── Self-contained stylized world continents (no external image dependency) ───
+const WORLD_CONTINENTS = [
+  // North America
+  '17,29 50,18 95,15 150,30 145,45 125,58 110,76 100,68 87,80 78,72 65,58 35,50',
+  // Greenland
+  '245,30 252,10 268,8 270,24 255,33',
+  // South America
+  '112,95 135,91 158,105 155,125 140,150 128,168 120,152 110,118',
+  // Europe
+  '190,40 200,28 220,24 240,30 244,45 230,55 215,63 200,58 192,50',
+  // British Isles
+  '186,30 191,28 192,36 187,38',
+  // Africa
+  '185,68 205,62 230,66 250,72 255,90 245,110 232,135 222,146 210,135 200,110 185,90',
+  // Asia
+  '245,35 270,20 320,15 370,22 398,35 395,55 370,60 350,75 330,70 310,85 295,95 280,80 260,60 248,48',
+  // Japan
+  '372,40 380,35 385,45 378,52',
+  // Australia
+  '330,125 350,119 368,128 370,142 355,150 338,145 328,135',
+]
 
 const defaultWinStates = (): Record<WinType, WinState> => ({
   EARLY_FIVE: { claimed: false, claimable: false, flickering: false, broken: false, claimers: [], expired: false, bursting: false },
@@ -131,7 +152,7 @@ const defaultWinStates = (): Record<WinType, WinState> => ({
   FULL_HOUSE_3: { claimed: false, claimable: false, flickering: false, broken: false, claimers: [], expired: false, bursting: false },
 })
 
-function getLiveBank(h: number) { return h % 23 }
+function getLiveBank(h: number) { return h % 22 }
 
 // ─── Ticket Generator ─────────────────────────────────────────────────────────
 function generateDevice(id: number): Device {
@@ -234,8 +255,13 @@ function WorldMapSketch({ currentHour, onSelectBank, style, className }: { curre
   const [hov, setHov] = useState<number | null>(null)
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#0a0612', overflow: 'hidden', minHeight: 200, ...style }}>
-      <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-qpHYdNrYszBgUEZK-XDwmoipoMY4fuwa6ooHcfdmGgOMR5hPsRnliaYv7UJIzsxEbBsoczbGp6nMjFaXT_Rwg2-zWBrnyEkuAKxW9KAc96MFqIKwxhSHGFXRMNEgYKENqjtU0LSdGC7Rj88SfAUFBK0_gcGjXckGkgXuEZySbIs4zWwpI6knvocSlgQdEYGheuw7Zanu5xobKhkWNSKh8okeX4k4QU0KSuxu-CD85KNnOYUlO0lEYScZM-1_wi7E_IAnX1gr460x"
-        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', position: 'absolute', inset: 0, opacity: 0.45, filter: 'saturate(0.35) brightness(0.7) contrast(1.2)', pointerEvents: 'none' }} alt="" />
+      {/* Vector world map — always renders, never depends on an external image host */}
+      <svg viewBox="0 0 400 210" preserveAspectRatio="xMidYMid slice" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
+        <rect x="0" y="0" width="400" height="210" fill="#08111f" />
+        {WORLD_CONTINENTS.map((pts, i) => (
+          <polygon key={i} points={pts} fill="rgba(178,107,255,0.10)" stroke="rgba(178,107,255,0.35)" strokeWidth="0.5" />
+        ))}
+      </svg>
       <svg viewBox="0 0 400 210" preserveAspectRatio="xMidYMid slice" style={{ width: '100%', height: '100%', display: 'block', position: 'relative', zIndex: 2 }}>
         {Array.from({ length: 41 }, (_, i) => <line key={"vg" + i} x1={i * 10} y1="0" x2={i * 10} y2="210" stroke="#170f2b" strokeWidth="0.15" />)}
         {Array.from({ length: 22 }, (_, i) => <line key={"hg" + i} x1="0" y1={i * 10} x2="400" y2={i * 10} stroke="#170f2b" strokeWidth="0.15" />)}
@@ -1914,7 +1940,7 @@ function LobbyMapWithOverlays({
           {/* Top Organized Icons & Action Controls Header */}
           <div
             style={{
-              padding: '8px 12px',
+              padding: '4px 8px',
               background: 'rgba(17,24,39, 0.85)',
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)',
@@ -1924,7 +1950,7 @@ function LobbyMapWithOverlays({
               alignItems: 'center',
               zIndex: 20,
               flexWrap: 'wrap',
-              gap: 8,
+              gap: 6,
             }}
           >
             {/* Left: Terminal Identity & Live Map Target */}
@@ -2075,8 +2101,7 @@ function LobbyMapWithOverlays({
             </div>
           </div>
 
-          {/* ── Middle Transparent Chat Body & Floating Heist List ── */}
-          <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'visible', minHeight: 0 }}>
             
             {/* Transparent Chat Log Area (Map is fully visible through here) */}
             <div
@@ -2084,6 +2109,7 @@ function LobbyMapWithOverlays({
               className={`hud-chatlog${heistPanelOpen ? '' : ' heist-closed'}`}
               style={{
                 flex: 1,
+                minHeight: 0,
                 overflowY: 'auto',
                 padding: '12px 14px',
                 display: 'flex',
@@ -2140,7 +2166,7 @@ function LobbyMapWithOverlays({
               style={{
                 position: 'absolute',
                 right: 12,
-                top: 12,
+                top: 0,
                 bottom: 12,
                 width: 210,
                 background: 'rgba(17,24,39, 0.88)',
@@ -2422,7 +2448,7 @@ function LobbyMapWithOverlays({
             <div
               className="heist-drawer-key"
               onClick={() => setHeistPanelOpen(o => !o)}
-              style={{ right: heistPanelOpen ? 224 : 2, left: 'auto' }}
+              style={{ right: heistPanelOpen ? 224 : 2, left: 'auto', zIndex: 120 }}
               title={heistPanelOpen ? 'Slide heist list away' : 'Draw heist list out'}
             >
               <span style={{ fontSize: 12, fontWeight: 800 }}>{heistPanelOpen ? '»' : '«'}</span>
@@ -2434,7 +2460,7 @@ function LobbyMapWithOverlays({
                 key={room.id}
                 room={room}
                 nickname={nickname}
-                posStyle={{ position: 'absolute', top: 12 + i * 16, left: (heistPanelOpen ? 230 : 46) + i * 16, zIndex: 30 }}
+                posStyle={{ position: 'absolute', top: 0, left: (heistPanelOpen ? 230 : 46) + i * 16, zIndex: 30 }}
                 onClose={() => onCloseRoom(room.id)}
               />
             ))}
@@ -2457,9 +2483,10 @@ function LobbyMapWithOverlays({
 
           {/* ── Bottom Transparent Input Bar with Universal File Upload ── */}
           <div
-            className="hud-chat-inputbar"
+            className={`hud-chat-inputbar${heistPanelOpen ? '' : ' heist-closed'}`}
             style={{
               display: 'flex',
+              alignItems: 'center',
               borderTop: '1px solid rgba(178,107,255,0.25)',
               background: 'rgba(17,24,39, 0.85)',
               backdropFilter: 'blur(8px)',
@@ -2492,10 +2519,12 @@ function LobbyMapWithOverlays({
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()}
               placeholder="ENTER TRANSMISSION COMMAND TO GLOBAL HEIST MATRIX..."
+              className="chat-text-input"
               style={{
                 flex: 1,
-                background: 'transparent',
-                border: 'none',
+                background: 'rgba(2,8,16,0.6)',
+                border: '1px solid rgba(178,107,255,0.35)',
+                borderRadius: 6,
                 padding: '8px 12px',
                 fontFamily: 'DM Mono,monospace',
                 fontSize: 8.5,
@@ -2505,19 +2534,25 @@ function LobbyMapWithOverlays({
             />
             <button
               onClick={send}
+              disabled={!input.trim()}
+              className="chat-send-btn"
               style={{
-                background: 'rgba(178,107,255,0.2)',
+                background: input.trim() ? 'linear-gradient(135deg, #39ff14, #00c853)' : 'rgba(178,107,255,0.12)',
                 border: 'none',
-                borderLeft: '1px solid rgba(178,107,255,0.3)',
-                padding: '8px 16px',
-                color: '#b26bff',
-                cursor: 'pointer',
+                borderRadius: 6,
+                padding: '8px 18px',
+                margin: 4,
+                color: input.trim() ? '#fff' : '#7d6b99',
+                cursor: input.trim() ? 'pointer' : 'not-allowed',
                 fontFamily: 'DM Mono,monospace',
                 fontSize: 8.5,
-                fontWeight: 700,
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                boxShadow: input.trim() ? '0 0 12px rgba(57,255,20,0.45), inset 0 1px 0 rgba(255,255,255,0.25)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
-              TRANSMIT
+              ➤ TRANSMIT
             </button>
           </div>
         </div>
@@ -2792,6 +2827,7 @@ function RoomChatTerminal({
   posStyle,
   cascadeIndex = 0,
   fixed = false,
+  dock = false,
 }: {
   room: ChatRoom
   nickname: string
@@ -2799,6 +2835,7 @@ function RoomChatTerminal({
   posStyle?: React.CSSProperties
   cascadeIndex?: number
   fixed?: boolean
+  dock?: boolean
 }) {
   const [minimized, setMinimized] = useState(false)
   const [messages, setMessages] = useState<RoomMsg[]>(() => roomMsgStore.get(room.id) ?? [
@@ -2825,7 +2862,10 @@ function RoomChatTerminal({
   }
 
   const pos: React.CSSProperties = posStyle ?? (fixed
-    ? { position: 'fixed', top: 60 + cascadeIndex * 16, right: 12 + cascadeIndex * 16, zIndex: 900 }
+    ? dock
+      ? /* Game phase: docked low so the Matrix arena always stays visible on top */
+        { position: 'fixed', bottom: 46 + cascadeIndex * 16, right: 12 + cascadeIndex * 16, zIndex: 45 }
+      : { position: 'fixed', top: 60 + cascadeIndex * 16, right: 12 + cascadeIndex * 16, zIndex: 900 }
     : { position: 'absolute', top: 12 + cascadeIndex * 16, right: 12 + cascadeIndex * 16, zIndex: 30 })
 
   return (
@@ -3319,6 +3359,7 @@ function Ransome() {
   // ─── Chain selection (solana | sui) ─────────────────────────────────────
   const [chain, setChain] = useState<'solana' | 'evm'>('evm')
   const [chainMenuOpen, setChainMenuOpen] = useState(false)
+  const [ethMenuOpen, setEthMenuOpen] = useState(false)
   const [robhinhoodSelected, setRobhinhoodSelected] = useState(false)
   const [vaultOpen, setVaultOpen] = useState(false)
   // EVM wallet state — reactive via useEvmWallet hook
@@ -3995,8 +4036,8 @@ function Ransome() {
   // ─── SUI wallet connect/disconnect (dapp-kit hooks) ────────────────────
   
   // ─── Mint devices (SUI or Solana) ──────────────────────────────────────
-  const mintDevices = async () => {
-    const count = mintCount
+  const mintDevices = async (overrideCount?: number) => {
+    const count = overrideCount ?? mintCount
 
     // DEV MODE — local-only mint ONLY when no wallet is connected (pure UI testing)
     if (DEV_MODE && !(chain === 'evm' && evmConnected && evmAddress) && !(chain === 'solana' && connected && publicKey)) {
@@ -4122,21 +4163,20 @@ function Ransome() {
   // ── LOBBY ─────────────────────────────────────────────────────────────────
   if (phase === 'lobby') return (
     <div data-theme={theme} style={{ minHeight: '100vh', background: '#0e0819', color: '#f8fafc', overflow: 'hidden' }}>
-      <div className="lobby-topbar" style={{ position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 50, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', background: 'rgba(5,10,23,0.9)', borderBottom: '1px solid rgba(178,107,255,0.1)', boxSizing: 'border-box' }}>
+      <div className="lobby-topbar" style={{ position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 50, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px', background: 'rgba(5,10,23,0.9)', borderBottom: '1px solid rgba(178,107,255,0.1)', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <button className="mobile-menu-button" onClick={() => setMobileMenuOpen(open => !open)} aria-label={mobileMenuOpen ? 'Close lobby menu' : 'Open lobby menu'} aria-expanded={mobileMenuOpen} title={mobileMenuOpen ? 'Close menu' : 'Open menu'}>
             <span />
             <span />
             <span />
-          </button>
-          <span className="lobby-logo" style={{ fontSize: 20, fontWeight: 800, color: '#b26bff', whiteSpace: 'nowrap' }}>ROBHIN HEIST</span>
+          </button>          <span className="lobby-logo" style={{ fontSize: 17, fontWeight: 800, color: '#b26bff', whiteSpace: 'nowrap' }}>ROBHIN HEIST</span>
           <div className="lobby-online-badge" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '2px 8px', whiteSpace: 'nowrap' }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'ledBlink 2s infinite' }} />
-            <span style={{ fontSize: 9, color: '#22c55e', fontWeight: 700 }}>+59M ONLINE</span>
+            <span style={{ fontSize: 9, color: '#22c55e', fontWeight: 700 }}>59M</span>
           </div>
           {DEV_MODE && <span style={{ fontSize: 9, color: '#f59e0b', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 4, padding: '2px 6px', marginLeft: 8 }}>⚠ DEV MODE</span>}
         </div>
-        <div className="lobby-topbar-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="lobby-topbar-actions" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap' }}>
           <div style={{ background: 'rgba(24,39,51,0.5)', padding: '4px 10px', border: '1px solid rgba(47,243,173,0.2)', fontSize: 12, color: '#b26bff', fontWeight: 700 }}>{fmtTime(lobbyCountdown)}</div>
           <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Light / dark mode" style={{ background: '#150d24', border: '1px solid #241538', borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer' }}>{theme === 'dark' ? '☀️' : '🌙'}</button>
           {/* Chain selector dropdown (replaces the old NOW/+30M/+59M dev boxes) */}
@@ -4186,6 +4226,29 @@ function Ransome() {
               <WalletMultiButton />
             )
           )}
+          {/* Network chip — shows active EVM chain, click to switch (Robinhood / Ethereum / Base / Arbitrum / OP) */}
+          {wallet && chain === 'evm' && (() => {
+            const activeChain = SUPPORTED_EVM_CHAINS[evmChainId ?? 1] || SUPPORTED_EVM_CHAINS[1]
+            return (
+              <div className="eth-chain-chip-wrap" style={{ position: 'relative' }}>
+                <button onClick={() => setEthMenuOpen(o => !o)} aria-expanded={ethMenuOpen} aria-label="Switch network" title="Switch network" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(192,132,252,0.12)', border: '1px solid rgba(192,132,252,0.35)', borderRadius: 6, padding: '4px 8px', fontSize: 9, fontWeight: 700, color: '#c084fc', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 10 }}>⬡</span> {activeChain.shortName.toUpperCase()} ▾
+                </button>
+                {ethMenuOpen && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, background: '#0e0819', border: '1px solid rgba(178,107,255,0.35)', borderRadius: 6, zIndex: 70, minWidth: 170, boxShadow: '0 6px 18px rgba(0,0,0,0.6)', padding: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {Object.values(SUPPORTED_EVM_CHAINS).filter(c => !c.isTestnet).map(c => {
+                      const isActive = evmChainId === c.id
+                      return (
+                        <div key={c.id} onClick={() => { setEthMenuOpen(false); if (!isActive) switchEvmNetwork(c.id) }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 9, fontWeight: isActive ? 800 : 400, color: isActive ? '#c084fc' : '#a99bc4', background: isActive ? 'rgba(178,107,255,0.12)' : 'transparent' }}>
+                          <span>{c.name}</span>{isActive && <span style={{ color: '#22c55e', fontSize: 8 }}>●</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </div>
       <div className="mobile-vault-status">
@@ -4218,8 +4281,8 @@ function Ransome() {
           ))}
         </div>
       )}
-      <div style={{ display: 'flex', paddingTop: 56 }}>
-        <div className={`lobby-sidebar${mobileMenuOpen ? ' mobile-open' : ''}`} style={{ width: 200, minHeight: 'calc(100vh - 56px)', background: '#150d24', borderRight: '1px solid rgba(178,107,255,0.08)', display: mobileMenuOpen ? 'block' : 'none', flexDirection: 'column', padding: '16px 0', flexShrink: 0 }}>
+      <div style={{ display: 'flex', paddingTop: 48 }}>
+        <div className={`lobby-sidebar${mobileMenuOpen ? ' mobile-open' : ''}`} style={{ width: 200, minHeight: 'calc(100vh - 48px)', background: '#150d24', borderRight: '1px solid rgba(178,107,255,0.08)', display: mobileMenuOpen ? 'block' : 'none', flexDirection: 'column', padding: '16px 0', flexShrink: 0 }}>
           <div className="lobby-operative" style={{ display: 'none' }}>
             <div style={{ width: 32, height: 32, background: '#1f1330', border: '1px solid rgba(178,107,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎭</div>
             <div><div style={{ color: '#b26bff', fontWeight: 700, fontSize: 10 }}>OPERATIVE</div><div style={{ color: '#7d6b99', fontSize: 9 }}>{nickname.slice(0, 10).toUpperCase()}</div></div>
@@ -4389,11 +4452,8 @@ function Ransome() {
               mintToken={mintToken}
               setMintToken={setMintToken}
               onQuickMint={(count) => {
-                setMintCount(count);
-                setTimeout(() => {
-                  mintDevices();
-                }, 100);
                 announce(`◈ Quick minting ${count} devices`);
+                mintDevices(count);
               }}
               mintCostLabel={mintCostLabel}
               chatRooms={chatRooms}
@@ -4673,7 +4733,7 @@ function Ransome() {
           </div>
           <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
             <button onClick={handleActivateAll} style={{ background: '#150d24', border: '1px solid #b26bff30', color: '#b26bff', borderRadius: 7, padding: '4px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
-              ◈ ALL ON
+              ◈ ACTIVATE ALL
             </button>
             <button onClick={() => setDevicesExpanded(true)} style={{ background: '#150d24', border: '1px solid #241538', color: '#453071', borderRadius: 7, padding: '4px 10px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
               ⊞ MAXIMIZE
@@ -4693,9 +4753,9 @@ function Ransome() {
         </div>
       </div>
 
-      {/* Private room windows remain through the matrix until the game ends */}
+      {/* Private room windows remain through the matrix until the game ends (docked low — arena stays on top) */}
       {chatRooms.map((room, i) => (
-        <RoomChatTerminal key={room.id} room={room} nickname={nickname} fixed cascadeIndex={i} onClose={() => setChatRooms(p => p.filter(r => r.id !== room.id))} />
+        <RoomChatTerminal key={room.id} room={room} nickname={nickname} fixed dock cascadeIndex={i} onClose={() => setChatRooms(p => p.filter(r => r.id !== room.id))} />
       ))}
       {announcement && (
         <div style={{ position: 'fixed', top: 52, left: '50%', transform: 'translateX(-50%)', background: '#0e0819', border: '1px solid #b26bff40', borderRadius: 10, padding: '9px 16px', fontFamily: 'DM Mono,monospace', fontSize: 10, color: '#b26bff', zIndex: 999, whiteSpace: 'pre', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', animation: 'slideDown 0.3s ease', maxWidth: '90vw' }}>

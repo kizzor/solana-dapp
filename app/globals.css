@@ -721,6 +721,50 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   }
 }
 
+/* ── Lobby map stage: responsive height, never taller than the viewport ──
+   Replaces the fixed 560px inline min-height so the map fits every screen.
+   (The stage + its first child carry the 560 inline — !important overrides it.) */
+.lobby-map-stage,
+.lobby-map-stage > div:first-child {
+  min-height: min(74vh, 640px) !important;
+}
+
+@media (min-width: 1600px) {
+  .lobby-map-stage,
+  .lobby-map-stage > div:first-child {
+    min-height: min(74vh, 720px) !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .lobby-map-stage,
+  .lobby-map-stage > div:first-child {
+    min-height: calc(100vh - 82px) !important;
+  }
+
+  @supports (height: 100dvh) {
+    .lobby-map-stage,
+    .lobby-map-stage > div:first-child {
+      min-height: calc(100dvh - 82px) !important;
+    }
+  }
+}
+
+/* ── Desktop: soften the HUD veil + message chips so the world map stays
+   clearly visible underneath the chat. (Mobile keeps the high-contrast
+   `.hud-chatlog` override further below for readability.) ── */
+@media (min-width: 601px) {
+  .global-heist-hud {
+    background: rgba(2, 8, 16, 0.35);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .hud-chatlog > div {
+    background: rgba(3, 12, 24, 0.55) !important;
+  }
+}
+
 /* ── Responsive game layout ───────────────────────────────────────────────── */
 .game-grid {
   grid-template-columns: minmax(0, 1fr) minmax(0, 200px) minmax(0, 220px);
@@ -933,8 +977,8 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .lobby-topbar {
     height: auto;
-    min-height: 56px;
-    padding: 8px 12px;
+    min-height: 48px;
+    padding: 4px 12px;
   }
 
   .lobby-topbar>div:first-child {
@@ -1022,13 +1066,13 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   .lobby-sidebar.mobile-open {
     display: flex;
     position: fixed;
-    top: 56px;
+    top: 48px;
     left: 0;
     right: 0;
     z-index: 60;
     width: 100%;
     min-height: auto;
-    max-height: calc(100vh - 56px);
+    max-height: calc(100vh - 48px);
     overflow-y: auto;
     padding: 10px 8px 0;
     border-right: none;
@@ -1095,7 +1139,8 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 
   .global-heist-hud {
     width: 100vw !important;
-    min-height: calc(100vh - 56px);
+    min-height: calc(100vh - 82px);
+    min-height: calc(100dvh - 82px);
     margin-left: calc(50% - 50vw);
     display: flex !important; /* Visible by default on all other screens */
   }
@@ -1233,19 +1278,36 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
     grid-template-columns: 1fr !important;
   }
 
-  /* Heist panel (Quick Mint + list) rides the RIGHT edge on mobile */
+  /* Heist panel (Quick Mint + list) rides the RIGHT edge on mobile, tucked just under the header */
   .heist-panel {
     position: fixed !important;
     right: 8px !important;
-    top: auto !important;
-    bottom: 60px !important;
+    top: 54px !important;
+    bottom: auto !important;
     width: 210px !important;
-    max-height: 60vh !important;
+    max-height: 62vh !important;
     z-index: 100 !important;
   }
 
   .heist-panel.heist-closed {
     right: -224px !important;
+  }
+
+  /* Mobile drawer key: compact square fixed just below the header on the right edge */
+  .heist-drawer-key {
+    position: fixed !important;
+    top: 52px !important;
+    right: 10px !important;
+    left: auto !important;
+    transform: none !important;
+    width: 26px !important;
+    height: 40px !important;
+    max-height: none !important;
+    border-radius: 5px;
+  }
+
+  .heist-drawer-key > span {
+    font-size: 11px;
   }
 
   /* Heist list toggle is visually hidden — the left-edge drawer key is the control */
@@ -1275,6 +1337,98 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
 @keyframes gliderPulse {
   0%, 100% { box-shadow: 0 0 8px rgba(178, 107, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
   50% { box-shadow: 0 0 16px rgba(178, 107, 255, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+}
+
+/* ─── Chat composer: highlighted input + polished send button ─── */
+.hud-chat-inputbar {
+  padding: 6px;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  gap: 6px;
+  box-sizing: border-box;
+}
+
+/* Composer tracks the heist panel just like the chatlog does,
+   so the input bar never disappears behind the quick-mint drawer */
+.hud-chat-inputbar {
+  transition: margin-right 0.25s ease;
+}
+
+@media (min-width: 601px) {
+  .hud-chat-inputbar {
+    margin-right: 224px;
+  }
+}
+
+.hud-chat-inputbar.heist-closed {
+  margin-right: 0;
+}
+
+@media (max-width: 600px) {
+  .hud-chat-inputbar {
+    margin-right: 0;
+  }
+}
+
+.chat-text-input {
+  min-width: 0;
+  min-height: 30px;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.chat-text-input::placeholder {
+  color: #7d6b99;
+  letter-spacing: 0.06em;
+}
+
+.chat-text-input:focus {
+  border-color: #b26bff !important;
+  background: rgba(2, 8, 16, 0.8) !important;
+  box-shadow:
+    0 0 0 1.5px rgba(178, 107, 255, 0.35),
+    0 0 14px rgba(178, 107, 255, 0.25);
+}
+
+.chat-send-btn:not(:disabled):hover {
+  filter: brightness(1.12);
+  box-shadow:
+    0 0 16px rgba(57, 255, 20, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.chat-send-btn:not(:disabled):active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: 0 0 8px rgba(57, 255, 20, 0.4);
+}
+
+/* ─── Mobile: keep the whole chat (incl. composer) inside the visual viewport.
+   The map stage has a 560px inline min-height — on phones it pushes the input bar
+   below the fold where it can't be tapped ("chat doesn't work"). dvh tracks the
+   browser chrome (URL bar / keyboard) so the composer always stays reachable.
+   48px header + 14px container padding + ~20px slack = 82px. ─── */
+@media (max-width: 600px) {
+  .lobby-map-stage,
+  .lobby-map-stage > div:first-child {
+    min-height: calc(100vh - 82px) !important;
+  }
+
+  @supports (height: 100dvh) {
+    .lobby-map-stage,
+    .lobby-map-stage > div:first-child {
+      min-height: calc(100dvh - 82px) !important;
+    }
+  }
+
+  /* Larger, tappable text in the composer on phones */
+  .chat-text-input {
+    font-size: 12px !important;
+    padding: 9px 12px !important;
+  }
+
+  .chat-send-btn {
+    padding: 9px 14px !important;
+    font-size: 10px !important;
+  }
 }
 
 .heist-drawer-key:hover {
