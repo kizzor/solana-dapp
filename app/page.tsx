@@ -233,17 +233,13 @@ function useOnChainSession(active: boolean) {
 
 // ─── MiniStopwatch ────────────────────────────────────────────────────────────
 function MiniStopwatch({ seconds, total }: { seconds: number; total: number }) {
-  const danger = seconds <= 10, r = 12, circ = 2 * Math.PI * r, dash = circ * (seconds / Math.max(total, 1))
+  const danger = seconds <= 10
   return (
-    <div style={{ position: 'relative', width: 34, height: 34, flexShrink: 0 }}>
-      <svg width="34" height="34" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="17" cy="17" r={r} fill="none" stroke="#150d24" strokeWidth="2.5" />
-        <circle cx="17" cy="17" r={r} fill="none" stroke={danger ? '#ff5c8a' : '#b26bff'} strokeWidth="2.5"
-          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" style={{ transition: 'stroke-dasharray 0.9s linear,stroke 0.3s' }} />
-      </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, color: danger ? '#ff5c8a' : '#b26bff' }}>{String(seconds % 60).padStart(2, '0')}</span>
-      </div>
+    <div title="Seconds until next number" style={{
+      background: '#08040a', border: `1px solid ${danger ? 'rgba(255,92,138,0.6)' : '#3a0d1a'}`, borderRadius: 8,
+      boxShadow: 'inset 0 0 12px rgba(0,0,0,0.7)', padding: '2px 9px', flexShrink: 0,
+    }}>
+      <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 20, fontWeight: 800, lineHeight: 1.15, display: 'block', color: danger ? '#ff5c8a' : '#ff4fa3', textShadow: `0 0 10px ${danger ? 'rgba(255,92,138,0.9)' : 'rgba(255,79,163,0.7)'}` }}>{String(seconds % 60).padStart(2, '0')}</span>
     </div>
   )
 }
@@ -686,56 +682,50 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
   const proxGlow = bestPct > 0.4 ? `0 0 ${Math.round(bestPct * 18)}px ${proxColor}40,0 0 ${Math.round(bestPct * 8)}px ${proxColor}20` : 'none'
   return (
     <div style={{
-      background: 'linear-gradient(180deg,#1a1029,#0b0614)', border: `2px solid ${canClaim ? '#ec4899' : bestPct > 0.5 ? proxColor : device.active ? '#b26bff30' : '#1a1029'}`, borderRadius: 14, padding: 0,
-      boxShadow: canClaim ? `0 0 0 2px rgba(236,72,153,0.3),0 6px 24px rgba(236,72,153,0.15)` : bestPct > 0.4 ? proxGlow : device.active ? '0 0 10px rgba(178,107,255,0.06)' : 'none',
+      background: 'linear-gradient(180deg,#2b1f42,#170f28)', border: `2px solid ${canClaim ? '#ec4899' : bestPct > 0.5 ? proxColor : device.active ? '#3a2a5c' : '#241a38'}`, borderRadius: 18, padding: 0,
+      boxShadow: canClaim ? `0 0 0 2px rgba(236,72,153,0.3),0 6px 24px rgba(236,72,153,0.15)` : bestPct > 0.4 ? proxGlow : device.active ? '0 0 10px rgba(168,85,247,0.10)' : 'none',
       display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none'
     }}>
-      {/* Header */}
-      <div style={{ background: 'linear-gradient(90deg,#150d24,#1a1029)', padding: '4px 7px', borderBottom: '1px solid #1a1029', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <div style={{ width: 11, height: 11, background: 'linear-gradient(to bottom,#b26bff 0%,#7c3aed 100%)', clipPath: 'polygon(50% 0%,100% 50%,50% 100%,0% 50%)', flexShrink: 0 }} />
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, color: '#b26bff' }}>{device.nftId}</span>
-            {device.walletAddr && <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 5, color: '#150d24', letterSpacing: '0.03em' }}>⛓ {device.walletAddr.slice(0, 10)}…</span>}
-          </div>
+      {/* Header — NFT capsule + telemetry */}
+      <div style={{ padding: '5px 8px', borderBottom: '1px solid #241a38', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, color: '#7ef9ff', background: 'rgba(126,249,255,0.08)', border: '1px solid rgba(126,249,255,0.35)', borderRadius: 6, padding: '1px 6px', textShadow: '0 0 6px rgba(126,249,255,0.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{device.nftId || `HEIST-${device.id}`}</span>
+          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 6, color: '#4a3a68', flexShrink: 0 }}>#{device.id}</span>
         </div>
-        <div style={{ flex: 1, height: 14, background: 'rgba(178,107,255,0.03)', border: '1px dashed #150d24', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 3px' }}>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 5, color: '#150d24' }}>AD</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>{nc}/15</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#34d399', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 6, padding: '1px 4px' }}>{nc}/15</span>
           <div style={{ width: 5, height: 5, borderRadius: '50%', background: device.active ? '#a78bfa' : '#241538', animation: device.active ? 'dot 1.5s infinite' : 'none' }} />
         </div>
       </div>
       {/* Mini bank / activate */}
       {device.active ? (
-        <div style={{ background: '#070310', margin: '3px 5px 0', borderRadius: 5, border: '1px solid #150d24', padding: '2px 5px', display: 'flex', alignItems: 'center', gap: 4, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ background: '#08040a', margin: '4px 6px 0', borderRadius: 9, border: '1px solid #2a0d1a', boxShadow: 'inset 0 0 14px rgba(0,0,0,0.7)', padding: '3px 8px', display: 'flex', alignItems: 'center', gap: 6, position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px)', pointerEvents: 'none' }} />
           <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 5, color: '#2d1f4a', zIndex: 1 }}>BANK</span>
-          <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1, zIndex: 1, textShadow: currentNum ? '0 0 8px #fff' : 'none' }}>{currentNum ?? '—'}</span>
+          <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 16, fontWeight: 800, color: '#ff4fa3', lineHeight: 1, zIndex: 1, textShadow: currentNum ? '0 0 10px rgba(255,79,163,0.9),0 0 22px rgba(255,79,163,0.5)' : 'none' }}>{currentNum ?? '—'}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1, zIndex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <div style={{ width: 3, height: 3, borderRadius: '50%', background: clickWindowOpen ? '#a78bfa' : '#ff5c8a', animation: clickWindowOpen ? 'dot 1s infinite' : 'none' }} />
-              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 5, color: clickWindowOpen ? '#a78bfa' : '#ff5c8a' }}>{clickWindowOpen ? 'OPEN' : 'CLOSED'}</span>
+              <div style={{ width: 3, height: 3, borderRadius: '50%', background: clickWindowOpen ? '#7ef9ff' : '#ff5c8a', animation: clickWindowOpen ? 'dot 1s infinite' : 'none' }} />
+              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 5, color: clickWindowOpen ? '#7ef9ff' : '#ff5c8a' }}>{clickWindowOpen ? 'OPEN' : 'CLOSED'}</span>
             </div>
             <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 5, color: '#2d1f4a' }}>{BANKS[liveBank]?.name?.split(' ')[0] ?? ''}</span>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, zIndex: 1 }}>
             {Array.from(calledNums).slice(-3).reverse().map((n, i) => (
-              <div key={i} style={{ width: 12, height: 12, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#150d24', border: '1px solid #241538', fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071', opacity: 1 - i * 0.25 }}>{n}</div>
+              <div key={i} style={{ width: 12, height: 12, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#120d20', border: '1px solid #2a2140', fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#7ef9ff', textShadow: '0 0 5px rgba(126,249,255,0.6)', opacity: 1 - i * 0.25 }}>{n}</div>
             ))}
           </div>
         </div>
       ) : (
-        <div style={{ margin: '3px 5px 0', background: '#070310', border: '1px solid #150d24', borderRadius: 5, padding: '4px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+        <div style={{ margin: '4px 6px 0', background: '#0a0714', border: '1px solid #241a38', borderRadius: 8, padding: '4px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
           <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>Disconnected</span>
           <button className="keyboard-key keyboard-key-accent" onClick={() => onActivate(device.id)} style={{ borderRadius: 4, padding: '3px 7px', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, cursor: 'pointer' }}>ACTIVATE</button>
         </div>
       )}
       {/* Grid */}
-      <div style={{ margin: '3px 5px 0', background: '#0a0612', border: '1px solid #150d24', borderRadius: 4, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', borderBottom: '1px solid #150d24' }}>
-          {COL_HEADERS.map((h, i) => <div key={i} style={{ padding: '1px 0', textAlign: 'center', fontFamily: 'DM Mono,monospace', fontSize: 4.5, color: '#241538', borderRight: i < 8 ? '1px solid #150d24' : 'none', background: '#070310' }}>{h}</div>)}
+      <div style={{ margin: '4px 6px 0', background: '#0f0a1a', border: '1px solid #241a38', borderRadius: 10, padding: '4px 4px 3px', boxShadow: 'inset 0 0 16px rgba(0,0,0,0.55)', overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', borderBottom: '1px solid #1c1330', marginBottom: 2 }}>
+          {COL_HEADERS.map((h, i) => <div key={i} style={{ padding: '1px 0', textAlign: 'center', fontFamily: 'DM Mono,monospace', fontSize: 4.5, color: '#4a3a68', borderRight: i < 8 ? '1px solid #1c1330' : 'none', background: '#0b0714' }}>{h}</div>)}
         </div>
         {device.grid.map((row, ri) => (
           <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', borderBottom: ri < 2 ? '1px solid #150d24' : 'none' }}>
@@ -746,21 +736,26 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
               const isEmpty = cell.num === null
               const glitch = `gx${(ri * 9 + ci) % 3} ${2 + ((ri * 9 + ci) % 2)}s ${(ri * 9 + ci) * 0.08}s infinite`
               return (
-                <button key={ci} onClick={() => isClick && onCellClick(device.id, ri, ci)} style={{
-                  height: 20, padding: 0, cursor: isClick ? 'pointer' : 'default', border: 'none',
-                  borderRight: ci < 8 ? '1px solid #150d24' : 'none',
-                  background: isEmpty ? '#0a0612' : cell.clicked ? 'rgba(255,255,255,0.08)' : isClick ? 'rgba(255,255,255,0.05)' : 'transparent',
-                  boxShadow: isClick ? 'inset 0 0 0 1.5px rgba(255,255,255,0.9)' : 'none',
-                  color: '#ffffff', fontFamily: 'DM Mono,monospace', fontSize: 9, fontWeight: 700,
-                  textShadow: isEmpty ? 'none' : cell.clicked ? '0 0 6px #fff,0 0 12px rgba(255,255,255,0.8)' : isClick ? '0 0 10px #fff' : '0 0 2px rgba(255,255,255,0.35)',
-                  opacity: isEmpty ? 0 : cell.clicked ? 1 : isClick ? 1 : 0.45,
+                <button key={ci} onClick={() => isClick && onCellClick(device.id, ri, ci)} className="device-key" style={{
+                  height: 24, padding: 0, cursor: isClick ? 'pointer' : 'default', border: 'none',
+                  borderRight: ci < 8 ? '1px solid #1c1330' : 'none',
+                  background: isEmpty ? 'transparent' : cell.clicked ? 'rgba(255,255,255,0.10)' : isClick ? 'rgba(126,249,255,0.10)' : 'linear-gradient(180deg,#1b1528,#110c1d)',
+                  boxShadow: isClick ? 'inset 0 0 0 1.5px rgba(255,255,255,0.95),0 0 10px rgba(126,249,255,0.35)' : isEmpty ? 'none' : 'inset 0 -2px 0 rgba(0,0,0,0.35),inset 0 1px 0 rgba(255,255,255,0.05)',
+                  borderRadius: 3,
+                  color: '#c8f4ff', fontFamily: 'DM Mono,monospace', fontSize: 9, fontWeight: 700,
+                  textShadow: isEmpty ? 'none' : cell.clicked ? '0 0 6px #fff,0 0 12px rgba(255,255,255,0.8)' : isClick ? '0 0 10px #fff' : '0 0 5px rgba(126,249,255,0.55)',
+                  opacity: isEmpty ? 0 : cell.clicked ? 1 : isClick ? 1 : 0.6,
                   animation: (!isEmpty && !isClick && !cell.clicked) ? glitch : 'none',
-                  transition: 'opacity 0.2s',
+                  transition: 'opacity 0.2s,box-shadow 0.2s',
                 }}>{cell.num ?? ''}</button>
               )
             })}
           </div>
         ))}
+        {/* decorative dot row (PNG chassis detail) */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5, padding: '3px 0 1px' }}>
+          {[0, 1, 2, 3].map(i => <div key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#120d20', border: '1px solid #241a38' }} />)}
+        </div>
       </div>
       {/* LED strip */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: 3, padding: '3px 5px 1px', alignItems: 'center' }}>
@@ -808,10 +803,10 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
         </div>
         <MiniStopwatch seconds={timer} total={totalTimer} />
         <div style={{ position: 'relative', flex: 1, display: 'flex', margin: '0 2px' }}>
-          <button onClick={doClaim} disabled={!canClaim} style={{
+          <button onClick={doClaim} disabled={!canClaim} className="ransom-pill" style={{
             flex: 1, width: '100%',
-            background: canClaim ? 'linear-gradient(180deg,#1a0000,#0d0000)' : bestPct > 0.5 ? `linear-gradient(180deg,rgba(${glowR},${glowG},20,0.15),rgba(${glowR},${glowG},20,0.05))` : 'linear-gradient(180deg,#080f18,#040a10)',
-            border: `2px solid ${canClaim ? '#ff5c8a' : bestPct > 0.5 ? proxColor : '#1a1029'}`, borderRadius: 7,
+            background: canClaim ? 'linear-gradient(180deg,#1a0000,#0d0000)' : bestPct > 0.5 ? `linear-gradient(180deg,rgba(${glowR},${glowG},20,0.15),rgba(${glowR},${glowG},20,0.05))` : 'linear-gradient(180deg,#140f22,#0b0716)',
+            border: `2px solid ${canClaim ? '#ff5c8a' : bestPct > 0.5 ? proxColor : '#2a1d42'}`, borderRadius: 10,
             padding: '8px 4px', cursor: canClaim ? 'pointer' : 'default',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             animation: canClaim ? 'ransomPulse 1s infinite' : bestPct > 0.8 ? 'ransomPulse 2s infinite' : 'none',
@@ -820,20 +815,25 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
           }}>
             <span style={{
               fontFamily: 'Syne,sans-serif', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em',
-              color: canClaim ? '#ff4040' : bestPct > 0.6 ? proxColor : '#241538',
+              color: canClaim ? '#ff4040' : bestPct > 0.6 ? proxColor : '#4a3a68',
               textShadow: canClaim ? '0 0 8px #ff5c8a,0 0 20px #ff5c8a80' : bestPct > 0.6 ? `0 0 6px ${proxColor}` : 'none'
             }}>RANSOM</span>
+            <span style={{
+              fontFamily: 'DM Mono,monospace', fontSize: 9, fontWeight: 700, marginLeft: 6,
+              color: canClaim ? '#ff6b6b' : '#4a3a68',
+              textShadow: canClaim ? '0 0 6px rgba(255,92,138,0.8)' : 'none'
+            }}>{nc}</span>
           </button>
           {onOpenVault && (
             <button onClick={(e) => { e.stopPropagation(); onOpenVault() }} title="⚿ CLAIM FROM DECENTERILZIED VAULT — anytime before the next round" style={{
               position: 'absolute', top: 1, right: 1, width: 16, height: 16, borderRadius: 3, padding: 0, zIndex: 3,
-              background: 'rgba(255,209,102,0.12)', border: '1px solid rgba(255,209,102,0.5)',
-              color: '#ffd166', fontSize: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+              background: 'rgba(126,249,255,0.10)', border: '1px solid rgba(126,249,255,0.45)',
+              color: '#7ef9ff', fontSize: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>⚿</button>
           )}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {[0, 1].map(i => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%,#33205e,#0e0819)', border: '1.5px solid #241538' }} />)}
+        <div style={{ display: 'flex', gap: 3 }}>
+          {[0, 1].map(i => <div key={i} style={{ width: 13, height: 13, borderRadius: 3, background: '#0d0917', border: '1px solid #241a38', boxShadow: 'inset 0 0 5px rgba(0,0,0,0.6)' }} />)}
         </div>
       </div>
     </div>
@@ -1014,241 +1014,112 @@ function WinnersTerminal({ winRecords }: { winRecords: WinRecord[] }) {
 }
 
 // ─── Hack Matrix Display (bisected vertically) ────────────────────────────────
-function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSecs, winRecords, liveBank, contractAddr, timer, totalTimer, deviceCount, vaultTotal, heistRateUsd }: {
+function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSecs, winRecords, liveBank, contractAddr, timer, totalTimer, deviceCount, vaultTotal, heistRateUsd, devices, currentNum, onCellClick, onClaim, onActivate, winStates, bankruptCount }: {
   calledNums: Set<number>; calledOrder: number[]; clickWindowOpen: boolean; preGameSecs: number; winRecords: WinRecord[]; liveBank: number; contractAddr: string; timer: number; totalTimer: number; deviceCount: number; vaultTotal: number; heistRateUsd?: number
+  devices: Device[]; currentNum: number | null; onCellClick: (id: number, r: number, c: number) => void; onClaim: (id: number, w: WinType) => void; onActivate: (id: number) => void; winStates: Record<WinType, WinState>; bankruptCount: number
 }) {
-  const [glitching, setGlitching] = useState(false)
-  const [bgCmds, setBgCmds] = useState<{ cmd: string; x: number; y: number; op: number; st: string; col: string }[]>([])
-  const [prices, setPrices] = useState<number[]>([0.12, 0.14, 0.11, 0.16, 0.18, 0.15, 0.20, 0.22, 0.19, 0.24, 0.21, 0.26])
-  const [live, setLive] = useState(0.26)
   const lastNum = calledOrder[calledOrder.length - 1] ?? null
   const prev5 = calledOrder.slice(-6, -1).reverse()
   const prevRef = useRef<number | null>(null)
-  const neonCols = ['#b26bff', '#c084fc', '#ff5c8a', '#f59e0b', '#a855f7']
   const drawn = calledNums.size
   const pct = Math.round((drawn / 90) * 100)
   const paid = winRecords.reduce((s, r) => s + r.split * r.claimers.length, 0)
   const vaultPct = Math.min(vaultTotal > 0 ? paid / vaultTotal : 0, 1)
-  const trend = prices[prices.length - 1] >= prices[0]
   // HEIST calculations
   // Convert vault MIST → SUI → USD → HEIST
   const vaultHeist = Math.max(0, Math.floor(vaultTotal / 1e9)) // vault holds raw HEIST (v4)
   const totalPaidHeist = paid
 
-  useEffect(() => {
-    if (lastNum !== null && lastNum !== prevRef.current) {
-      prevRef.current = lastNum
-      setGlitching(true)
-      setTimeout(() => setGlitching(false), 600)
-    }
-  }, [lastNum])
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setBgCmds(p => [...p.slice(-16), {
-        cmd: HACK_CMDS[Math.floor(Math.random() * HACK_CMDS.length)],
-        x: 3 + Math.random() * 90, y: 5 + Math.random() * 85,
-        op: 0.015,
-        st: HACK_STATUSES[Math.floor(Math.random() * HACK_STATUSES.length)],
-        col: neonCols[Math.floor(Math.random() * neonCols.length)],
-      }])
-    }, 260)
-    return () => clearInterval(t)
-  }, [])
-
-  useEffect(() => {
-    if (!contractAddr) return
-    const t = setInterval(() => {
-      const delta = (Math.random() - 0.47) * 0.012
-      setLive(p => { const n = Math.max(0.001, +(p + delta).toFixed(4)); setPrices(pp => [...pp.slice(-28), n]); return n })
-    }, 1800)
-    return () => clearInterval(t)
-  }, [contractAddr])
 
   return (
-    <div style={{ background: '#0e0819', border: '2px solid #2e1065', borderRadius: 14, overflow: 'hidden', display: 'flex', position: 'relative', minHeight: 360 }}>
+    <div style={{ background: 'linear-gradient(180deg,#241735,#170f28)', border: '2px solid #3a2a5c', borderRadius: 22, boxShadow: '0 0 24px rgba(88,44,140,0.25),inset 0 0 60px rgba(0,0,0,0.35)', padding: 12, display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 360, gap: 8 }}>
       {/* Scanlines */}
       <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.1) 2px,rgba(0,0,0,0.1) 4px)', pointerEvents: 'none', zIndex: 1 }} />
 
-      {/* ════ LEFT — numbers + progress + winners ════ */}
-      <div style={{ flex: 1, minWidth: 0, padding: '10px 12px', position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column' }}>
-        {/* floating bg commands */}
-        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
-          {/* background glitches removed for cleaner arena */}
+      {/* ════ TOP STRIP — bank screen · ⚡MATRIX chip · red seconds screen ════ */}
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Pink bank/round screen (PNG left capsule) */}
+        <div style={{ flex: '0 1 300px', minWidth: 0, background: '#08040a', border: '1px solid #2a0d1a', borderRadius: 12, boxShadow: 'inset 0 0 16px rgba(0,0,0,0.75)', padding: '5px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 7, color: '#4a0d2a', letterSpacing: '0.1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>🏦 {BANKS[liveBank].name.toUpperCase()}</span>
+          <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 17, fontWeight: 800, color: '#ff4fa3', textShadow: '0 0 10px rgba(255,79,163,0.8)', whiteSpace: 'nowrap' }}>{drawn}/90</span>
         </div>
-
-        <div style={{ position: 'relative', zIndex: 1, flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071', letterSpacing: '0.15em' }}>◉ HACK MATRIX</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#a78bfa', animation: 'dot 1.5s infinite' }} />
-              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a78bfa' }}>LIVE</span>
-            </div>
-          </div>
-
-          {preGameSecs > 0 && calledOrder.length === 0 ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071', letterSpacing: '0.2em' }}>HACK INITIATES IN</div>
-              <div style={{
-                fontFamily: 'Syne,sans-serif', fontSize: 56, fontWeight: 800, color: '#fff', lineHeight: 1,
-                textShadow: '0 0 30px #fff,0 0 60px rgba(255,255,255,0.4)'
-              }}>{fmtTime(preGameSecs)}</div>
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>ACTIVATE YOUR DEVICES NOW</div>
-            </div>
-          ) : (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 8, paddingTop: 4 }}>
-              {/* ── Big number ── */}
-              <div style={{ textAlign: 'center', position: 'relative' }}>
-                {lastNum !== null ? (
-                  <>
-                    <div style={{
-                      fontFamily: 'Syne,sans-serif', fontSize: 72, fontWeight: 800, lineHeight: 1, color: '#fff',
-                      textShadow: '0 0 20px #fff,0 0 40px rgba(255,255,255,0.6)',
-                      animation: glitching ? 'matrixGlitch 0.6s ease' : 'numAppear 0.4s cubic-bezier(.34,1.56,.64,1)'
-                    }}>
-                      {lastNum}
-                    </div>
-                    {glitching && (<>
-                      <div style={{
-                        position: 'absolute', inset: 0, fontFamily: 'Syne,sans-serif', fontSize: 72, fontWeight: 800,
-                        color: '#ff0040', opacity: 0.5, animation: 'glitchR 0.6s ease', pointerEvents: 'none'
-                      }}>{lastNum}</div>
-                      <div style={{
-                        position: 'absolute', inset: 0, fontFamily: 'Syne,sans-serif', fontSize: 72, fontWeight: 800,
-                        color: '#c084fc', opacity: 0.5, animation: 'glitchB 0.6s ease', pointerEvents: 'none'
-                      }}>{lastNum}</div>
-                    </>)}
-                  </>
-                ) : (
-                  <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 32, fontWeight: 400, color: '#2d1f4a', lineHeight: 2.2, letterSpacing: '0.2em' }}>
-                    STANDBY
-                  </div>
-                )}
-              </div>
-
-              {/* Click window pill + round timer arc — synced with device clocks */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px',
-                  background: clickWindowOpen ? 'rgba(167,139,250,0.1)' : 'rgba(255,92,138,0.06)',
-                  border: `1px solid ${clickWindowOpen ? 'rgba(167,139,250,0.4)' : 'rgba(255,92,138,0.2)'}`, borderRadius: 20
-                }}>
-                  <div style={{
-                    width: 4, height: 4, borderRadius: '50%', background: clickWindowOpen ? '#a78bfa' : '#ff5c8a',
-                    animation: clickWindowOpen ? 'dot 1s infinite' : 'none'
-                  }} />
-                  <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: clickWindowOpen ? '#a78bfa' : '#ff5c8a' }}>
-                    {clickWindowOpen ? 'CLICK WINDOW OPEN' : 'WINDOW CLOSED'}
-                  </span>
-                </div>
-                {/* Timer moved to vertical Decenterilzied vault bar */}
-              </div>
-
-              {/* Prev 5 */}
-              {prev5.length > 0 && (
-                <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                  {prev5.map((n, i) => (
-                    <div key={i} style={{
-                      width: 22, height: 22, borderRadius: 4, display: 'flex', alignItems: 'center',
-                      justifyContent: 'center', background: '#150d24', border: '1px solid #241538',
-                      fontFamily: 'DM Mono,monospace', fontSize: 9, color: '#fff',
-                      opacity: 0.72 - i * 0.12, textShadow: '0 0 4px rgba(255,255,255,0.4)'
-                    }}>{n}</div>
-                  ))}
-                </div>
-              )}
-
-              {/* Progress bar */}
-              <div style={{ width: '100%' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>NUMBERS DRAWN</span>
-                  <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071' }}>{drawn}/90 · {100 - pct}% left</span>
-                </div>
-                <div style={{ height: 5, background: '#150d24', borderRadius: 3, overflow: 'hidden', border: '1px solid #150d24', position: 'relative' }}>
-                  <div style={{
-                    height: '100%', width: `${pct}%`, borderRadius: 3, transition: 'width 0.6s ease',
-                    background: 'linear-gradient(90deg,#b26bff,#c084fc,#f59e0b)',
-                    boxShadow: '0 0 6px rgba(178,107,255,0.5)'
-                  }} />
-                  {Array.from({ length: 9 }, (_, i) => (
-                    <div key={i} style={{ position: 'absolute', left: `${(i + 1) * 100 / 9}%`, top: 0, bottom: 0, width: 1, background: '#ffffff0a' }} />
-                  ))}
-                </div>
-              </div>
-
-              {/* Winner feed */}
-              <div style={{ width: '100%', background: '#0a0612', border: '1px solid #150d24', borderRadius: 6, padding: '5px 8px' }}>
-                <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.1em', marginBottom: 3 }}>
-                  🏆 WINNER FEED
-                </div>
-                <WinnersTerminal winRecords={winRecords} />
-              </div>
-            </div>
-          )}
+        {/* ⚡ MATRIX chip */}
+        <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 9, fontWeight: 700, color: '#e9d5ff', letterSpacing: '0.14em', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.5)', borderRadius: 8, padding: '4px 10px', textShadow: '0 0 6px rgba(168,85,247,0.7)' }}>⚡ MATRIX →</span>
+        {/* Red seconds screen (PNG right dark screen) — 60s countdown to next number */}
+        <div style={{ marginLeft: 'auto', background: '#08040a', border: '1px solid #2a0d1a', borderRadius: 12, boxShadow: 'inset 0 0 16px rgba(0,0,0,0.75)', padding: '4px 16px' }}>
+          <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 28, fontWeight: 800, lineHeight: 1.1, color: timer <= 10 ? '#ff5c8a' : '#ff4fa3', textShadow: '0 0 14px rgba(255,79,163,0.85),0 0 34px rgba(255,79,163,0.4)' }}>{String(timer % 60).padStart(2, '0')}</span>
         </div>
       </div>
 
-      {/* ════ Divider ════ */}
-      <div className="matrix-right-divider" style={{ width: 1, background: 'linear-gradient(180deg,transparent,#2e106560,#2e106560,transparent)', flexShrink: 0, zIndex: 2, alignSelf: 'stretch' }} />
-
-      {/* ════ RIGHT — Vault + Chart + Stats (hidden on mobile) ════ */}
-      <div className="matrix-right-panel" style={{ width: 170, flexShrink: 0, padding: '10px 10px', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 6 }}>
-
-        {/* Bank name */}
-        <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071', letterSpacing: '0.1em', fontWeight: 700 }}>
-          🏦 {BANKS[liveBank].name.toUpperCase()}
-        </div>
-
-        {/* ── 1. Decenterilzied vault illustration + vertical timer ── */}
-        <div style={{ flex: '0 0 130px', display: 'flex', gap: 8, alignItems: 'stretch' }}>
-          <VaultSketch pct={vaultPct} paid={paid} />
-          {(() => {
-            const danger = timer <= 10
-            const pctTime = Math.max(0, Math.min(100, (timer / Math.max(totalTimer, 1)) * 100))
-            return (
-              <div title="Round timer" style={{ width: 12, borderRadius: 8, background: '#07121f', border: '1px solid #2e1065', overflow: 'hidden', position: 'relative', alignSelf: 'stretch' }}>
-                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${pctTime}%`, background: danger ? 'linear-gradient(180deg,#ff5c8a,#47161b)' : 'linear-gradient(180deg,#b26bff,#c084fc)', boxShadow: danger ? '0 0 10px #ff5c8a' : '0 0 10px #b26bff', transition: 'height 0.9s linear' }} />
-                <span style={{ position: 'absolute', inset: 0, writingMode: 'vertical-rl', transform: 'rotate(180deg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f8fafc', fontWeight: 700 }}>{String(timer % 60).padStart(2, '0')}s</span>
-              </div>
-            )
-          })()}
-        </div>
-
-        {/* Vault progress bar */}
-        <div style={{ height: 4, background: '#150d24', borderRadius: 2, overflow: 'hidden', border: '1px solid #150d24' }}>
-          <div style={{
-            height: '100%', width: `${vaultPct * 100}%`, background: 'linear-gradient(90deg,#b26bff,#a78bfa)',
-            borderRadius: 2, transition: 'width 1.2s ease', boxShadow: '0 0 4px rgba(178,107,255,0.5)'
-          }} />
-        </div>
-
-        {/* ── 2. HEIST chart ── */}
-        <div>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.08em', marginBottom: 3 }}>
-            📈 HEIST PRICE
+      {/* ════ KEYPAD DECK — device consoles wired into the chassis ════ */}
+      <div style={{ position: 'relative', zIndex: 2, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10, alignItems: 'start' }}>
+        {devices.length === 0 ? (
+          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '18px 8px', color: '#4a3a68', fontFamily: 'DM Mono,monospace', fontSize: 9 }}>
+            NO CONSOLES — MINT DEVICES FROM THE LOBBY TO ENTER THE MATRIX
           </div>
-          <HeistChart prices={prices} trend={trend} live={live} contractAddr={contractAddr} />
-        </div>
-
-        {/* ── 3. Sliding Decenterilzied vault stats panel ── */}
-        <div style={{ marginTop: 'auto', borderTop: '1px solid #150d24', padding: '7px 8px', borderRadius: 8, background: 'linear-gradient(90deg,rgba(178,107,255,0.06),rgba(0,184,255,0.02))', transform: 'translateX(0)', boxShadow: 'inset 3px 0 0 rgba(178,107,255,0.35)' }}>
-          {[
-            ['CLAIMED', `$${(paid / 1000).toFixed(0)}K`, '#b26bff'],
-            ['REMAINING', `$${((vaultTotal - paid) / 1000).toFixed(1)}K`, '#f59e0b'],
-            ['DRAWN', `${drawn}/90`, '#a99bc4'],
-            ['WINS', String(winRecords.length), '#a855f7'],
-          ].map(([k, v, col]) => (
-            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0', borderBottom: '1px solid #070f1a' }}>
-              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>{k}</span>
-              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: col, fontWeight: 700 }}>{v}</span>
-            </div>
-          ))}
-        </div>
+        ) : devices.map(d => (
+          <HackingDevice key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
+            calledNums={calledNums} onCellClick={onCellClick} onClaim={onClaim} onActivate={onActivate}
+            winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank} />
+        ))}
       </div>
 
-      {/* ════ BOTTOM — Vault Info Bar ════ */}
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10, background: 'linear-gradient(180deg,rgba(2,13,26,0.92),rgba(2,13,26,0.98))', borderTop: '1px solid #2e1065', padding: '6px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+      {/* ════ STATUS ROW — window pill · prev numbers · progress · winner feed ════ */}
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '2px 4px' }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+          background: clickWindowOpen ? 'rgba(126,249,255,0.08)' : 'rgba(255,92,138,0.06)',
+          border: `1px solid ${clickWindowOpen ? 'rgba(126,249,255,0.4)' : 'rgba(255,92,138,0.2)'}`, borderRadius: 20
+        }}>
+          <div style={{ width: 4, height: 4, borderRadius: '50%', background: clickWindowOpen ? '#7ef9ff' : '#ff5c8a', animation: clickWindowOpen ? 'dot 1s infinite' : 'none' }} />
+          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: clickWindowOpen ? '#7ef9ff' : '#ff5c8a' }}>
+            {clickWindowOpen ? 'CLICK WINDOW OPEN' : 'WINDOW CLOSED'}
+          </span>
+        </div>
+        {prev5.length > 0 && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {prev5.map((n, i) => (
+              <div key={i} style={{
+                width: 22, height: 22, borderRadius: 4, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', background: '#120d20', border: '1px solid #2a2140',
+                fontFamily: 'DM Mono,monospace', fontSize: 9, color: '#7ef9ff',
+                opacity: 0.72 - i * 0.12, textShadow: '0 0 5px rgba(126,249,255,0.6)'
+              }}>{n}</div>
+            ))}
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <div style={{ height: 5, background: '#120d20', borderRadius: 3, overflow: 'hidden', border: '1px solid #1c1330', position: 'relative' }}>
+            <div style={{
+              height: '100%', width: `${pct}%`, borderRadius: 3, transition: 'width 0.6s ease',
+              background: 'linear-gradient(90deg,#a855f7,#c084fc,#ff4fa3)',
+              boxShadow: '0 0 6px rgba(168,85,247,0.5)'
+            }} />
+            {Array.from({ length: 9 }, (_, i) => (
+              <div key={i} style={{ position: 'absolute', left: `${(i + 1) * 100 / 9}%`, top: 0, bottom: 0, width: 1, background: '#ffffff0a' }} />
+            ))}
+          </div>
+        </div>
+        <div style={{ flex: '1 1 220px', minWidth: 180, background: '#0a0714', border: '1px solid #241a38', borderRadius: 8, padding: '4px 8px' }}>
+          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#4a3a68', letterSpacing: '0.1em', marginBottom: 2 }}>
+            🏆 WINNER FEED
+          </div>
+          <WinnersTerminal winRecords={winRecords} />
+        </div>
+      </div>
+      {preGameSecs > 0 && calledOrder.length === 0 && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,6,20,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 20 }}>
+          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a78bfa', letterSpacing: '0.2em' }}>HACK INITIATES IN</div>
+          <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 46, fontWeight: 800, color: '#ff4fa3', lineHeight: 1, textShadow: '0 0 24px rgba(255,79,163,0.9),0 0 60px rgba(255,79,163,0.45)' }}>{fmtTime(preGameSecs)}</div>
+          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#4a3a68' }}>ACTIVATE YOUR DEVICES NOW</div>
+        </div>
+      )}
+
+      {/* ════ BOTTOM — CLAIM frame bar (PNG bottom neon panel) ════ */}
+      <div className="md-claim-frame" style={{ position: 'relative', zIndex: 10, borderRadius: 18, padding: 6, background: 'linear-gradient(180deg,rgba(30,16,52,0.92),rgba(16,9,30,0.96))', border: '2px solid #a855f7', boxShadow: '0 0 18px rgba(168,85,247,0.35),0 0 50px rgba(168,85,247,0.15),inset 0 0 24px rgba(168,85,247,0.10)' }}>
+      <div style={{ borderRadius: 13, border: '1px solid rgba(168,85,247,0.45)', background: 'rgba(10,6,20,0.6)', padding: '6px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        {/* CLAIM title (decorative status label) */}
+        <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 15, fontWeight: 800, letterSpacing: '0.18em', color: '#ff4fa3', textShadow: '0 0 14px rgba(255,79,163,0.85),0 0 34px rgba(255,79,163,0.4)' }}>CLAIM</span>
         {/* Vault HEIST tokens */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#b26bff', boxShadow: '0 0 6px #b26bff' }} />
@@ -1273,6 +1144,7 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
           <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.05em' }}>VALUE</span>
           <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f59e0b', fontWeight: 700 }}>${heistRateUsd != null ? (Math.max(0, vaultHeist - totalPaidHeist) * heistRateUsd).toFixed(2) : '—'}</span>
         </div>
+      </div>
       </div>
     </div>
   )
@@ -4655,26 +4527,12 @@ function Ransome() {
   return (
     <div data-theme={theme} style={{ background: 'linear-gradient(180deg,#0a0612,#0e0819)', color: '#f1f5f9', minHeight: '100vh' }}>
       {/* Header */}
-      <div className="app-header" style={{ padding: '7px 12px', borderBottom: '1px solid #1a1029', display: 'flex', alignItems: 'center', background: 'rgba(2,13,26,0.96)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 17, fontWeight: 800, color: '#b26bff', flexShrink: 0 }}>ROBHIN HEIST{DEV_MODE && <span style={{ fontSize: 9, color: '#f59e0b', marginLeft: 6, verticalAlign: 'middle' }}>DEV</span>}</div>
-        <div style={{ flex: 1, margin: '0 10px', height: 26, background: 'rgba(178,107,255,0.02)', border: '1px dashed #150d24', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#150d24' }}>AD</span>
-        </div>
+      <div className="app-header" style={{ padding: '5px 12px', borderBottom: '1px solid #1a1029', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', background: 'rgba(2,13,26,0.96)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 50 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
-          {preGameSecs > 0 && <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f59e0b', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6, padding: '3px 7px' }}>⏱ {fmtTime(preGameSecs)}</div>}
           {onChainSession && phase === 'game' && <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', background: 'rgba(178,107,255,0.06)', border: '1px solid rgba(178,107,255,0.2)', borderRadius: 6, padding: '3px 6px' }}>
             ⛓ {onChainSession.drawCount}/{onChainSession.maxDraws || 59} on-chain
           </div>}
-          {phase === 'game' && preGameSecs === 0 && <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: sessionSecs >= (57 * 60) ? '#ff5c8a' : '#453071', background: sessionSecs >= (57 * 60) ? 'rgba(255,92,138,0.08)' : 'transparent', border: sessionSecs >= (57 * 60) ? '1px solid rgba(255,92,138,0.25)' : 'none', borderRadius: 6, padding: '3px 6px', transition: 'all 0.5s' }}>
-            {sessionSecs >= (57 * 60) ? '🚨' : '⏱'} {String(Math.floor(sessionSecs / 60)).padStart(2, '0')}:{String(sessionSecs % 60).padStart(2, '0')}
-          </div>}
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#ff5c8a', background: 'rgba(255,92,138,0.08)', border: '1px solid rgba(255,92,138,0.2)', borderRadius: 6, padding: '3px 7px' }}>🔴 {BANKS[liveBank].name}</div>
-          <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Light / dark mode" style={{ background: '#150d24', border: '1px solid #241538', borderRadius: 6, padding: '3px 7px', fontSize: 10, cursor: 'pointer' }}>{theme === 'dark' ? '☀️' : '🌙'}</button>
-          {DEV_MODE && <>
-            <button onClick={devDrawNext} title="Draw next on-chain number now" style={{ background: '#150d24', border: '1px solid #c084fc55', borderRadius: 6, padding: '3px 7px', fontSize: 8, cursor: 'pointer', color: '#c084fc' }}>⏩ DRAW</button>
-            <button onClick={devSettleNow} title="Settle pending claims now (check wallet split)" style={{ background: '#150d24', border: '1px solid #f59e0b55', borderRadius: 6, padding: '3px 7px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>⏭ SETTLE</button>
-          </>}
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a99bc4', background: '#150d24', borderRadius: 6, padding: '3px 7px' }}>👤 {nickname}</div>
+          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a99bc4', background: '#150d24', borderRadius: 6, padding: '3px 7px', maxWidth: '34vw', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>👤 {nickname}</div>
           {wallet ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
               <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', background: '#150d24', border: '1px solid #b26bff30', borderRadius: 6, padding: '3px 7px', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -4688,6 +4546,37 @@ function Ransome() {
           )}
         </div>
       </div>
+      {DEV_MODE && (
+        <div style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 900, display: 'flex', gap: 4 }}>
+          <button onClick={devDrawNext} title="Draw next on-chain number now" style={{ background: 'rgba(21,13,36,0.9)', border: '1px solid #c084fc55', borderRadius: 6, padding: '3px 7px', fontSize: 8, cursor: 'pointer', color: '#c084fc' }}>⏩ DRAW</button>
+          <button onClick={devSettleNow} title="Settle pending claims now (check wallet split)" style={{ background: 'rgba(21,13,36,0.9)', border: '1px solid #f59e0b55', borderRadius: 6, padding: '3px 7px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>⏭ SETTLE</button>
+        </div>
+      )}
+
+      {/* STEP 2 — target design with the LIVE drawn number wired into the big screen (replaces the baked "24") */}
+      <div style={{ margin: '10px 12px 0', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden', border: '1px solid #3a2a5c', boxShadow: '0 0 24px rgba(88,44,140,0.25)', maxWidth: 640, width: '100%', containerType: 'inline-size' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/new_matrix.png" alt="Matrix Arena" style={{ display: 'block', width: '100%', height: 'auto' }} />
+          {/* LIVE number overlay — pixel-mapped to the PNG's baked "24" (digits bbox 73.4–84.2% x, 5.7–17.2% y). Top-anchored so 2-digit numbers never squeeze. */}
+          <div style={{ position: 'absolute', left: '71.2%', top: '4.2%', width: '15.8%', height: '14.6%', background: '#0b0409', borderRadius: '1cqw', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '1.6cqw', overflow: 'hidden' }}>
+            {currentNum !== null ? (
+              <span key={currentNum} style={{
+                fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: '8.4cqw', lineHeight: 1, color: '#ff4fa3', letterSpacing: '-0.02em', whiteSpace: 'nowrap',
+                textShadow: '0 0 1.6cqw rgba(255,79,163,0.9),0 0 4cqw rgba(255,79,163,0.4)',
+                animation: 'numAppear 0.4s cubic-bezier(.34,1.56,.64,1)'
+              }}>{currentNum}</span>
+            ) : (
+              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: '2.6cqw', color: '#3a0d1a', letterSpacing: '0.2em' }}>STANDBY</span>
+            )}
+          </div>
+          {/* LIVE 60s countdown overlay — pixel-mapped to the PNG's red "9" chip (glyph bbox 15.2–16.9% x, 18–21.9% y) */}
+          <div style={{ position: 'absolute', left: '14.4%', top: '17.1%', width: '6.6%', height: '5.6%', background: '#0a0507', borderRadius: '0.8cqw', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }} title="Seconds until next number">
+            <span style={{ fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: '4.4cqw', lineHeight: 1, color: timer <= 10 ? '#ff5c8a' : '#ff2d55', letterSpacing: '0.02em', whiteSpace: 'nowrap', textShadow: '0 0 1.2cqw rgba(255,45,85,0.9),0 0 3cqw rgba(255,45,85,0.45)' }}>{String(Math.max(0, timer % 60)).padStart(2, '0')}</span>
+          </div>
+          <span style={{ position: 'absolute', top: 8, left: 8, fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a78bfa', background: 'rgba(10,6,20,0.8)', border: '1px solid rgba(168,85,247,0.4)', borderRadius: 6, padding: '2px 7px', letterSpacing: '0.1em' }}>LIVE MATRIX · STEP 3/6</span>
+        </div>
+      </div>
 
       {/* Responsive layout: 3-col on wide, stacked on mobile */}
       <div style={{
@@ -4698,7 +4587,7 @@ function Ransome() {
       }}
         className="game-grid">
         <div style={{ gridArea: 'matrix', minWidth: 0 }}>
-          <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr} timer={timer} totalTimer={totalTimer} deviceCount={devices.filter(d => d.active).length} vaultTotal={onChainSession?.vaultTotal ?? VAULT_ESTIMATE} heistRateUsd={onChainSession?.rates?.HEIST != null ? Number(onChainSession.rates.HEIST) : undefined} />
+          <HackMatrixDisplay calledNums={calledNums} calledOrder={calledOrder} clickWindowOpen={clickWindowOpen} preGameSecs={preGameSecs} winRecords={winRecords} liveBank={liveBank} contractAddr={contractAddr} timer={timer} totalTimer={totalTimer} deviceCount={devices.filter(d => d.active).length} vaultTotal={onChainSession?.vaultTotal ?? VAULT_ESTIMATE} heistRateUsd={onChainSession?.rates?.HEIST != null ? Number(onChainSession.rates.HEIST) : undefined} devices={devices} currentNum={currentNum} onCellClick={handleCellClick} onClaim={handleClaim} onActivate={handleActivate} winStates={winStates} bankruptCount={bankruptCount} />
         </div>
       </div>
 
@@ -4725,31 +4614,18 @@ function Ransome() {
         })}
       </div>
 
-      {/* Devices section: 2 cols normal, maximize opens full screen */}
-      <div className="devices-section" style={{ padding: '10px 12px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>
-            ◈ NFT DEVICES &nbsp;<span style={{ color: '#453071' }}>{devices.length} total · {devices.filter(d => d.active).length} active</span>
-          </div>
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-            <button onClick={handleActivateAll} style={{ background: '#150d24', border: '1px solid #b26bff30', color: '#b26bff', borderRadius: 7, padding: '4px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
-              ◈ ACTIVATE ALL
-            </button>
-            <button onClick={() => setDevicesExpanded(true)} style={{ background: '#150d24', border: '1px solid #241538', color: '#453071', borderRadius: 7, padding: '4px 10px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
-              ⊞ MAXIMIZE
-            </button>
-            <button onClick={() => setShowTerminate(true)} style={{ background: 'rgba(127,0,0,0.25)', border: '1px solid #4a0d26', color: '#ff5c8a', borderRadius: 7, padding: '4px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer', letterSpacing: '0.05em' }}>
-              ⏻ TERMINATE
-            </button>
-          </div>
-        </div>
-        {/* 2 columns, ALL devices scroll down */}
-        <div className="device-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 }}>
-          {devices.map(d => (
-            <HackingDevice key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
-              calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim} onActivate={handleActivate}
-              winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank} onOpenVault={() => setShowVaultClaim(true)} />
-          ))}
+      {/* Legacy console list (MAXIMIZE shows the full-screen view) */}
+      <div className="devices-section" style={{ padding: '0 12px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+          <button onClick={handleActivateAll} style={{ background: '#150d24', border: '1px solid #b26bff30', color: '#b26bff', borderRadius: 7, padding: '4px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
+            ◈ ACTIVATE ALL
+          </button>
+          <button onClick={() => setDevicesExpanded(true)} style={{ background: '#150d24', border: '1px solid #241538', color: '#453071', borderRadius: 7, padding: '4px 10px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
+            ⊞ MAXIMIZE
+          </button>
+          <button onClick={() => setShowTerminate(true)} style={{ background: 'rgba(127,0,0,0.25)', border: '1px solid #4a0d26', color: '#ff5c8a', borderRadius: 7, padding: '4px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer', letterSpacing: '0.05em' }}>
+            ⏻ TERMINATE
+          </button>
         </div>
       </div>
 

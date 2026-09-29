@@ -1514,3 +1514,45 @@ button:disabled {
     padding-top: 64px !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MATRIX ARENA — NEON DECK (appearance-only port of the reference PNG)
+   Purple chassis · pink neon number screens · dark neon keypads ·
+   RANSOM pill + count · CLAIM frame on the vault bar.
+   NO layout/handler changes — all game logic untouched.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Device keypad cells: subtle neon keycap feel (still pure inline-styled buttons) */
+.device-key {
+  transition: opacity 0.2s, box-shadow 0.2s, filter 0.15s;
+}
+.device-key:not(:disabled):hover {
+  filter: brightness(1.35);
+}
+
+/* RANSOM actuator: hover flare + pressed bottom-out (visual only) */
+.ransom-pill:not(:disabled) {
+  transition: box-shadow 0.15s, transform 0.1s, filter 0.15s;
+}
+.ransom-pill:not(:disabled):hover {
+  filter: brightness(1.25);
+  box-shadow: inset 0 0 12px rgba(255, 32, 32, 0.35), 0 0 16px rgba(255, 92, 138, 0.5);
+}
+.ransom-pill:not(:disabled):active {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: inset 0 0 18px rgba(255, 32, 32, 0.5), 0 0 26px rgba(255, 92, 138, 0.65);
+}
+
+/* CLAIM frame legibility on tiny screens */
+@media (max-width: 600px) {
+  .md-claim-frame {
+    padding: 4px;
+  }
+  .md-claim-frame>div {
+    gap: 8px !important;
+    padding: 4px 8px !important;
+  }
+  .md-claim-frame>div>span:first-child {
+    font-size: 12px !important;
+  }
+}
