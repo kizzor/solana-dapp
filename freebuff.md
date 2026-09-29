@@ -449,6 +449,30 @@ NEW heist.move v2 (PUBLISHED 2026-08-02): FH1=19.5% FH2=19.5% FH3=40% total=99%
 
 ## SESSION LOG
 
+### Session: 2026-09-29 — 🏷️ `recall_experiment` — PNG-anchored Matrix Arena (Steps 1–3 DONE, verified + tagged)
+**Task:** Rebuild the Matrix Arena by rendering the user's reference PNG (`new_matrix.png`) on-page and wiring the live game engine into it region-by-region, verifying each step before continuing.
+
+**🏷️ RECALL POINT `recall_experiment` = commit `2974321` (verified-good: tsc=0, headless-verified):**
+- Recover with: `git reset --hard recall_experiment` → `rm -rf .next && npm run dev`.
+- Pre-existing WIP from an earlier session is parked in stash `parked-wip-before-recall_pro1-redo` (recover with `git stash pop` if ever wanted).
+
+**Done (frontend-only — app/page.tsx + app/globals.css + public/new_matrix.png; game logic/handlers untouched, no secrets touched):**
+1. ✅ **STEP 1:** `new_matrix.png` (user-provided, from `Desktop/LOGO/ecommerce/alyama/wconsoles/`) copied to `public/` and rendered on the game screen.
+2. ✅ **Header cleanup:** game header shows ONLY `⛓ n/59 on-chain` · `👤 nickname` · wallet chip/connect. Removed: logo, ad slot, pregame pill, session clock, bank chip, theme toggle. DEV ⏩ DRAW / ⏭ SETTLE moved to a floating bottom-left cluster (DEV_MODE only).
+3. ✅ **STEP 2:** LIVE drawn number wired into the PNG's big screen — overlay pixel-mapped over the baked "24" (digits bbox scanned at runtime: x 73.4–84.2%, y 5.7–17.2% of the image), pink neon, numAppear animation per draw, auto-updates every 60s (headless-verified: engine drew 54 then 64, overlay matched).
+4. ✅ **STEP 3:** red "9" screen is now the live 60s countdown to the next number (glyph bbox 15.2–16.9% x, 18–21.9% y; overlay left 14.4% / top 17.1%, `timer % 60` zero-padded, hotter red ≤10s).
+5. ✅ **2-digit squeeze FIXED:** big number is top-anchored + condensed (`fontSize 9.4cqw` + `scaleX(0.62)`, Syne) — verified "47" spans 72.7–85.5% vs baked "24" at 73.4–84.2% (fits:true). All sizes in container-query `cqw` units → scales at 1440/390/320px, zero horizontal overflow.
+6. ✅ Earlier in session: full console/deck restyle + engine-in-arena rebuild (HackingDevice compact 3×9 in-chassis deck, CLAIM frame bar) — superseded by the PNG-anchored approach but included in the tagged state.
+
+**Verification:** `tsc --noEmit` = 0; headless Chrome (puppeteer-core) pixel-measured overlay alignment, live-number adoption, and mobile fit. Screenshots at repo root (untracked, delete after review): `ui-step3-2digit.png`, `ui-step3-live.png`, `ui-step2-*.png`, `ui-deck-*.png`.
+
+**NEXT (pending user go-ahead):**
+- **STEP 4:** wire real device grids into the PNG keypad panels (compact, clickable, PNG-styled).
+- **STEP 5:** RANSOM pills → live match count + claimable state.
+- **STEP 6:** CLAIM bar → vault stats; then remove the old deck below the PNG.
+
+**📌 PRODUCTION PUSH IS A USER MANUAL STEP (Rule 2):** commits `d9a3bef` + `2974321` are local — run `git push origin main` when Vercel should deploy them.
+
 ### Session: 2026-09-27 — recall_pro1 UI/UX fix round (Matrix Arena + lobby HUD)
 **Task:** User-reported UI fixes: drawer-key bug, missing map under chat, map sizing, neon green TRANSMIT, remove Nordic Reserve from Matrix Arena header, quick-mint off-by-one, arena always on top, "All" → "Activate All". Tag `recal_pro1`.
 
