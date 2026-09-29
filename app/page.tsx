@@ -4562,7 +4562,8 @@ function Ransome() {
           <div style={{ position: 'absolute', left: '71.2%', top: '4.2%', width: '15.8%', height: '14.6%', background: '#0b0409', borderRadius: '1cqw', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '1.6cqw', overflow: 'hidden' }}>
             {currentNum !== null ? (
               <span key={currentNum} style={{
-                fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: '8.4cqw', lineHeight: 1, color: '#ff4fa3', letterSpacing: '-0.02em', whiteSpace: 'nowrap',
+                fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: '9.4cqw', lineHeight: 1, color: '#ff4fa3', whiteSpace: 'nowrap',
+                transform: 'scaleX(0.62)', transformOrigin: 'center top',
                 textShadow: '0 0 1.6cqw rgba(255,79,163,0.9),0 0 4cqw rgba(255,79,163,0.4)',
                 animation: 'numAppear 0.4s cubic-bezier(.34,1.56,.64,1)'
               }}>{currentNum}</span>
