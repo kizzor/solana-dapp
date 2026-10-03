@@ -13,9 +13,11 @@ import {
 export function RobinhoodLockPanel({
   onSkipLobby,
   onMintSuccess,
+  onMintRequest,
 }: {
   onSkipLobby?: () => void;
   onMintSuccess?: (count: number) => void;
+  onMintRequest?: (count: number) => void;
 }) {
   const {
     address,
@@ -76,6 +78,11 @@ export function RobinhoodLockPanel({
   };
 
   const handleMintConsoles = async () => {
+    // Delegate to the main terminal's mint flow (correct grid shape + server registration)
+    if (onMintRequest) {
+      onMintRequest(consoleCount);
+      return;
+    }
     if (!address) {
       await connect();
       return;
@@ -374,7 +381,7 @@ export function RobinhoodLockPanel({
         </div>
       </div>
 
-      {/* DEV MODE TEST CONTROLS */}
+      {/* DEV MODE TEST CONTROLS — TODO(final polish): hide in production */}
       {address && (
         <div style={{
           background: 'rgba(245, 158, 11, 0.05)',

@@ -449,6 +449,61 @@ NEW heist.move v2 (PUBLISHED 2026-08-02): FH1=19.5% FH2=19.5% FH3=40% total=99%
 
 ## SESSION LOG
 
+### Session: 2026-10-01 — UI/UX correction rounds 1+2 (tap targets, autofocus, reduced-motion)
+**Task:** Resume via solanamark.md + freebuff.md; UI/UX focus only. RED files untouched (CONFIDENTIAL_MAP routing; graph MCP unavailable this session — manual RED/YELLOW/GREEN routing used).
+
+**Done (app/page.tsx + app/globals.css only; no logic/API/contract changes):**
+1. ✅ NicknameModal input `autoFocus` (keyboard-first entry, verified activeElement=input) + tagline typo "DECENTERILZIED" → "DECENTRALIZED".
+2. ✅ WCAG 2.5.8 tap targets (all ≥24×24): quick-mint ▲▼ 22×13 → 24×24; quick-mint stepper container fixed 40×40 → `minHeight:66` (would have clipped); sidebar ▲▼ 28×16 → 28×24; token selector, 🔍 search, ⚙ OPTIONS, ◈ MATRIX →, MINT buttons padded to ≥24px.
+3. ✅ WCAG 2.3.1: global `prefers-reduced-motion: reduce` block in globals.css — kills the 0.14s capHunt flicker + all loops for users who opt out; state colors/borders untouched.
+4. ✅ Verified: tsc=0, `npm run build` ✓ (dev stopped per .next-collision rule, restarted, HTTP 200), headless suites: `ui-ux-audit.cjs` 13/13 + `ui-drill-verify.cjs` 9/9 — zero overflow desktop 1440×900 / mobile 390×844, no fatal console errors.
+5. 📌 New untracked helpers at repo root: `ui-audit.cjs` (pixel metrics — chip square/slot, screen-box band, capsule widths, element overflow) + `ui-ux-audit.cjs` (interaction/a11y — tap targets incl. sr-only exclusion, autofocus, cursors, focus). Screenshots `ui-tour-*.png` / `ui-audit-*.png` untracked — delete after review.
+
+**Flagged (user decision, unchanged):** "ROBHIN HEIST" spelling in modal (intentional branding?); lobby uses styled divs not h1/h2 (optional a11y polish); confirm `NEXT_PUBLIC_DEV_MODE` is NOT set in Vercel Production env (DEV_MODE is env-driven — user check per Rule 2).
+
+**Not changed:** contracts, API routes, claim/settle logic, env vars. Rotation log unchanged: rows 1–5 ✅, row 6 (`SUI_PRIVATE_KEY` authority republish) still ⏳ PENDING user decision.
+
+### Session: 2026-09-30 (3rd) — TIMER PROPORTION FIX (uneven height + buried digits)
+**Task:** User feedback on the capsule drill: timer looks uneven with extra height; digits get buried by the short width (clipped edges).
+
+**Root causes (measured headless, not guessed):**
+- PNG countdown chip height was %-of-image (11.2%) → collapses relative to its width-scaled font on wide/short banner → glyphs wider (71px) than the box (57.8px) → horizontal clipping.
+- Arena top-strip timer box (38px) was taller than its flex-row neighbor (bank screen ≈31px) → uneven strip.
+- Syne digits are wide; the live-number screen already compensates with scaleX(0.62) — the countdown screens had no squeeze.
+
+**Fixes (page.tsx only):**
+1. ✅ PNG chip: fixed box units (`12cqw × 8cqw` at 13.6%/13.5%) + digits `scaleX(0.75)` → measured: box 76.5×51, visual glyph 40px wide, 18.2px side clearance, `clipped=false` both axes.
+2. ✅ Top strip: row switched to `alignItems:'stretch'` → bank screen + timer box now render EQUAL heights (≈39px, centered digits, 26px font); timer box `minWidth:76`.
+3. ✅ MiniStopwatch: height-normalized to 30px box / 22px digits / `minWidth:60` → fits with clearance.
+4. ✅ Verified: tsc=0, `npm run build` ✓ (dev stopped first), dev restarted, headless fit-checks PASS both timer surfaces, 0 overflow, 7 capsules intact.
+5. ✅ **(follow-up) Square countdown chip aligned to the artwork:** root cause of the misalignment — `new_matrix.png` is 627×611 (near-square, NOT a wide banner), so the floating chip hung off the baked red "9" slot and exposed it. Fix: chip shrunk 8→6.2cqw (true square, 4cqw digits) and snapped to the PNG's designed slot (13%/17%). Measured: 39.5×39.5 box, center 16.1%/20.2% vs slot 16.05%/19.95% → `slotAligned=true`, glyph fits with clearance.
+
+### Session: 2026-09-30 (2nd) — VAULT CAPSULE DRILL (arena capsule system + even numbers + timer fix)
+**Task:** User drill — remove the `LIVE MATRIX · STEP 3/6` badge (overlapped the vault capsule); make the capsule functional: shows which jackpot the user is nearing, bar fills, whole capsule glows + flickers rapidly until RANSOM, turns green after RANSOM (win hit). Codes: FF=fast five, TA/CA/BA=top/central/base accounts, FB1/FB2/FB3=full bank breaches. Numbers look uneven site-wide — make them even. Timer has clipped edges — enlarge/move.
+
+**Done (GREEN files only — app/page.tsx + app/globals.css; no logic/handler changes):**
+1. ✅ **STEP 3/6 badge removed** from the PNG banner.
+2. ✅ **VaultCapSegment + capsule row** inside the CLAIM frame: 7 capsules — `FF` FAST FIVE · `TA` TOP ACCOUNTS · `CA` CENTRAL ACCOUNTS · `BA` BASE ACCOUNTS · `FB1/FB2/FB3` FULL BANK I/II/III — each with win-% chip (WIN_BPS), fill bar = best active-device progress per win type (real grids: matched/5, row filled, 15 matched), and state machine: **locked** (future FB tier, dimmed `LOCKED`) → **filling** (label = win name) → **claimable** (`◈ HIT RANSOM!` + `capHunt` 0.14s rapid flicker + hot frame pulse) → **user claimed** (`✓ HACKED — PAID`, green `capGreen` solidify, bar full green) → **breached by others** (`✕ BREACHED`, `capFilament` dim pulse).
+3. ✅ **CLAIM frame reacts:** hot pink flicker (`capFrameHot`) while any win is claimable; settles green (`capFrameGreen` + green border) once the user holds ≥1 claim.
+4. ✅ **Even numbers site-wide:** `.num-tab` (tabular-nums) on all key numeric displays + body-level `font-variant-numeric: tabular-nums` — proportional fonts no longer render 1 narrower than 0.
+5. ✅ **Timer clipping fixed:** PNG countdown chip enlarged + top-anchored (13.8%/13.2% origin, 8.4%×11.2% box, 6.2cqw glyph), arena top-strip seconds 28→38px, MiniStopwatch 20→26px.
+6. ✅ **Verified:** dev stopped → `tsc --noEmit` = 0 → `npm run build` ✅ → dev restarted → **9/9 headless checks** (two-stage enter: nickname → lobby → arena): badge gone, 7 capsules in DOM, codes + status labels render, no overflow desktop 1440×900 / mobile 390×844, no fatal errors. Screenshots `ui-drill-arena.png` / `ui-drill-mobile.png` (untracked — delete after review; helper `ui-drill-verify.cjs` also untracked).
+
+**Not changed:** game logic, click/claim handlers, API routes, contracts. Capsules are display-only and read the SAME winStates/devices state the LEDs use — no new state introduced.
+
+### Session: 2026-09-30 — recall_experiment → PRODUCTION handoff (fast-forward verified)
+**Task:** User directive: "make the recall_experiment git tag reflect on the production site."
+
+**Done (git refs + freebuff.md only — zero secrets touched):**
+1. ✅ **Topology mapped:** `origin/main` (= `recall_pro1`, fca1b5c) is a direct ANCESTOR of `recall_experiment` → clean FAST-FORWARD, no merge/force-push needed. Tag sits 2 commits ahead: `d9a3bef` (PNG-anchored arena — header cleanup, live number screen, 60s countdown) + `2974321` (2-digit number fits the screen — condensed scale, top-anchored).
+2. ✅ **Detached HEAD resolved:** local `main` was already at `a8720c1` (docs commit on top of the tag) → checked out `main`; `main` = `a8720c1` ⊃ tag `2974321` ⊃ `origin/main`. Tracked tree clean.
+3. ✅ **Secret scan of outgoing commits:** `a8720c1` touches freebuff.md only; targeted grep (suiprivkey / private key / mnemonic / PEM / api-key) = CLEAN. The 2 experiment commits are app/UI code only.
+4. ✅ **Pre-flight at `a8720c1`:** `npx tsc --noEmit` = 0 errors; `npm run build` PASSES (13 routes; built with dev STOPPED per the .next-collision rule, dev restarted after).
+5. ✅ **Headless smoke (puppeteer-core + Chrome):** desktop 1440×900 + mobile 390×844 → no horizontal overflow, no fatal page errors, full interactive E2E (nickname modal → ENTER THE MATRIX → arena reached). Screenshots `ui-exp-*.png` + helper `ui-exp-verify.cjs` untracked at repo root — delete after review.
+6. 📌 **PRODUCTION PUSH = USER MANUAL STEP (Rule 2):** run `git push origin main --tags` → Vercel auto-deploys → production serves the `recall_experiment` arena. Then hard-refresh https://www.ransomematrix.xyz and confirm the PNG-anchored arena renders (build takes a few minutes).
+
+**Not changed:** contracts, API routes, env vars. Rotation log unchanged: rows 1–5 ✅, row 6 (`SUI_PRIVATE_KEY` authority republish) still ⏳ PENDING user decision.
+
 ### Session: 2026-09-29 — 🏷️ `recall_experiment` — PNG-anchored Matrix Arena (Steps 1–3 DONE, verified + tagged)
 **Task:** Rebuild the Matrix Arena by rendering the user's reference PNG (`new_matrix.png`) on-page and wiring the live game engine into it region-by-region, verifying each step before continuing.
 
