@@ -124,11 +124,12 @@ export default function ChatPage() {
   const otherModels = models.filter(m => m.owner !== 'combo')
 
   return (
-    <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 12px' }}>
+    <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 12px', background: 'linear-gradient(180deg, #0a0612 0%, #0e0819 60%, #150d24 100%)', position: 'relative' }}>
+      <div className="skin-aurora" />
       <div style={{ width: '100%', maxWidth: 860, display: 'flex', flexDirection: 'column', flex: 1, gap: 10, minHeight: 0 }}>
 
         {/* Header */}
-        <div style={{ background: '#0e0819', border: '1px solid #241538', borderRadius: 14, padding: '14px 16px', boxShadow: '0 0 40px rgba(178,107,255,0.07)' }}>
+        <div style={{ position: 'relative', zIndex: 1, background: 'rgba(22, 12, 42, 0.55)', backdropFilter: 'blur(14px) saturate(1.2)', WebkitBackdropFilter: 'blur(14px) saturate(1.2)', border: '1px solid rgba(216, 180, 254, 0.22)', borderRadius: 16, padding: '14px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.40), 0 0 40px rgba(124,58,237,0.10), inset 0 1px 0 rgba(255,255,255,0.12)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: online === true ? '#b26bff' : online === false ? '#ff5c8a' : '#f59e0b', boxShadow: `0 0 10px ${online === true ? '#b26bff' : online === false ? '#ff5c8a' : '#f59e0b'}`, animation: 'dot 1.5s infinite' }} />
             <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 20, fontWeight: 800, color: '#b26bff', textShadow: '0 0 20px #b26bff60' }}>ORACLE UPLINK</div>
@@ -155,7 +156,7 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div ref={scrollRef} style={{ flex: 1, minHeight: 320, overflowY: 'auto', background: '#0e0819', border: '1px solid #241538', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div ref={scrollRef} style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 320, overflowY: 'auto', background: 'rgba(16, 9, 32, 0.55)', backdropFilter: 'blur(14px) saturate(1.2)', WebkitBackdropFilter: 'blur(14px) saturate(1.2)', border: '1px solid rgba(216, 180, 254, 0.22)', borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column', gap: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.10)' }}>
           {messages.length === 0 && (
             <div style={{ margin: 'auto', textAlign: 'center', fontFamily: 'DM Mono,monospace', color: '#453071', fontSize: 10, letterSpacing: '0.15em', lineHeight: 2.4 }}>
               <div style={{ fontSize: 30, color: '#2d1f4a', fontFamily: 'Syne,sans-serif', fontWeight: 800 }}>◇</div>
@@ -169,8 +170,10 @@ export default function ChatPage() {
                 {m.role === 'user' ? '▶ YOU' : '◆ ORACLE'}{m.role === 'assistant' && busy && i === messages.length - 1 ? ' ▊' : ''}
               </div>
               <div style={{
-                background: m.role === 'user' ? '#150d24' : '#120a1f',
-                border: `1px solid ${m.role === 'user' ? '#2d1f4a' : '#241538'}`,
+                background: m.role === 'user' ? 'rgba(124, 58, 237, 0.28)' : 'rgba(22, 12, 42, 0.60)',
+                backdropFilter: 'blur(10px)',
+                border: `1px solid ${m.role === 'user' ? 'rgba(192, 132, 252, 0.35)' : 'rgba(216, 180, 254, 0.20)'}`,
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 16px rgba(0,0,0,0.25)',
                 borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '12px 12px 12px 3px',
                 padding: '9px 12px', fontFamily: 'DM Mono,monospace', fontSize: 11,
                 color: m.role === 'user' ? '#f8fafc' : '#e6dcff',
@@ -189,7 +192,7 @@ export default function ChatPage() {
             placeholder="TRANSMIT TO THE ORACLE...  (Enter = send · Shift+Enter = newline)"
             rows={2}
             disabled={busy || online === false}
-            style={{ flex: 1, resize: 'none', background: '#0e0819', border: '1px solid #241538', borderRadius: 12, padding: '10px 12px', fontFamily: 'DM Mono,monospace', fontSize: 11, color: '#c084fc', outline: 'none', boxSizing: 'border-box', caretColor: '#b26bff' }}
+            style={{ position: 'relative', zIndex: 1, flex: 1, resize: 'none', background: 'rgba(10, 6, 18, 0.55)', backdropFilter: 'blur(10px)', border: '1px solid rgba(216, 180, 254, 0.25)', borderRadius: 12, padding: '10px 12px', fontFamily: 'DM Mono,monospace', fontSize: 11, color: '#c084fc', outline: 'none', boxSizing: 'border-box', caretColor: '#b26bff' }}
           />
           {busy ? (
             <button onClick={stop} style={sendBtn('#f59e0b')}>ABORT</button>
@@ -204,7 +207,7 @@ export default function ChatPage() {
 
 function chipBtn(bg: string, color: string): React.CSSProperties {
   return {
-    background: bg, border: '1px solid #241538', borderRadius: 8, padding: '6px 10px',
+    background: 'rgba(22, 12, 42, 0.7)', backdropFilter: 'blur(8px)', border: '1px solid rgba(216, 180, 254, 0.25)', borderRadius: 8, padding: '6px 10px',
     fontFamily: 'DM Mono,monospace', fontSize: 8, letterSpacing: '0.1em',
     color, cursor: 'pointer',
   }
@@ -212,8 +215,9 @@ function chipBtn(bg: string, color: string): React.CSSProperties {
 
 function sendBtn(color?: string): React.CSSProperties {
   return {
-    background: '#150d24', border: '1px solid #2d1f4a', borderRadius: 12, padding: '0 22px',
+    background: 'rgba(62, 38, 108, 0.85)', backdropFilter: 'blur(10px)', border: '1px solid rgba(216, 180, 254, 0.30)', borderRadius: 12, padding: '0 22px',
+    boxShadow: '0 0 16px rgba(168, 85, 247, 0.35), inset 0 1px 0 rgba(255,255,255,0.18)',
     fontFamily: 'DM Mono,monospace', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em',
-    color: color ?? '#b26bff', cursor: 'pointer',
+    color: color ?? '#e9d5ff', cursor: 'pointer',
   }
 }

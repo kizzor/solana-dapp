@@ -172,14 +172,18 @@ export default function GovernancePage() {
   // ── Styles ───────────────────────────────────────────────────────────────────
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
-    background: '#020a14',
-    color: '#dce6f3',
+    background: 'linear-gradient(180deg, #0a0612 0%, #0e0819 60%, #150d24 100%)',
+    color: '#e2e8f0',
     fontFamily: 'DM Mono,monospace',
+    position: 'relative' as const,
   }
 
   const headerStyle: React.CSSProperties = {
-    background: 'linear-gradient(180deg, #0d1a2e, #060e1a)',
-    borderBottom: '2px solid #1e3a5f',
+    background: 'rgba(22, 12, 42, 0.60)',
+    backdropFilter: 'blur(14px) saturate(1.25)',
+    WebkitBackdropFilter: 'blur(14px) saturate(1.25)',
+    borderBottom: '1px solid rgba(216, 180, 254, 0.22)',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.45), 0 0 40px rgba(124,58,237,0.10), inset 0 1px 0 rgba(255,255,255,0.12)',
     padding: '16px 20px',
     display: 'flex',
     justifyContent: 'space-between',
@@ -197,11 +201,15 @@ export default function GovernancePage() {
   }
 
   const cardStyle: React.CSSProperties = {
-    background: 'linear-gradient(180deg,#0d1a2e,#060e1a)',
-    border: '1px solid #1e3a5f',
-    borderRadius: 12,
+    background: 'rgba(22, 12, 42, 0.55)',
+    backdropFilter: 'blur(14px) saturate(1.2)',
+    WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
+    border: '1px solid rgba(216, 180, 254, 0.22)',
+    borderRadius: 14,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.40), 0 0 32px rgba(124,58,237,0.08), inset 0 1px 0 rgba(255,255,255,0.10)',
     padding: '14px 16px',
     marginBottom: 12,
+    transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
   }
 
   return (

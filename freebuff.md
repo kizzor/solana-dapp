@@ -449,6 +449,182 @@ NEW heist.move v2 (PUBLISHED 2026-08-02): FH1=19.5% FH2=19.5% FH3=40% total=99%
 
 ## SESSION LOG
 
+### Session: 2026-10-13 (c) — Console → MARK-X arena build (user imgref: cyan frame + voxel cube + override terminal)
+**Task:** User supplied an image reference (cyan neon frame, magenta rails, HEIST header w/ big pink draw + lock chip, isometric voxel cube behind numbers, magenta SECURITY OVERRIDE TERMINAL w/ green meters + ENC waveform, INITIATE DECRYPT / CONFIRM SETTLE actions) and asked for consoles geared up for the matrix arena.
+
+**Done (app/page.tsx only — appearance; ALL handlers/logic untouched):**
+1. ✅ Chassis MARK-X: cyan #2DD8F0 double-line neon frame (2px border + inset bezel ring), magenta energy rails on both chassis edges (proximity-driven opacity), deep space-navy face. Charcoal skin retired.
+2. ✅ Header: accent chip + HEIST-id cyan 13px + BIG PINK DRAW (Syne 40px, #ff4fa3 glow, numAppear pop) + magenta lock chip; CORE_BANK row (pink label / white num / green OPEN / bk count) — replaces the old white-slab OLED + red digits.
+3. ✅ ARENA FIELD: neon-purple bordered screen — pure-CSS isometric VOXEL CUBE (6×6 diamond cells, deterministic lit pattern, rotateX/Z) behind a floating 9×3 number field (blank slots = dim ◇, hot cells = violet AC per imgref, clicked = pink glass, live-hit = cyan fill + white ring), star specks + cyan energy bloom + side filaments.
+4. ✅ SECURITY OVERRIDE TERMINAL footer (replaces red RANSOM bar): magenta frame; best-line prox meter (% = max of line/full-house prox, green→magenta ≥95%), data meter (= fhp), 16-bar ENC waveform (CSS, decorational only), INITIATE DECRYPT chip (live while click window is open, STANDBY otherwise), CONFIRM SETTLE = the doClaim actuator (canClaim-gated, SETTLED ×n after), cyan ⚿ vault key.
+5. ✅ Corner LED beacons + pagination + rack controls untouched; claimable = magenta frame pulse per imgref.
+
+**Verify:** `npx tsc --noEmit` exit 0 (no TS errors — React.CSSProperties used as a type-only namespace is valid here); `/` 200; session polling 200s; dev-server-3002.log clean.
+
+### Session: 2026-10-13 (b) — Rack pagination: 5 rows × 2 side-by-side consoles per page + PREV/NEXT
+**Task:** User: "make 2 consoles visible side by side for a column, make 5 rows per page, add a pagination on the top of console matrix".
+
+**Done (app/page.tsx only — layout/UX, all game logic/handlers untouched):**
+1. ✅ Rack layout flipped from column-flow (2 stacked per column) → row-major `gridTemplateColumns: repeat(2, minmax(0,1fr))` — 2 consoles SIDE-BY-SIDE, 5 rows per page (10/page).
+2. ✅ Pagination state: `rackPage` + `RACK_PAGE_SIZE = 10` + `rackPageCount` = ceil(devices/10) + `rackPageSafe` clamp (device count can shrink mid-game without crashing the pager); page slice `devices.slice(...)` at render — off-page devices keep full state (cells/claims live in `devices`), paging is view-only.
+3. ✅ Pagination bar sits at the very top of the console matrix (above the rack control bar): ◀ PREV / clickable page dots (cyan→violet active pill, glow on active) / NEXT ▶ / `PAGE x/y · a–b OF n` readout — disabled states dimmed at bounds.
+4. ✅ 20 devices = 2 pages; empty rack shows placeholder (gridColumn span kept).
+
+**Verify:** `npx tsc --noEmit` exit 0 (status captured from tsc directly, not a filter); `/` 200; `/api/session-state` polling 200s; dev-server-3002.log clean. One transient typo introduced mid-edit was fixed before verification.
+
+### Session: 2026-10-13 — Console → kwys_bright.png neon-keys rebuild + rack width cap (user reference #4)
+**Task:** User: "make 2 consoles visible for a column, design it like this with neon keys" + image `C:\Users\admin\Desktop\LOGO\ecommerce\alyama\kwys_bright.png` — PIL pixel-analysis extracted spec (same pipeline as sessions i/j).
+
+**Spec extracted (kwys_bright.png, 1024×651):**
+- Charcoal metal shell (row avgs ~#2B2E30 top → near-black mid) — NOT violet. Compact 3:2 body.
+- ONE bright band y .15–.25: WHITE slab (#F2F4F6 avg 155–201-255 → pure white readout) with SMALL red glow digits (top color #E23B4A) + gray unlit glyph rows with red side dots.
+- Neon key field x .12–.91: dominant key colors cyan #40E0E0/#50F0F0, periwinkle #7878F0, blue #78A0F0, violet #A028F0/#7800F0, magenta hover — keys are BRIGHT SATURATED TILES (mx>120, sat>60), separated by gaps (grid-edge analysis H edges 110+ = separated tiling).
+- Accent tier: cyan #22d3ee-family + violet #402080 + white mint highlights.
+
+**Done (app/page.tsx + app/globals.css only — appearance-only, ALL handlers/logic untouched):**
+1. ✅ Chassis (MARK-IX): violet rim retired → charcoal gradient #26292D→#141619 + 1px #3A414A hairline border, compact bezel; claimable keeps hot-pink proximity glow (win-aware unchanged).
+2. ✅ OLED: cyan→violet band retired → WHITE slab band (#FDFDFD→#E2E6EA) w/ ruled texture; draw number = 34px RED glow digit (#E23B4A + layered red glow + bevel shadow); unlit red side-dot right; HEIST-XXXX tag recolored dark ink; STANDBY/OFFLINE = gray ink.
+3. ✅ Ticker: dark slab #1A1F24→#14181C with 2px RED #E23B4A top separator; CORE_BANK/bank-tag/nc-15 readouts recolored red-tinted neon; OPEN green dot preserved.
+4. ✅ KEYCAPS → NEON KEYS: every cap gets horizontal neon gradient fill (cyan #22D3EE → blue #60A5FA → indigo #818CF8 → violet #A855F7 → magenta #E879F9) — idle = same gradient at 16% alpha over dark steel, active click = FULL neon fill, clicked = white glass; glyphs white w/ cool glow (clicked = white glass + ink glyph); glass top bevel + 7px violet underglow on all caps.
+5. ✅ Rack width cap: `.device-rack .device-console { max-width: 560px; justify-self: center; width: 100% }` — 2 consoles per column stay visible in the viewport instead of stretching to full column width (grid rows/columns untouched).
+
+**Verify:** `tsc --noEmit`=0; `/` 200 (compiled clean); `/api/session-state` polling healthy 200s; dev-server-3002.log tail clean.
+
+### Session: 2026-10-12 (j) — Console → kwys.jfif analytically-extracted build (user reference #3)
+**Task:** User: previous keypad design "not as expected, redesign like this" + image `C:\Users\admin\Desktop\LOGO\ecommerce\alyama\kwys.jfif` — loaded via the nextlevel builder skill (ui-ux-pro-max) then PIL-analyzed for the exact spec since jfif isn't renderable.
+
+**Spec extracted (pixel analysis of kwys.jfif):**
+- Screen band y .14–.23: full-width horizontal gradient **cyan→violet** (#189da4 → #2d669d → #491b88) with white glyphs lit on it; LCD scanline rows visible (color-cycle runs).
+- Mid slab y .33–.56: two glyph bands on gray-white tiles (col runs at 6-7,9-10,12-13,15-16,18-19,21-22,24-25 tiles —iliyor separated keycap cluster rhythm across two rows).
+- Accent palette: cyan #22d3ee tier + bank/violet #402080 / #0890a0 + green glow accents.
+- Console face: deep VOC near-black; face grid edges (H edges 110+) → separated keycap tiling, not large continuum.
+
+**Done (app/page.tsx only — appearance-only, logic untouched):**
+1. ✅ OLED consolidated into ONE bordered screen block: upper half = cyan→violet LCD gradient with big white matrix number (42px, triangle text-shadow LCD feel, scanlines overlay); lower half = LCD ticker (CORE_BANK yellow-green LED text + OPEN/WAIT + bank tag + n/15 cyan). HEIST-XXXX corner tag overlaid top-left.
+2. ✅ RIVETED STEEL SLAB kept + side switch + rivets, BUT cap layout reshaped to fill the entire plate — 9 cols × 3 rows = all 15 numbers + blank `◇` slots as keycaps with 6-color rainbow cycle across cells (cyan/blue/purple/magenta/pink/green), per-cell tint b0-glow, no more banding mismatch vs savanna row height inconsistencies.
+3. ✅ Everything works identically: onCellClick signature `(device.id, ri, ci)` unchanged; vending-style blanks show glyphs for mint-blanks so every slot is present.
+4. ✅ RANSOM footer bar + corner beacons unchanged.
+
+**Verify:** `tsc --noEmit`=0; `/` 200 — dev.log clean.
+
+### Session: 2026-10-12 (i) — Console → MARK-VIII keypad build (user-supplied reference #2)
+**Task:** User provided a second reference image (violet-rimmed keypad console w/ cyan neon ring, OLED status screen, riveted steel keypad plate, RANSOM capsule) and asked to use it for the consoles, ensuring ALL minted numbers appear inside the console.
+
+**Done (app/page.tsx only — appearance; all handlers/logic untouched):**
+1. ✅ Chassis: violet rim (2px #a855f7, rounded-18) + inner face ringed in cyan neon (2px #22d3ee + inner glow) over radial plate (still win-aware: claimable → pink frame glow).
+2. ✅ OLED STATUS BAR (ticker): HEIST-XXXX ▰ CORE_BANK: n ▰ OPEN/WAIT bkname — right-aligned n/15. Offline keeps inline ACTIVATE key.
+3. ✅ OLED DRAW SCREEN: digital-rain green glyph columns behind a big white outline-gradient matrix number (44px, text-stroke + numAppear pop); window-open = green inner halo; STANDBY/OFFLINE states.
+4. ✅ RIVETED STEEL PLATE: 4 rotated hex rivets + left slide switch (lights cyan when active) framing a 5×3 keycap matrix — **every minted ticket number renders as a keycap** (blanks from mint render as dim ◇ glyph slots so the plate reads full-square, per ref art's decorative glyphs), rainbow neon glyph colors per column (cyan/blue/purple/magenta/pink), missed = dark red. Clicks still route through onCellClick(device.id, ri, ci) — same cell semantics (row-major 3×9 grid re-shaped 5×3 for display; grid data untouched).
+5. ✅ RANSOM FOOTER (existing from prior session, already matches ref's capsule) kept — red neon bar, green sq + big num left, RANSOM/PAID actuator + cyan vault ⚿ right.
+
+**Verify:** `tsc --noEmit`=0 (after reshaping column loop to 5 cols); `/` 200; dev.log tail clean.
+
+### Session: 2026-10-12 (h) — Removed duplicate number set + outline boxes from console
+**Task:** User: consoles show 2 sets of numbers — remove the bottom set; also remove the long outline boxes.
+
+**Diagnosis:** the second "number set" was the legacy 7-slot win-LED strip between the column strips and the footer; the "long outline boxes" were the LED row's decorative end-cap tiles (2× left, 3× right thin bordered slabs).
+
+**Change (app/page.tsx only):** deleted the entire LED strip block (seven win-LED cells + both end-cap groups) from RANSOME HackingDevice console. Win feedback is preserved via: corner LED beacons (proximity→claimable cascade), footer RANSOM bar state (claimable/PAID), and the strip inside MaximizedDevices view still intact (separate render path, untouched). CELL/claim/claim-wiring not touched (ef5p/t0p/m1p/b2p/fhp still drive bestPct → beacons/footer)
+
+**Verify:** `tsc --noEmit`=0; `/` 200; dev.log tail clean.
+
+### Session: 2026-10-12 (g) — HackingDevice reskinned to reference image (MARK-VII HEIST TERMINAL)
+**Task:** User supplied a reference image of the console and asked for the console to be redesigned to match, using the ui-ux-pro-max skill.
+
+**Skill verification:** cyberpunk-ui style card matched (neon on dark #0D0D0D, cyan/magenta/green neon accents, monospace, scanline overlays, glow text-shadows) — applied directly to the console chassis.
+
+**Done (app/page.tsx only — appearance-only, all handlers/claims/LEDs/corner beacons/auto-play wired unchanged):**
+1. ✅ Chassis: violet→cyan gradient neon frame (padding 3, rounded 16) + inner dark NGON face (radial #1a1533→#07050f) — claimable state still turns the frame hot pink (win-aware preserved). Legacy glass-forged body retired.
+2. ✅ HEADER TILE: cyan→blue→violet gradient bar — left `HEIST-XXXX` in glowing teal DM Mono 15px, right `n/15` gray 14px (matches image's teal title + gray counter).
+3. ✅ BANK STRIP: dark tile `CORE_BANK:` gray label + white glowing live number + green OPEN indicator bar/window-state + bank tag uppercase truncated — offline devices keep the ACTIVATE key inline.
+4. ✅ COLUMN STRIPS: the old row-grid replaced with 9 separated cyan-bordered mini-strips (header cell dark tile + 3 number wells each) exactly like the reference; cell clicks/goard wiring identical (same onCellClick, isCur/isClick detection, glitch anims preserved).
+5. ✅ RANSOM FOOTER BAR: red neon strip with green square indicator + white live number left; right is the RANSOM actuator (disabled until claimable, turns hot pink + PULSes when claimable, shows PAID ×n after claim) + cyan vault key square (⚿ onOpenVault kept).
+6. ✅ LED strip + MiniStopwatch still present above the footer (kept for the 7-win filament system); legacy Bottom-bar 3-dot column replaced by footer bar.
+
+**Verify:** `tsc --noEmit`=0 (after fixing one unbalanced JSX close from the wrapper add); `/` 200; dev.log clean.
+
+### Session: 2026-10-12 (f) — Console parity across devices
+**Task:** User: mobile console doesn't look like the desktop console — make the identical desktop console render on all devices.
+
+**Finding:** there was NO `.device-console` or `.device-key` mobile re-skin. The only mobile console-affecting rule left was the legacy `.device-grid` (an unused old class that collapsed the console grid to a single column at ≤600px). All console visuals (chassis/bezel/LED/keycaps) are inline on HackingDevice — identical markup everywhere already.
+
+**Change (app/globals.css only):** deleted the `@media (max-width:600px) .device-grid` split rule (kept the comment + the .devices-section padding rule). Result: mobile inherits the exact desktop rack grid (2-deep columns, 800px scroll) and the same console, bezel-for-bezel, keycap-for-keycap.
+
+**Verify:** `tsc --noEmit`=0; `/` 200; dev.log tail clean.
+
+### Session: 2026-10-12 (e) — Rack structure unified: mobile = same as desktop
+**Task:** User correction on (d): drop the special mobile rack layout — use the SAME structure and console that desktop has.
+
+**Change (app/globals.css only):** the mobile `@media (max-width: 600px)` override on `.device-rack` was deleted entirely. Mobile now inherits the exact desktop inline grid (grid-auto-flow: column, 2-deep side-by-side columns, 800px scroll cap, ACTIVATE ALL + AUTO MATRIX bar, identical `device-console` chassis). No other files touched; no logic changed.
+
+**Verify:** `tsc --noEmit`=0; `/` 200; dev.log clean.
+
+### Session: 2026-10-12 (d) — Rack orientation fix: 2 consoles PER COLUMN (not per row)
+**Task:** User correction on (c): devices should stack as 2 consoles per COLUMN, not per row.
+
+**Change (app/page.tsx + app/globals.css only):** inline grid switched from `grid-template-columns: repeat(2,1fr)` (row-major) to `grid-template-rows: repeat(2, max-content)` + `grid-auto-flow: column` + `gridAutoColumns: 1fr` — devices now fill TWO SIDE-BY-SIDE COLUMNS of 2-deep consoles (so 4 visible before any scroll on desktop), and the rack keeps its 800px vertical scroll. Mobile media query flips to `grid-template-rows: repeat(4)` → 4-deep columns (4 visible per column before scroll). Every console pair in a column stays side-by-side; vertical scroll is per-column depth.
+
+**Verify:** `tsc --noEmit`=0; `/` 200; dev.log clean.
+
+### Session: 2026-10-12 (c) — Arena widened + scrollable console rack + AUTO MATRIX (backend-verified)
+**Task:** User request: bigger arena screen, rack rule = 2/row desktop & up to 4/row mobile with vertical scroll under the arena display, ACTIVATE ALL controls on top of the rack, plus a golden AUTO MATRIX button that auto-clicks matching numbers — work the backend too. Confidential protocols followed (no RED files, no env reading).
+
+**Done (app/page.tsx + app/globals.css + app/api/auto-play/* — new route only, zero logic edits to existing endpoints):**
+1. ✅ Arena `maxWidth` 760→1180 — the whole arena deck (display + rack + claim frame) is now a wide console board.
+2. ✅ Console rack: `repeat(2,minmax(0,1fr))` grid, `maxHeight: 800` + `overflowY:auto` + `overscroll-contain`, inset shadow + `.device-rack` spectrum scrollbar. Mobile: 4-per-row compact 2×2 card grid at max-height 66vh via media query — vertically scrollable, never page-breaking.
+3. ✅ Rack control bar ABOVE the rack inside the arena frame: `◈ ACTIVATE ALL` (moved from the legacy toolbar, same handler) + `◇ AUTO MATRIX` golden master key (`goldPulse` 1.1s while engaged, Syne 800, saffron gradient) + RACK x/20 · N ONLINE telemetry. Legacy toolbar still exists below but ACTIVATE ALL is now duplicated at the rack top per request.
+4. ✅ AUTO MATRIX frontend: `autoPlay` state + golden button; `useEffect` on window-open × draw-number finds matching unclicked cells per active device, POSTs batch to `/api/auto-play`, applies ONLY the endpoint-verified cells through the normal `handleCellClick` pipeline (deduped per draw via `autoSentRef`). Claims still flow exclusively through the existing debounced `handleClaim` → `/api/claim-sui` path — auto mode grants no new claim privilege.
+5. ✅ Backend: NEW `app/api/auto-play/route.ts` — force-dynamic nodejs route; validates drawNumber (1..99 int), batch size cap, device roster, per-hit coordinates + intra-batch double-click dedupe; returns only verified hits; sanitized errors; no env/secret access; TODO stub documented for the future VRF-authoritative draw cross-check (KNOWN BUGS #3).
+6. ✅ Verify: `tsc --noEmit`=0..Live endpoint tests: valid batch → deduped verified list (dup removed, device-out-of-roster removed, bad coords removed); no-live-draw → `{ok,verified:[],reason:'no-live-draw'}`; out-of-range draw 900 → no-live-draw refusal; `/` 200.
+
+**No changes to:** draw/claim/settle handlers, contract wiring, env. `dev.log` clean.
+
+### Session: 2026-10-12 (b) — MATRIX ARENA: PNG removed → large live display; consoles → cyberpunk chassis + corner LED beacons
+**Task:** User request: remove `/new_matrix.png` + its contents, remove the game-screen app-header, put a large display in their place; redesign consoles as futuristic hacking devices with corner LEDs that flash rapidly near a win. Contents unchanged.
+
+**Done (app/page.tsx + app/globals.css only):**
+1. ✅ PNG chassis deleted from the arena (`<img src="/new_matrix.png">` + pixel-mapped number/countdown overlays) — the PNG file itself remains in /public, untouched.
+2. ✅ Game-screen `.app-header` strip removed (session identity now hangs off the new display's status rails; lobby + vault modal keep wallet controls; DEV DRAW/SETTLE controls and announcement top:52 anchor unchanged).
+3. ✅ NEW LARGE DISPLAY in the arena: 760px glass deck — left status rails (LIVE + DRAWN/STANDBY dot + bank tag), center Syne `clamp(56px,15cqw,108px)` neon number with numAppear pop, right column with 9cqw square countdown chip (44px min) + last-4 called history + click-window state chip. Corner sweep LEDs sit on the deck frame.
+4. ✅ `HackingDevice` console hardened: `.device-console` glass chassis (frosted blur, forged gradient, bezel, brushed scanline plate) + PROX % chip in the telemetry bezel + **4 corner LED beacons (tl/tr/bl/br)** wired to win-proximity: idle = emberPulse 2.4s ripple (per-corner delays), ≥40% = amber 1.1s blink, ≥70% = orange 0.55s blink, ≥95% = 0.22s strobe, claimable = rapidFlicker 8Hz burst — same thresholds as the in-grid LED strip. Beacon colors/anim inline-driven; globals.css provides `emberPulse`, per-corner delays, reduced-motion kill, `.display-scanlines` helper.
+5. ✅ Verify: `tsc --noEmit`=0; dev `/` 200; served HTML has zero `new_matrix.png` refs and zero `app-header` on game screen (consoles/arena need an entered-game session — live DOM verified last session, same render path).
+
+**No changes to:** game logic, API, contracts, win/claim wiring, DEV_MODE, env. PNG file still on disk (referenced nowhere in the game path now; lobby map stage untouched).
+
+### Session: 2026-10-12 — GLASS TERMINAL SKIN (full frontend reskin, nextlevel ui-ux-pro-max skill)
+**Task:** User request: complete redesign — futuristic cyberpunk, glassmorphism everywhere, spectrum reflections, mechanical key-press keys for the terminal theme. Frontend-only; no API/contract/env/RED files touched.
+
+**Skill:** `ui-ux-pro-max` installed via `npx skills add nextlevelbuilder/ui-ux-pro-max-skill` (`.agents/skills/ui-ux-pro-max/`). Design-system search output: glassmorphism style card (blur 10–20px, rgba 10–30% overlays, 1px light borders) + purple/rose neon palette.
+
+**Done:**
+1. `app/globals.css` — appended GLASS TERMINAL SKIN block: `--skin-*` tokens (glass bg rgba(22,12,42,.55), borders rgba(216,180,254,.22), blur 14/22px, glow purple/cyan/pink/green); aurora backdrop + `.skin-aurora` drifting layer (26s alternate loop, reduced-motion killed); glass surfaces applied to all major panels (lobby sidebar/vault/heist/matrix/topbar/mobile-vault/triple-shadow with inner highlight); full glass keycap reskin of `.keyboard-key`/`-accent`/`-danger`/`-sm` — hover 1px mid-travel, active bottoms out 5px + white core flare, springs back on release (CSS !:active/:hover, no JS); spectrum scrollbar + focus ring.
+2. `app/page.tsx` — added `.skin-aurora` + positioning wrappers to setup/lobby/game roots; topbar + app-header inline `background` → `transparent` (glass comes from CSS layer, avoids double-background).
+3. `app/governance/page.tsx` — container/header/cards converted to glass tokens (was Solana-blue #020a14 palette).
+4. `app/chat/page.tsx` — ORACLE UPLINK header/messages/textarea/bubbles converted to glass.
+5. `app/turbolucent/page.tsx` — container/cards/inputs converted to glass (admin console only touched visuals).
+6. Dev server was serving stale Oct-7 `.next` (governance/chat 404) — killed PID 55876, deleted `.next`, restarted on :3000. Fresh: `/` 200, `/governance` 200, `/chat` 200; live CSS contains skin-aurora/auroraDrift/capHunt/backdrop-filter; dev log 0 errors.
+
+**Verify:** `tsc --noEmit` = 0. Node count verified in served HTML/CSS. **Not yet done:** production `npm run build` + user visual review + headless pixel audit (helpers ui-audit*.cjs at Desktop root still available).
+
+**Next (user):** open http://localhost:3000 and review the glass skin. Then commit: `git add app/globals.css app/page.tsx app/governance/page.tsx app/chat/page.tsx app/turbolucent/page.tsx freebuff.md` (commit is user's manual rule-2 step, or ask agent).
+
+### Session: 2026-10-06 — Session resume: recovered lost Oct-1 UI fixes + verified/completed arena steps 4–6 WIP
+**Task:** Resume via solanamark.md + freebuff.md; UI/UX focus only. Graph MCP unavailable — manual RED/YELLOW/GREEN routing via CONFIDENTIAL_MAP.md; ZERO RED files read.
+
+**State found:** uncommitted steps 4–6 arena WIP in working tree (app/page.tsx + app/globals.css, mtime Oct 3): vault capsules moved INTO the arena frame, keypad deck wired under the PNG, RANSOM pills, vault stats bar, legacy deck below PNG removed. **The Oct-1 fixes (tap targets, autofocus, reduced-motion) were logged as done but NEVER committed and are absent from HEAD, all stashes, and all branches — lost in the branch shuffle. Restored this session.**
+
+**Done (app/page.tsx + app/globals.css only; no logic/API/contract changes):**
+1. ✅ Restored Oct-1: NicknameModal `autoFocus`; typo `DECENTERILZIED` → `DECENTRALIZED` (14 occurrences incl. HACK_CMDS + SVG legend).
+2. ✅ Restored Oct-1 WCAG 2.5.8 tap targets (≥24×24): quick-mint ▲▼ 22×13→24×24; quick-mint stepper 40×40→`minHeight:66`; sidebar ▲▼ 28×16→28×24; token selector `minHeight:24`; 🔍 search 7px→10px pad; ⚙ OPTIONS 3px→8px pad; ◈ MATRIX 4px→9px pad; ✕ close padded; ETH ▾ pad+minHeight.
+3. ✅ Restored Oct-1 WCAG 2.3.1: global `prefers-reduced-motion: reduce` block in globals.css — `[style*="infinite"]` + `.keyboard-key-accent/-danger` + `.hud-glider-key` → `animation: none`. One-shot transitions (numAppear/ledBurst/ledExpire) kept.
+4. ✅ WIP completion: `.vault-cap` class hooks + tooltip titles (`{label} — {pct}% of vault`) on both capsule rows (drill-suite selector + a11y).
+5. ✅ Countdown chip regression from the WIP FIXED: the re-arena had reverted the Sep-30 verified square chip (6.2cqw × 6.2cqw @ 13%/17%, 4cqw digits) back to the old %-of-height geometry (width 6.6%/height 5.6% → 40.5×33.5 non-square, drifted off slot). Restored square+slot geometry — measured: 38.1×38.1 (delta 0.0px), center 16.1%/20.2% vs slot 16.05/19.95, top-strip timer h=38px.
+6. ✅ Verified: tsc=0, `npm run build` ✓ (dev stopped per .next-collision rule; a stray double dev instance on 3000+3002 was killed and consolidated), dev restarted HTTP 200. Headless: `ui-drill-verify.cjs` 9/9 (7 capsules found in DOM), `ui-ux-audit.cjs` 13/13 (autofocus, tap targets, tooltip, no overflow desktop 1440×900 / mobile 390×844, no fatal errors), `ui-audit.cjs` 12/12 pixel metrics.
+
+**Not changed:** contracts, API routes, claim/settle logic, env vars, RED files. Rotation log unchanged: rows 1–5 ✅, row 6 (`SUI_PRIVATE_KEY` authority republish) still ⏳ PENDING user decision.
+
+**Next (user):** review the arena steps 4–6 render, then commit. Production push = manual user step (Rule 2): `git add app/page.tsx app/globals.css freebuff.md && git commit && git push` → Vercel auto-deploys. Untracked ui-*.png/cjs helpers can be deleted after review.
+
 ### Session: 2026-10-01 — UI/UX correction rounds 1+2 (tap targets, autofocus, reduced-motion)
 **Task:** Resume via solanamark.md + freebuff.md; UI/UX focus only. RED files untouched (CONFIDENTIAL_MAP routing; graph MCP unavailable this session — manual RED/YELLOW/GREEN routing used).
 
@@ -1657,3 +1833,29 @@ RawContentLength  : 701
 - Executed the recall protocol: `git reset --hard recall_purple` → cleared `.next` → rebuilt → restarted dev. HTTP 200 confirmed.
 - App is back on the exact full-neon purple state (purple ambient backdrop, white core halo, glowing neon keys). Working tree clean at `55c4f3a`.
 - Protocol note: tag (`recall_2`, `recall_3`…) before every major styling swing; each checkpoint stays one-command recoverable.
+
+### Session: 2026-10-21 — CARNIVAL branch: slot machine retheme (frontend only)
+- Branch `carnival` created off main; no API routes or engine logic touched.
+- New `components/SlotMachine.tsx` (root-level, imported as `@/components/SlotMachine` from `app/page.tsx`): carnival cabinet with TWO GIANT DIGIT ROLLERS (tens + units drums) wired to the existing `currentNum` engine draw — drums blur-spin and snap digit-by-digit on each draw, ambient drift between draws, last-5 hits shown as popped tokens.
+- State-light system for the whole cabinet: LOBBY rainbow / SPIN amber strobe / OPEN green / CLAIM magenta jackpot frenzy / PAID emerald — marquee bulb arch, side LED chase strips, base strip, and 7 payline lamps (FAST FIVE ... FULL BANK III/40% jackpot) all reuse the real WIN_BPS and winStates. Claim logic untouched.
+- Old `arena-live-display` live-number panel replaced in the main game view; cabinet also mounted atop the expanded MaximizedDevices deck.
+- Lobby retheme: devices/consoles -> TICKETS (NFT label "CARNIVAL SLOT TICKET", PRICE PER TICKET, YOUR TICKETS, ENTER CARNIVAL, announce strings, ticket cards now TKT- with gold bezel + magenta rails).
+- `globals.css`: carnival* keyframes appended, prefers-reduced-motion supported.
+- Verified: `npx tsc --noEmit` clean; dev server `npx next dev -p 3002` from repo root compiled 9,840 modules, GET / 200; opened in browser tab.
+- 2026-10-21 follow-up: roller deck rebuilt into classic 4-window chassis per user ref image (desktop/LOGO/ecommerce/alyama/tick — JPEG not renderable by agent, layout applied from user description): outer windows = TENS/UNITS digit reels, inner 2 = reserved stat screens (STAT·VAULT, STAT·PLAYERS placeholders glowing with the state LED color). Stats wiring deferred by user. tsc 0, hot recompile 10,003 modules, GET / 200.
+
+### Session: 2026-10-22 — Console → TACTICAL CYBERDECK reskin (alyama/design, paint-only)
+**Task:** User: use the console design from `Desktop/LOGO/ecommerce/alyama/design` (AI Studio "ROBHIN HEIST — Tactical Cyberdeck", `src/components/CyberdeckInterface.tsx` + its index.css), fit mobile + desktop, keep the 2-devices-per-row architecture, polish with the nextlevel-builder skill if needed — "just paint, do not change any mechanics".
+
+**Done (app/page.tsx HackingDevice render + app/globals.css only — ALL handlers/state wiring untouched):**
+1. ✅ CSS layer already present from earlier WIP (globals.css `TACTICAL CYBERDECK SKIN` — titanium-panel, screw-bolt, keycap-socket/btn with is-blank/is-missed/is-active/is-target-exact/neon-tube-outer/ransom-emboss). Added the missing `.deck-sm` density layer (≤700px keycap 26px; ≤460px keycap 20px, socket padding 2px, `--deck-keygap: 2px`).
+2. ✅ Chassis: carnival gold bezel + magenta rails → brushed titanium panel (radial #2f2a42→#0d0c15) + 4 precision screw bolts; purple/fuchsia proximity glow pulse kept win-aware (canClaim → capHunt).
+3. ✅ Header: deck brand (HEIST + nftId numeric suffix, e.g. "HEIST 0000") · MATRIX target chip (black-on-cyan label + glowing cyan draw number, numAppear pop kept) · cyan gradient counter chip (nc/15, window-open pulse). Corner LED beacons kept verbatim.
+4. ✅ Module bay (new): BUS//PWR animated eq strip + SIGNAL/LINE-PROX segmented meter (bestPct, 8 segments, green ≥95%) + DATA/FULL-HOUSE readout (fhp) — same prox values the old footer meters used.
+5. ✅ Keypad: old voxel-cube arena → recessed socket plate, 9×3 mechanical keycaps, white-glow mono digits; ◇ blanks = dim socket caps; missed = dead red caps; clicked = fuchsia is-active; live-match+window-open = cyan is-target-exact. Same onCellClick(device.id, ri, ci). isHot = subtle brightness(1.15). CORE_BANK data relocated to deck terminal readout bar (bank name / OPEN-WAIT-OFFLINE / nc 15 / PAID ×n).
+6. ✅ Footer: SECURITY OVERRIDE TERMINAL → RANSOM ACTUATOR COMPARTMENT — neon-tube chamber, ACT sensor (LIVE when window open), embossed RANSOM button = doClaim (SETTLED ×n when claimed), tactile switch = ⚿ onOpenVault vault key + ON (offline ACTIVATE, secondary in switch column), hex readout = matched count.
+7. ✅ Verifier `ui-deck2-verify.cjs` (headless Chrome): 15/15 PASS — desktop 2/row (560px each, side-by-side), 9 cols, keycap 30px; mobile 390: 2/row (159px each, no overflow), keycap 20px; 320: 9 cols + 27 sockets, keycap 20px; no fatal page errors. Screenshots: ui-deck2-desktop.png / ui-deck2-mobile.png / ui-deck2-mobile320.png.
+8. ✅ Header dup fix: "HEIST HEIST-0000" → "HEIST 0000" (nftId suffix only).
+
+**Verify:** npx tsc --noEmit = 0; dev :3002 GET / 200 (compiled clean); ui-deck2-verify.cjs 15/15 PASS; visual pass on desktop + mobile screenshots.
+**Files:** app/page.tsx (HackingDevice JSX only), app/globals.css (deck-sm append; deck CSS section pre-existed), ui-deck2-verify.cjs (new, untracked). No contract/env/secret changes. Confirmed: `recall_retro_1` == HEAD `42bd094`; `temp1_fixed` does NOT exist — reskin is uncommitted WIP on carnival.

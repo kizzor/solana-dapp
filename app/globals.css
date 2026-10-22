@@ -807,10 +807,8 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
       "chat";
   }
 
-  .device-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-  }
+  /* Console parity: legacy .device-grid mobile split removed — console chassis
+     and keypad cells render identical to desktop on every screen size. */
 
   .devices-section {
     padding-left: 8px;
@@ -1255,6 +1253,21 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb {
   animation: gliderPulse 2.6s ease-in-out infinite;
 }
 
+/* ═══ WCAG 2.3.1 — prefers-reduced-motion: kill decorative animation loops ═══
+   Targets the inline-styled infinite animations used across the UI (LEDs, dots,
+   capsules, pulses). One-shot transitions (numAppear, ledBurst, ledExpire) are
+   left intact — they animate once and settle, not loop. */
+@media (prefers-reduced-motion: reduce) {
+  [style*="infinite"] {
+    animation: none !important;
+  }
+  [style*="capHunt"] {
+    animation: none !important;
+  }
+  .keyboard-key-accent, .keyboard-key-danger, .hud-glider-key {
+    animation: none !important;
+  }
+}
 /* A–Z quick-jump rail (heist list) */
 .az-rail:hover .az-letter { color: #b26bff; }
 .az-letter { transition: color 0.1s ease, transform 0.1s ease; }
@@ -1555,4 +1568,824 @@ button:disabled {
   .md-claim-frame>div>span:first-child {
     font-size: 12px !important;
   }
+}
+
+/* Vault-capsule hot flicker — claim frame fires this while a win is claimable
+   (restored with the capsule drill; lost in the recall_experiment reset) */
+@keyframes capHunt {
+  0%, 100% {
+    background-color: rgba(236, 72, 153, 0.08);
+    box-shadow: 0 0 8px rgba(236, 72, 153, 0.35), inset 0 0 10px rgba(236, 72, 153, 0.08);
+  }
+  50% {
+    background-color: rgba(236, 72, 153, 0.22);
+    box-shadow: 0 0 16px rgba(236, 72, 153, 0.65), inset 0 0 18px rgba(236, 72, 153, 0.18);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="capHunt"] {
+    animation: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GLASS TERMINAL SKIN — 2026-10-12 full redesign
+   Layered over the neon deck: frosted glassmorphism surfaces, aurora
+   spectrum-lit backdrop, upgraded mechanical key-press kinematics.
+   Appearance-only. Layout, handlers and game logic untouched.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Skin ink — spectrum the glass reflects */
+  --skin-glass-bg: rgba(22, 12, 42, 0.55);
+  --skin-glass-bg-strong: rgba(16, 9, 32, 0.72);
+  --skin-glass-border: rgba(216, 180, 254, 0.22);
+  --skin-glass-border-lit: rgba(216, 180, 254, 0.45);
+  --skin-glass-highlight: rgba(255, 255, 255, 0.12);
+  --skin-blur: 14px;
+  --skin-blur-heavy: 22px;
+  --skin-glow-purple: rgba(168, 85, 247, 0.35);
+  --skin-glow-violet: rgba(139, 92, 246, 0.25);
+  --skin-glow-cyan: rgba(34, 211, 238, 0.18);
+  --skin-glow-pink: rgba(236, 72, 153, 0.30);
+  --skin-glow-green: rgba(52, 211, 153, 0.28);
+  --skin-key-radius: 10px;
+  --skin-travel: 4px; /* keycap throw distance */
+}
+
+/* ── Aurora backdrop: reflected in every glass panel ───────────────────── */
+body {
+  background-image:
+    radial-gradient(ellipse 60% 40% at 12% 8%, rgba(124, 58, 237, 0.28), transparent 60%),
+    radial-gradient(ellipse 50% 36% at 88% 12%, rgba(236, 72, 153, 0.16), transparent 60%),
+    radial-gradient(ellipse 55% 40% at 82% 92%, rgba(34, 211, 238, 0.14), transparent 58%),
+    radial-gradient(ellipse 45% 34% at 10% 88%, rgba(52, 211, 153, 0.10), transparent 58%),
+    radial-gradient(ellipse 70% 45% at 50% 36%, rgba(255, 255, 255, 0.05), transparent 60%),
+    radial-gradient(ellipse 85% 55% at 50% -12%, rgba(168, 85, 247, 0.16), transparent 62%),
+    linear-gradient(180deg, #0a0612 0%, #0e0819 52%, #150d24 100%);
+  background-attachment: fixed;
+}
+
+/* Drifting aurora sheen above the fixed backdrop (pointer-transparent) */
+.skin-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background:
+    radial-gradient(ellipse 40% 28% at 30% 40%, rgba(168, 85, 247, 0.10), transparent 60%),
+    radial-gradient(ellipse 36% 24% at 72% 60%, rgba(34, 211, 238, 0.07), transparent 60%);
+  filter: blur(30px);
+  animation: auroraDrift 26s ease-in-out infinite alternate;
+}
+
+@keyframes auroraDrift {
+  0% { transform: translate3d(-3%, -2%, 0) scale(1); }
+  50% { transform: translate3d(2%, 3%, 0) scale(1.06); }
+  100% { transform: translate3d(3%, -1%, 0) scale(1.02); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skin-aurora { animation: none; }
+}
+
+/* ── Glass surface archetypes ──────────────────────────────────────────── */
+/* Panels: frosted slabs — background follows the aurora, edges catch light.
+   Only adds glass depth; panels keep their existing layout and shadows. */
+.lobby-sidebar,
+.lobby-vault-panel,
+.sidebar-vault-card,
+.heist-panel,
+.matrix-right-panel,
+.lobby-hud-container,
+.mobile-vault-menu-panel,
+.lobby-topbar,
+.mobile-vault-heading,
+.mobile-vault-content,
+.mobile-vault-claim,
+.fmk-overlay > div,
+.hud-chatlog > div {
+  background: var(--skin-glass-bg) !important;
+  -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(1.25);
+  backdrop-filter: blur(var(--skin-blur)) saturate(1.25);
+  border: 1px solid var(--skin-glass-border) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 0 40px rgba(124, 58, 237, 0.10),
+    inset 0 1px 0 var(--skin-glass-highlight),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Topbar: heavier frost so HUD text stays legible over the map */
+.lobby-topbar {
+  background: var(--skin-glass-bg-strong) !important;
+  -webkit-backdrop-filter: blur(var(--skin-blur-heavy)) saturate(1.3);
+  backdrop-filter: blur(var(--skin-blur-heavy)) saturate(1.3);
+  border-bottom: 1px solid var(--skin-glass-border-lit) !important;
+}
+
+/* Lit-hover: panels brighten their rim when the pointer visits */
+.lobby-sidebar,
+.lobby-vault-panel,
+.heist-panel,
+.matrix-right-panel {
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.lobby-sidebar:hover,
+.lobby-vault-panel:hover,
+.heist-panel:hover,
+.matrix-right-panel:hover {
+  border-color: var(--skin-glass-border-lit) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 0 48px rgba(168, 85, 247, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03) !important;
+}
+
+/* ── Glass keycap skin: replaces the neon-tube cap look, same kinematics ── */
+/* Press physics: hover = mid-travel dip (1px), active = bottom-out (--skin-travel).
+   On release the cap springs back to rest — pure CSS :active/:hover, no JS.    */
+.keyboard-key {
+  border-radius: var(--skin-key-radius);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.02) 38%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(to bottom, rgba(62, 38, 108, 0.88) 0%, rgba(40, 22, 74, 0.92) 100%);
+  -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(1.3);
+  backdrop-filter: blur(var(--skin-blur)) saturate(1.3);
+  color: #f5f3ff;
+  border-top: 1px solid rgba(240, 220, 255, 0.40);
+  border-left: 1px solid rgba(216, 180, 254, 0.28);
+  border-right: 1px solid rgba(30, 10, 60, 0.65);
+  border-bottom: var(--skin-travel) solid rgba(12, 6, 24, 0.92);
+  box-shadow:
+    0 0 16px rgba(168, 85, 247, 0.40),
+    0 0 34px rgba(34, 211, 238, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -6px 12px rgba(10, 4, 22, 0.45);
+  text-shadow:
+    0 0 8px rgba(255, 255, 255, 0.85),
+    0 0 14px rgba(216, 180, 254, 0.55);
+}
+
+.keyboard-key:hover {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.03) 38%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(to bottom, rgba(75, 46, 128, 0.90) 0%, rgba(48, 27, 88, 0.94) 100%);
+  border-bottom-width: calc(var(--skin-travel) - 1px);
+  top: 1px;
+  box-shadow:
+    0 0 24px rgba(192, 132, 252, 0.55),
+    0 0 52px rgba(34, 211, 238, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -6px 12px rgba(10, 4, 22, 0.45);
+}
+
+.keyboard-key:active {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.01) 40%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(to bottom, rgba(44, 26, 82, 0.96) 0%, rgba(30, 16, 58, 0.98) 100%);
+  border-top: 1px solid rgba(12, 6, 24, 0.8);
+  border-left: 1px solid rgba(12, 6, 24, 0.7);
+  border-right: 1px solid rgba(30, 10, 60, 0.8);
+  border-bottom: 1px solid rgba(12, 6, 24, 0.92);
+  top: calc(var(--skin-travel) - 1px);
+  box-shadow:
+    inset 0 0 18px rgba(216, 180, 254, 0.38),
+    inset 0 2px 5px rgba(0, 0, 0, 0.55),
+    0 0 40px rgba(192, 132, 252, 0.60),
+    0 0 80px rgba(168, 85, 247, 0.28);
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 1),
+    0 0 22px rgba(216, 180, 254, 0.85);
+}
+
+/* Accent — hot violet glass cap */
+.keyboard-key-accent {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.30) 0%, rgba(255, 255, 255, 0.04) 42%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(to bottom, rgba(168, 85, 247, 0.92) 0%, rgba(91, 33, 182, 0.95) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+  border-left: 1px solid rgba(240, 220, 255, 0.38);
+  border-right: 1px solid rgba(40, 10, 80, 0.70);
+  border-bottom: var(--skin-travel) solid rgba(36, 10, 74, 0.95);
+  box-shadow:
+    0 0 20px rgba(168, 85, 247, 0.60),
+    0 0 42px rgba(236, 72, 153, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -6px 12px rgba(30, 6, 66, 0.40);
+}
+
+.keyboard-key-accent:hover {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.05) 42%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(to bottom, rgba(185, 103, 251, 0.94) 0%, rgba(109, 40, 217, 0.96) 100%);
+  border-bottom-width: calc(var(--skin-travel) - 1px);
+  box-shadow:
+    0 0 28px rgba(192, 132, 252, 0.70),
+    0 0 60px rgba(236, 72, 153, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -6px 12px rgba(30, 6, 66, 0.40);
+}
+
+.keyboard-key-accent:active {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.03) 44%, rgba(255, 255, 255, 0) 62%),
+    linear-gradient(to bottom, rgba(124, 58, 237, 0.96) 0%, rgba(70, 18, 150, 0.98) 100%);
+  border-top: 1px solid rgba(30, 6, 66, 0.7);
+  border-left: 1px solid rgba(30, 6, 66, 0.55);
+  border-right: 1px solid rgba(40, 10, 80, 0.75);
+  border-bottom: 1px solid rgba(36, 10, 74, 0.95);
+  box-shadow:
+    inset 0 0 20px rgba(255, 255, 255, 0.42),
+    inset 0 2px 5px rgba(0, 0, 0, 0.5),
+    0 0 46px rgba(192, 132, 252, 0.75),
+    0 0 95px rgba(168, 85, 247, 0.36);
+}
+
+/* Danger — hot magenta glass cap */
+.keyboard-key-danger {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.03) 42%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(to bottom, rgba(255, 92, 138, 0.90) 0%, rgba(190, 24, 93, 0.94) 100%);
+  border-top: 1px solid rgba(255, 220, 235, 0.52);
+  border-left: 1px solid rgba(255, 180, 205, 0.32);
+  border-right: 1px solid rgba(80, 5, 40, 0.70);
+  border-bottom: var(--skin-travel) solid rgba(58, 7, 30, 0.95);
+  box-shadow:
+    0 0 20px rgba(255, 92, 138, 0.48),
+    0 0 42px rgba(236, 72, 153, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -6px 12px rgba(50, 3, 26, 0.40);
+}
+
+.keyboard-key-danger:hover {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.04) 42%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(to bottom, rgba(255, 112, 153, 0.92) 0%, rgba(214, 31, 105, 0.95) 100%);
+  border-bottom-width: calc(var(--skin-travel) - 1px);
+  box-shadow:
+    0 0 28px rgba(255, 92, 138, 0.62),
+    0 0 58px rgba(236, 72, 153, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    inset 0 -6px 12px rgba(50, 3, 26, 0.40);
+}
+
+.keyboard-key-danger:active {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.02) 44%, rgba(255, 255, 255, 0) 62%),
+    linear-gradient(to bottom, rgba(224, 36, 106, 0.95) 0%, rgba(150, 14, 70, 0.98) 100%);
+  border-top: 1px solid rgba(58, 7, 30, 0.7);
+  border-left: 1px solid rgba(58, 7, 30, 0.55);
+  border-right: 1px solid rgba(80, 5, 40, 0.75);
+  border-bottom: 1px solid rgba(58, 7, 30, 0.95);
+  box-shadow:
+    inset 0 0 20px rgba(255, 255, 255, 0.32),
+    inset 0 2px 5px rgba(0, 0, 0, 0.5),
+    0 0 45px rgba(255, 92, 138, 0.68),
+    0 0 90px rgba(236, 72, 153, 0.30);
+}
+
+/* ── Spectrum-lit inline panels (page.tsx hard-codes its own colors; this
+   rim-lights the biggest ones without touching their inline styles) ────── */
+.ransom-pill {
+  border-radius: 999px;
+}
+
+/* Dev deck / mint terminal / vault drawer headings catch a spectrum sheen */
+.lobby-logo {
+  text-shadow:
+    0 0 10px rgba(178, 107, 255, 0.9),
+    0 0 26px rgba(168, 85, 247, 0.5),
+    0 0 44px rgba(236, 72, 153, 0.25);
+  letter-spacing: 0.08em;
+}
+
+/* Scrollbars match the glass edge */
+::-webkit-scrollbar-track {
+  background: rgba(10, 6, 18, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(216, 180, 254, 0.35), rgba(124, 58, 237, 0.45));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(216, 180, 254, 0.55), rgba(167, 139, 250, 0.65));
+}
+
+/* Focus ring keeps WCAG-visible in the new palette */
+button:focus-visible {
+  outline: 3px solid rgba(216, 180, 254, 0.9);
+  outline-offset: 2px;
+}
+
+/* Glass chrome for the dropdown menus opened from the topbar */
+.lobby-topbar div[style*="position: absolute"],
+.eth-chain-chip-wrap > div {
+  background: rgba(18, 10, 34, 0.92) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid var(--skin-glass-border-lit) !important;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.6), 0 0 30px rgba(124, 58, 237, 0.15) !important;
+}
+
+/* Claim pills + status chips reflect the spectrum */
+.md-claim-frame {
+  -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(1.2);
+  backdrop-filter: blur(var(--skin-blur)) saturate(1.2);
+}
+
+/* Light-theme inversion ruler stays aligned with the new skin */
+html[data-theme='light'] .skin-aurora { opacity: 0.25; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CYBERPUNK CONSOLE + CORNER LED BEACONS (2026-10-12 arena redesign)
+   Appearance-only chassis additions; geometry lives entirely inline.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Idle ember breath for unlit console corner LEDs (inline animation ref) */
+@keyframes emberPulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+}
+
+/* AUTO MATRIX golden master key — slow luxury pulse while engaged */
+@keyframes goldPulse {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(255, 209, 102, 0.65), 0 0 42px rgba(255, 209, 102, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(255, 209, 102, 0.9), 0 0 64px rgba(255, 209, 102, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+}
+
+/* Console rack — thin spectrum scrollbar for the vertical device scroll */
+.device-rack::-webkit-scrollbar { width: 6px; height: 6px; }
+.device-rack::-webkit-scrollbar-track { background: rgba(5, 3, 10, 0.5); border-radius: 3px; }
+.device-rack::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(216,180,254,0.4), rgba(124,58,237,0.55)); border-radius: 3px; }
+
+/* Console rack orientation: 2 consoles PER COLUMN on desktop — the rack
+   stack is driven inline (grid-auto-flow: column, 2 rows), so devices fill
+   TWO SIDE-BY-SIDE COLUMNS and the rack scrolls vertically down each one.
+   Console cards keep min-width 0 to shrink-fit inside narrow columns.
+
+   Mobile: SAME structure as desktop — identical inline grid (column flow,
+   2-deep columns), no mobile override. The rack simply reflows into
+   narrower columns and keeps the same vertical scroll behavior. */
+.device-rack .device-console {
+  min-width: 0;
+  /* kwys_bright refs: compact 3:2 console body — cap width so 2 consoles
+     per column fit the viewport instead of stretching to full column width */
+  max-width: 560px;
+  justify-self: center;
+  width: 100%;
+}
+
+/* Delayed ripple so the 4 corner beacons don't fire in perfect unison
+   (each beacon offsets its ember phase by its corner index) */
+.corner-led-tl { animation-delay: 0s; }
+.corner-led-tr { animation-delay: 0.3s; }
+.corner-led-br { animation-delay: 0.6s; }
+.corner-led-bl { animation-delay: 0.9s; }
+
+/* Claimable / strobed beacons ignore the ripple delay — they must look
+   simultaneous and urgent */
+.corner-led[style*="rapidFlicker"],
+.corner-led[style*="ledBlink"] { animation-delay: 0s !important; }
+
+/* Console chassis: donor glass face — bezel already has inline glass blur */
+.device-console {
+  container: none;
+}
+
+/* Scanline helper for the big display (kept CSS side — reused by arena display) */
+.display-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(168, 85, 247, 0.035) 2px, rgba(168, 85, 247, 0.035) 4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .corner-led { animation: none !important; opacity: 0.85; }
+  .skin-aurora { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MATRIX ARENA — MK-II GREEN HUD (2026-10-15)
+   Cyberpunk UI design-system layer for the game-screen arena deck:
+   matrix-green data rails + alert-red countdown on black, Orbitron
+   display digits, corner HUD ticks on the live display panel.
+   Appearance-only — geometry and handlers stay inline in page.tsx.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Corner HUD ticks on the live draw panel (green TL / red BR) */
+.arena-live-display::before,
+.arena-live-display::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.95;
+  transition: opacity 0.3s ease, box-shadow 0.3s ease;
+}
+.arena-live-display::before {
+  top: 6px;
+  left: 8px;
+  border-top: 2px solid rgba(0, 255, 65, 0.80);
+  border-left: 2px solid rgba(0, 255, 65, 0.80);
+  box-shadow: 0 0 9px rgba(0, 255, 65, 0.35);
+}
+.arena-live-display::after {
+  bottom: 6px;
+  right: 8px;
+  border-bottom: 2px solid rgba(255, 51, 51, 0.75);
+  border-right: 2px solid rgba(255, 51, 51, 0.75);
+  box-shadow: 0 0 9px rgba(255, 51, 51, 0.30);
+}
+
+/* Live panel rim brightens while a draw is in flight (STANDBY stays dim) —
+   driven purely by presence of the drawn-number glow inline; CSS rest state. */
+.arena-live-display {
+  transition: border-color 0.35s ease;
+}
+
+/* Rack + win-strip scrollbars adopt the MK-II palette */
+.device-rack::-webkit-scrollbar-track { background: rgba(1, 6, 4, 0.55); }
+.device-rack::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(0, 255, 65, 0.35), rgba(0, 120, 30, 0.55));
+}
+.device-rack::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(0, 255, 65, 0.6), rgba(0, 150, 40, 0.7));
+}
+
+/* Arena-scoped focus ring (MK-II green) — deck buttons only, keeps
+   the global violet ring everywhere else */
+.md-claim-frame button:focus-visible {
+  outline: 3px solid rgba(0, 255, 65, 0.85);
+  outline-offset: 2px;
+}
+
+/* Reduced motion: freeze the HUD ticks (no inline-animation risk here) */
+@media (prefers-reduced-motion: reduce) {
+  .arena-live-display::before,
+  .arena-live-display::after {
+    animation: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CARNIVAL MODE — slot cabinet keyframes (branch: carnival)
+   Rolls, LED chases, marquee bulbs, jackpot frenzy. All animation names are
+   carnival-prefixed to avoid collisions with the hacking-mode keyframes.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Reel drum spin — one full digit-cell per iteration (smooth stop is done
+   by swapping the animation off and transitioning transform inline). */
+@keyframes carnivalReelSpin {
+  from { transform: translateY(0); }
+  to   { transform: translateY(calc(-10 * var(--carn-cell))); }
+}
+
+/* Ambient slow idle drift for the drums between draws */
+@keyframes carnivalReelIdle {
+  from { transform: translateY(0); }
+  to   { transform: translateY(calc(-2 * var(--carn-cell))); }
+}
+
+/* Blur sweep while the drum is at full speed */
+@keyframes carnivalReelBlur {
+  0%, 100% { filter: blur(0px); }
+  50%      { filter: blur(2.5px); }
+}
+
+/* Marquee bulb chase — bulb runs on animation-delay so the classic
+   alternating carnival arch reads correctly */
+@keyframes carnivalBulb {
+  0%, 100% { opacity: 1; box-shadow: 0 0 10px 2px currentColor, 0 0 22px 6px currentColor; }
+  50%      { opacity: 0.25; box-shadow: 0 0 4px 0px currentColor, 0 0 8px 1px currentColor; }
+}
+
+/* Side LED strip chase — a highlight cell sweeps down the strip */
+@keyframes carnivalLedChase {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* MACRO LED state strobes — applied to whole strips per game state */
+@keyframes carnivalStrobe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+@keyframes carnivalLampPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* Jackpot frenzy — full-cabinet saturation pulse when a win is claimable */
+@keyframes carnivalJackpot {
+  0%, 100% {
+    filter: brightness(1) saturate(1);
+    box-shadow: 0 0 24px rgba(255, 122, 24, 0.35), 0 0 60px rgba(255, 0, 128, 0.22);
+  }
+  50% {
+    filter: brightness(1.25) saturate(1.4);
+    box-shadow: 0 0 44px rgba(255, 122, 24, 0.7), 0 0 100px rgba(255, 0, 128, 0.5);
+  }
+}
+
+/* The settled winning digit lands with an overshoot bounce */
+@keyframes carnivalDigitSnap {
+  0%   { transform: translateY(3px); filter: brightness(1.5); }
+  60%  { transform: translateY(-3px); }
+  100% { transform: translateY(0); filter: brightness(1); }
+}
+
+/* Marquee title breathing glow */
+@keyframes carnivalMarqueeGlow {
+  0%, 100% { text-shadow: 0 0 10px rgba(255, 196, 0, 0.9), 0 0 30px rgba(255, 122, 24, 0.55), 0 2px 0 rgba(0,0,0,0.6); }
+  50%      { text-shadow: 0 0 18px rgba(255, 215, 0, 1), 0 0 48px rgba(255, 0, 128, 0.8), 0 2px 0 rgba(0,0,0,0.6); }
+}
+
+/* Rainbow hue rotation for the lobby/waiting strip state */
+@keyframes carnivalHue {
+  from { filter: hue-rotate(0deg); }
+  to   { filter: hue-rotate(360deg); }
+}
+
+/* Reduced motion: freeze all carnival cabinet animation */
+@media (prefers-reduced-motion: reduce) {
+  .carn-cabinet * {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TACTICAL CYBERDECK SKIN (2026-10-22) — ported design-system from the
+   AI Studio CyberdeckInterface export (design/skins ONLY, no app logic).
+   Names are collision-checked against the rest of this stylesheet.
+   Rack-density overrides (.deck-sm heights) are deck-local additions.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Deep metallic brushed cyberdeck chassis panel */
+.titanium-panel {
+  background: radial-gradient(circle at 50% 10%, #2f2a42 0%, #171522 70%, #0d0c15 100%);
+  box-shadow:
+    inset 1px 1px 1px rgba(255, 255, 255, 0.15),
+    inset -1px -1px 2px rgba(0, 0, 0, 0.8),
+    0 25px 60px -15px rgba(0, 0, 0, 0.95),
+    0 0 50px rgba(168, 85, 247, 0.16);
+}
+
+.metal-bevel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 1px 1px 0px rgba(255, 255, 255, 0.14),
+    inset -1px -1px 0px rgba(0, 0, 0, 0.6);
+}
+
+/* Precision engineered chassis screw bolts */
+.screw-bolt {
+  width: 10px;
+  height: 10px;
+  background: radial-gradient(circle, #5b5670 20%, #1c1b26 80%);
+  border-radius: 50%;
+  border: 1px solid #14131d;
+  box-shadow: inset 0.5px 0.5px 1px rgba(255,255,255,0.4), 0.5px 0.5px 1px rgba(0,0,0,0.8);
+  position: relative;
+  pointer-events: none;
+}
+.screw-bolt::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(42deg);
+  width: 6px;
+  height: 1.5px;
+  background: #0d0c13;
+  box-shadow: 0 0.5px 0.5px rgba(255,255,255,0.2);
+}
+
+/* Keycap sockets recessed into the plate */
+.keycap-socket {
+  background: #0e0d16;
+  border-radius: 7px;
+  padding: 3px;
+  box-shadow: inset 2px 2px 4px rgba(0,0,0,0.95), inset -1px -1px 2px rgba(255,255,255,0.06);
+}
+
+/* Industrial mechanical keycap buttons (rack default height 30px) */
+.keycap-btn {
+  position: relative;
+  width: 100%;
+  height: 30px;
+  background: linear-gradient(175deg, #302b45 0%, #1d1b2b 45%, #131220 100%);
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.5),
+    inset 0 0 12px rgba(255, 255, 255, 0.2),
+    0 0 12px rgba(255, 255, 255, 0.35),
+    0 3px 0 #0d0c14;
+  transition: all 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+}
+
+.keycap-btn:active, .keycap-btn.active-press {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.1),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.9),
+    0 1px 0 #0d0c14,
+    0 2px 3px rgba(0,0,0,0.6);
+}
+
+.keycap-btn span {
+  color: #ffffff;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.95), 0 0 14px rgba(255, 255, 255, 0.8), 0 0 24px rgba(255, 255, 255, 0.6);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.85));
+  transition: all 0.12s ease-in-out;
+}
+
+.keycap-btn::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 3px;
+  background: radial-gradient(ellipse at 50% 120%, rgba(255, 255, 255, 0.3) 0%, transparent 75%);
+  pointer-events: none;
+}
+
+/* Blank (no-number) socket cap — dim decorative glyph */
+.keycap-btn.is-blank {
+  background: linear-gradient(175deg, #17141f 0%, #100e18 45%, #0b0a11 100%);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.08), 0 2px 0 #0d0c14;
+  cursor: default;
+}
+.keycap-btn.is-blank span {
+  color: rgba(125, 142, 172, 0.38);
+  text-shadow: none;
+  filter: none;
+}
+
+/* Missed ball — dead red cap */
+.keycap-btn.is-missed {
+  background: linear-gradient(175deg, #3b0d14 0%, #24080d 45%, #150508 100%);
+  border-color: rgba(255, 82, 82, 0.35);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.06), 0 2px 0 #0d0c14;
+}
+.keycap-btn.is-missed span {
+  color: rgba(254, 202, 202, 0.55);
+  text-shadow: none;
+  filter: none;
+}
+
+/* Vibrant purple/fuchsia neon toggled state (clicked number) */
+.keycap-btn.is-active {
+  border: 1px solid #d946ef !important;
+  box-shadow:
+    inset 0 0 14px rgba(217, 70, 239, 0.6),
+    0 0 20px rgba(217, 70, 239, 0.85),
+    0 0 35px rgba(168, 85, 247, 0.55),
+    0 2px 0 #1b0a24 !important;
+  background: linear-gradient(175deg, #3d1747 0%, #291238 45%, #180a24 100%) !important;
+}
+
+.keycap-btn.is-active span {
+  color: #f5d0fe !important;
+  text-shadow: 0 0 8px #f0abfc, 0 0 16px #d946ef, 0 0 28px #a855f7 !important;
+  filter: drop-shadow(0 0 12px #d946ef) !important;
+}
+
+.keycap-btn.is-active::after {
+  background: radial-gradient(ellipse at 50% 120%, rgba(217, 70, 239, 0.55) 0%, transparent 75%) !important;
+}
+
+/* Cyan target-exact state (matches the live draw) */
+.keycap-btn.is-target-exact {
+  border: 1px solid #22d3ee !important;
+  box-shadow:
+    inset 0 0 16px rgba(34, 211, 238, 0.7),
+    0 0 24px rgba(34, 211, 238, 0.9),
+    0 0 35px rgba(6, 182, 212, 0.7),
+    0 2px 0 #083344 !important;
+  background: linear-gradient(175deg, #0e374e 0%, #082738 45%, #051622 100%) !important;
+}
+
+.keycap-btn.is-target-exact span {
+  color: #a5f3fc !important;
+  text-shadow: 0 0 8px #67e8f9, 0 0 16px #22d3ee, 0 0 28px #06b6d4 !important;
+  filter: drop-shadow(0 0 12px #22d3ee) !important;
+}
+
+.keycap-btn.is-target-exact::after {
+  background: radial-gradient(ellipse at 50% 120%, rgba(34, 211, 238, 0.6) 0%, transparent 75%) !important;
+}
+
+/* High voltage neon tube housing (double-ring actuator chamber) */
+.neon-tube-outer {
+  box-shadow:
+    0 0 15px rgba(217, 70, 239, 0.6),
+    inset 0 0 12px rgba(217, 70, 239, 0.5),
+    0 0 28px rgba(168, 85, 247, 0.4);
+  border: 2px solid #e879f9;
+}
+
+.neon-tube-inner {
+  box-shadow:
+    0 0 8px #f43f5e,
+    inset 0 0 8px rgba(244, 63, 94, 0.7);
+}
+
+.ransom-emboss {
+  background: linear-gradient(180deg, #2a223e 0%, #151221 100%);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.3),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.8),
+    0 4px 10px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 0 10px #f0abfc, 0 0 22px #c026d3;
+}
+
+.ransom-emboss:hover {
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.45),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.8),
+    0 6px 18px rgba(217, 70, 239, 0.5);
+}
+
+/* Pulsing red indicator ring (timer/threat) */
+@keyframes redGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(255, 42, 75, 0.8), inset 0 0 10px rgba(255, 42, 75, 0.5);
+    border-color: #ff2a4b;
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(255, 42, 75, 1), inset 0 0 14px rgba(255, 42, 75, 0.85);
+    border-color: #ff5c77;
+    transform: scale(1.04);
+  }
+}
+
+.red-ring-pulse {
+  animation: redGlowPulse 1.2s infinite ease-in-out;
+}
+
+/* CRT scanline + aberration plate */
+.cyber-scanlines {
+  background:
+    linear-gradient(rgba(18, 16, 26, 0) 50%, rgba(0, 0, 0, 0.35) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+
+/* Hit flash overlay */
+@keyframes hitFlashAnim {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+.hit-flash {
+  animation: hitFlashAnim 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Screen shake */
+@keyframes shakeScreen {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 3px); }
+  40% { transform: translate(4px, -3px); }
+  60% { transform: translate(-3px, -2px); }
+  80% { transform: translate(3px, 2px); }
+  100% { transform: translate(0, 0); }
+}
+.shake-effect {
+  animation: shakeScreen 0.28s ease-in-out;
+}
+
+/* Reduced motion: freeze cyberdeck skin FX */
+@media (prefers-reduced-motion: reduce) {
+  .red-ring-pulse, .hit-flash, .shake-effect { animation: none !important; }
+}
+
+/* ── Cyberdeck rack density fine-tuning (.deck-sm layer) ──────────────────
+   Keeps 2 consoles PER ROW readable on phones: shrink socket padding,
+   keycap height and grid gap as the viewport narrows. Layout structure
+   (2-deep column flow) is unchanged. */
+@media (max-width: 700px) {
+  .keycap-btn { height: 26px; }
+  .keycap-btn span { font-size: 9.5px; }
+}
+@media (max-width: 460px) {
+  .keycap-socket { padding: 2px; }
+  .keycap-btn { height: 20px; border-radius: 4px; }
+  .keycap-btn span { font-size: 8px; }
+  :root { --deck-keygap: 2px; }
 }

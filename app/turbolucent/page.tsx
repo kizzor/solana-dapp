@@ -14,16 +14,21 @@ type RegistryState = {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const containerStyle: React.CSSProperties = {
   minHeight: '100vh',
-  background: '#020a14',
-  color: '#dce6f3',
+  background: 'linear-gradient(180deg, #0a0612 0%, #0e0819 60%, #150d24 100%)',
+  color: '#e2e8f0',
   fontFamily: 'DM Mono,monospace',
+  position: 'relative' as const,
 }
 const cardStyle: React.CSSProperties = {
-  background: 'linear-gradient(180deg,#0d1a2e,#060e1a)',
-  border: '1px solid #1e3a5f',
-  borderRadius: 12,
+  background: 'rgba(22, 12, 42, 0.55)',
+  backdropFilter: 'blur(14px) saturate(1.2)',
+  WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
+  border: '1px solid rgba(216, 180, 254, 0.22)',
+  borderRadius: 14,
+  boxShadow: '0 8px 32px rgba(0,0,0,0.40), 0 0 32px rgba(124,58,237,0.08), inset 0 1px 0 rgba(255,255,255,0.10)',
   padding: '14px 16px',
   marginBottom: 12,
+  transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
 }
 const btnBase: React.CSSProperties = {
   fontFamily: 'DM Mono,monospace',
@@ -36,15 +41,16 @@ const btnBase: React.CSSProperties = {
 }
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: '#0a1628',
-  border: '1px solid #0a2535',
-  borderRadius: 6,
+  background: 'rgba(10, 6, 18, 0.55)',
+  border: '1px solid rgba(216, 180, 254, 0.25)',
+  borderRadius: 8,
   padding: '8px 10px',
   fontFamily: 'DM Mono,monospace',
   fontSize: 9,
-  color: '#dce6f3',
+  color: '#ede9fe',
   outline: 'none',
   boxSizing: 'border-box',
+  transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
 }
 
 export default function AdminPage() {
