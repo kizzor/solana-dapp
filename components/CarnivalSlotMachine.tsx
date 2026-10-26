@@ -235,6 +235,9 @@ export default function CarnivalSlotMachine({
             </div>
           </div>
 
+          {/* bridges the vault plate to the window edge — masks the art's paytable */}
+          <div className="cv-slot cv-vault-fill" aria-hidden="true" />
+
           {/* CRT screen — single roller (no heading: the number owns the glass) */}
           <div className={`cv-slot cv-screen ${spinning ? 'cv-screen-waiting' : ''}`}>
             <div className="cv-crt" aria-hidden="true" />

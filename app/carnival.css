@@ -697,7 +697,7 @@
 .cv-slot-v { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: max(11px, 1.7cqw); line-height: 1; color: #fcd34d; text-shadow: 0 0 10px rgba(245, 158, 11, 0.9); font-variant-numeric: tabular-nums; }
 
 .cv-slot-vault {
-  left: 16.2%; top: 44.5%; width: 9.4%; height: 31.5%;
+  left: 16.2%; top: 44.5%; width: 9.4%; height: 34.5%;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35cqw;
   padding: 4% 3%;
   border-radius: 6px;
@@ -709,6 +709,19 @@
 .cv-slot-vault .cv-gold-bar { height: max(6px, 0.9cqw); width: 100%; }
 .cv-slot-vault .cv-gold-bar-sm { height: max(5px, 0.6cqw); width: 88%; }
 .cv-slot-vault .cv-gold-bar span { font-size: max(4px, 0.45cqw); }
+
+/* The artwork paints its own paytable ("3 GOLD 7's… / 2 CHERRIES…") into the gap
+   between the vault plate and the ticket window. This bridges the plate out to
+   the window edge so none of that baked-in text can show through. */
+.cv-vault-fill {
+  left: 25.4%; top: 66.6%; width: 5.2%; height: 12.4%;
+  background: radial-gradient(circle at 50% 30%, #241338 0%, #150a22 65%, #0d0617 100%);
+  border: 1px solid #b45309;
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+  box-shadow: inset 0 0 1.2cqw rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+}
 
 /* ── CRT screen with the roller ──────────────────────────────────────────── */
 .cv-slot.cv-screen {
