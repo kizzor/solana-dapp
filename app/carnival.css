@@ -585,15 +585,22 @@
 .cv-arena-stats strong { font-family: 'Orbitron', sans-serif; color: #e0f2fe; margin-left: 3px; }
 
 /* ── cabinet ─────────────────────────────────────────────────────────────── */
-.cv-cab {
+/* The machine = the art cabinet plus a 300px ticket apron stretched south,
+   so art + strips read as one chassis. */
+.cv-machine {
   position: relative;
   width: 100%;
   max-width: 1180px;
-  aspect-ratio: 1024 / 553;
-  container-type: inline-size;
   border-radius: clamp(8px, 1.2vw, 18px);
   overflow: hidden;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9);
+}
+.cv-cab {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1024 / 553;
+  container-type: inline-size;
+  overflow: hidden;
 }
 .cv-cab-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; user-select: none; }
 
@@ -734,7 +741,6 @@
 @keyframes cvRaster { from { transform: translateY(-100%); } to { transform: translateY(1300%); } }
 
 .cv-roller { position: relative; z-index: 4; display: flex; flex-direction: column; min-height: 0; flex: 1; }
-.cv-roller-k { font-family: 'Share Tech Mono', monospace; font-size: max(5px, 1.7cqw); line-height: 1.2; letter-spacing: 1.2px; color: #67e8f9; text-align: center; opacity: 0.8; white-space: nowrap; }
 .cv-roller-window {
   position: relative;
   flex: 1;
@@ -747,6 +753,7 @@
   background: radial-gradient(circle at 50% 50%, #101a2c 0%, #060a12 65%, #010204 100%);
   box-shadow: inset 0 0 2cqw rgba(0, 0, 0, 0.98), inset 0 0 1cqw rgba(34, 211, 238, 0.18);
   border: 1px solid rgba(34, 211, 238, 0.25);
+  container-type: size;
 }
 .cv-payline {
   position: absolute;
@@ -768,7 +775,7 @@
   width: 100%;
   animation: cvRollSlide 0.62s cubic-bezier(0.2, 0.85, 0.15, 1) forwards;
 }
-.cv-reel-cell { height: 50%; display: flex; align-items: center; justify-content: center; }
+.cv-reel-cell { height: 50%; min-height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 @keyframes cvRollSlide {
   0% { transform: translateY(0); filter: blur(2px); }
   62% { filter: blur(0.6px); }
@@ -777,8 +784,10 @@
 .cv-roller-num {
   font-family: 'Orbitron', sans-serif;
   font-weight: 900;
-  font-size: clamp(26px, 19cqw, 132px);
-  line-height: 1;
+  font-size: clamp(26px, min(22cqw, 68cqh), 140px);
+  line-height: 0.95;
+  padding: 0 3%;
+  max-width: 100%;
   font-variant-numeric: tabular-nums;
   color: #ffffff;
   text-shadow: 0 0 8px #fff, 0 0 22px #38bdf8, 0 0 44px #06b6d4, 0 0 70px #0284c7;
@@ -790,67 +799,139 @@
 .cv-roller-hint { font-family: 'Share Tech Mono', monospace; font-size: max(6px, 2.2cqw); letter-spacing: 1.4px; color: #7dd3fc; opacity: 0.75; }
 .cv-screen-waiting .cv-roller-window { box-shadow: inset 0 0 2cqw rgba(0, 0, 0, 0.98), inset 0 0 1.2cqw rgba(245, 158, 11, 0.2); }
 
-/* ── ticket window (design slot: under the screen) ───────────────────────── */
+/* ── ticket window: two closest tickets printed inside the glass ─────────── */
 .cv-slot.cv-window {
-  left: 30.2%; top: 67%; width: 53.4%; height: 13.2%;
+  left: 30.2%; top: 66.5%; width: 53.4%; height: 18%;
   container-type: inline-size;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1%;
-  padding: 0.6%;
+  padding: 0.5% 0.6% 1.7%;
   border-radius: 7px;
   background: #000;
   border: 1px solid rgba(168, 85, 247, 0.55);
   overflow: hidden;
 }
 .cv-window-hot { border-color: #34d399; box-shadow: 0 0 14px rgba(52, 211, 153, 0.55); }
-.cv-window-ticket:only-child { grid-column: 1 / -1; }
-.cv-window-empty { grid-column: 1 / -1; display: grid; place-items: center; font-family: 'Share Tech Mono', monospace; font-size: max(6px, 2.2cqw); color: #7c6a99; }
-.cv-window-ticket {
-  position: relative;
-  min-height: 0;
-  border-radius: 4px;
-  padding: 1% 1.4%;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  overflow: hidden;
-  background: linear-gradient(160deg, #071120, #04060c);
-  border: 1px solid rgba(34, 211, 238, 0.55);
-}
-.cv-window-win {
-  border-color: #34d399;
-  background: linear-gradient(160deg, #052012, #030a06);
-  animation: cvGreenBlink 0.85s infinite steps(1, end);
-}
 @keyframes cvGreenBlink {
   0%, 100% { box-shadow: 0 0 14px rgba(34, 197, 94, 0.9), inset 0 0 12px rgba(34, 197, 94, 0.45); border-color: #6ee7b7; }
   50% { box-shadow: 0 0 2px rgba(34, 197, 94, 0.2), inset 0 0 2px rgba(34, 197, 94, 0.1); border-color: #065f46; }
 }
-.cv-window-head { display: flex; align-items: center; justify-content: space-between; font-family: 'Share Tech Mono', monospace; font-size: max(5px, 1.7cqw); line-height: 1.1; letter-spacing: 0.5px; }
-.cv-window-serial { color: #67e8f9; }
-.cv-window-hits { color: #fcd34d; }
-.cv-window .cv-tk-nums { flex: 1; min-height: 0; gap: 2px; }
-.cv-window .cv-tk-num { font-size: max(6px, 1.9cqw); padding: 0; border-radius: 2px; }
-.cv-window-state { font-family: 'Share Tech Mono', monospace; font-size: max(5px, 1.6cqw); line-height: 1.2; letter-spacing: 0.6px; color: #8b74b0; }
-.cv-window-claim {
-  font-family: 'Orbitron', sans-serif;
-  font-size: max(5px, 1.6cqw);
-  font-weight: 900;
-  letter-spacing: 1px;
-  padding: 0;
-  line-height: 1.2;
-  border-radius: 3px;
-  border: 1px solid #6ee7b7;
-  background: linear-gradient(180deg, #34d399, #059669);
-  color: #04150d;
-  cursor: pointer;
-  animation: cvGreenGlow 0.9s infinite ease-in-out;
+/* swipe rail — one swipe = the next pair of closest tickets */
+.cv-strips {
+  height: 100%;
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.cv-strips::-webkit-scrollbar { display: none; }
+.cv-strips-empty {
+  flex: 1 1 100%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: max(6px, 1.9cqw);
+  letter-spacing: 1px;
+  color: #7c6a99;
+}
+
+/* one page = two tickets; a swipe lands exactly on the next pair */
+.cv-strip-page {
+  flex: 0 0 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2%;
+  padding: 0 5%;
+  scroll-snap-align: start;
+}
+
+/* sticker ticket — just the 15 numbers, no boxes */
+.cv-sticker {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  border-radius: 4px;
+}
+.cv-sticker-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px;
+  padding-bottom: 1px;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.22);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: max(5px, 1.45cqw);
+  line-height: 1.2;
+  letter-spacing: 0.3px;
+  color: #67e8f9;
+}
+.cv-sticker-serial { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-sticker-hits { flex: 0 0 auto; color: #fcd34d; }
+.cv-sticker .cv-tk-nums { flex: 1 1 auto; gap: 0 4%; }
+.cv-sticker .cv-tk-num {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-size: max(6px, 1.5cqw);
+  line-height: 1.2;
+  color: #c7f9ff;
+}
+.cv-sticker .cv-tk-num-hit {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  transform: none;
+  color: #fbbf24;
+  text-shadow: 0 0 6px rgba(245, 158, 11, 0.9);
+}
+.cv-sticker-win .cv-sticker-label { border-color: rgba(110, 231, 183, 0.55); }
+.cv-sticker-win .cv-sticker-hits { color: #6ee7b7; }
+.cv-sticker-win { animation: cvGreenBlink 0.85s infinite steps(1, end); }
+
 @keyframes cvGreenGlow {
   0%, 100% { box-shadow: 0 0 10px #10b981, inset 0 0 8px #34d399; }
   50% { box-shadow: 0 0 26px #34d399, inset 0 0 14px #6ee7b7; }
 }
+
+/* paging chrome inside the glass */
+.cv-win-arrow {
+  position: absolute;
+  top: 0;
+  bottom: 10%;
+  width: 5%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  z-index: 3;
+  font-size: max(8px, 2.4cqw);
+  line-height: 1;
+  color: rgba(165, 243, 252, 0.9);
+  background: linear-gradient(90deg, rgba(2, 0, 10, 0.8), transparent);
+}
+.cv-win-arrow:disabled { opacity: 0.18; cursor: default; }
+.cv-win-prev { left: 0; }
+.cv-win-next { right: 0; background: linear-gradient(270deg, rgba(2, 0, 10, 0.8), transparent); }
+.cv-window-dots {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  z-index: 3;
+}
+.cv-window-dot { width: max(3px, 0.55cqw); height: max(3px, 0.55cqw); border-radius: 50%; background: #2b1a44; }
+.cv-window-dot.is-on { background: #67e8f9; box-shadow: 0 0 5px #22d3ee; }
 
 /* ── machine keys: collect / coin / spin / max bet ───────────────────────── */
 .cv-key {
@@ -910,37 +991,42 @@
   93% { transform: rotate(4deg); }
 }
 
-/* ── match board ─────────────────────────────────────────────────────────── */
-.cv-board {
-  width: 100%;
-  max-width: 1180px;
+/* ── arena head vault key ────────────────────────────────────────────────── */
+.cv-head-vault {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  color: #fcd34d;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.22), rgba(245, 158, 11, 0.06));
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+/* ── terminate key ───────────────────────────────────────────────────────── */
+.cv-kill {
   margin-top: 10px;
-  padding: clamp(10px, 1.2vw, 16px);
-  border-radius: 16px;
-  border: 1.5px solid rgba(52, 211, 153, 0.3);
-  background: linear-gradient(180deg, rgba(16, 10, 28, 0.94), rgba(6, 4, 12, 0.96));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  padding: 8px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.28);
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.cv-board-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; }
-.cv-board-k { font-family: 'Orbitron', sans-serif; font-size: clamp(9px, 1vw, 11.5px); font-weight: 800; letter-spacing: 1.4px; color: #6ee7b7; }
-.cv-board-note { font-family: 'Share Tech Mono', monospace; font-size: 9.5px; letter-spacing: 1px; color: #a78bfa; }
-.cv-board-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
-.cv-board-ticket {
-  border-radius: 13px;
-  padding: 10px;
-  border: 1.5px solid rgba(34, 211, 238, 0.45);
-  background: linear-gradient(160deg, #0b1424, #05070d);
+.cv-kill:hover { background: rgba(153, 27, 27, 0.42); color: #fecaca; }
+.cv-kill-armed {
+  color: #fff1f2;
+  background: linear-gradient(180deg, #ef4444, #991b1b);
+  border-color: #fca5a5;
+  animation: cvKillArm 0.7s infinite steps(1, end);
 }
-.cv-board-win { border-color: #34d399; animation: cvGreenBlink 0.85s infinite steps(1, end); }
-.cv-board-ticket-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
-.cv-board-hits { font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 1px; color: #fcd34d; }
-.cv-board-ticket .cv-tk-num { font-size: 12px; padding: 5px 0; }
-.cv-board-ticket-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
-.cv-board-state { font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 1px; color: #9d8bbb; }
-.cv-board-win .cv-board-state { color: #6ee7b7; }
-.cv-board-prize { font-family: 'Orbitron', sans-serif; font-size: 10px; color: #fcd34d; }
-.cv-board-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
-.cv-board-tip { font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #8570a8; flex: 1; min-width: 180px; }
+@keyframes cvKillArm { 50% { background: linear-gradient(180deg, #b91c1c, #7f1d1d); } }
+
 .cv-toast-arena { bottom: 12px; }
 
 
@@ -950,11 +1036,20 @@
   .cv-coll-list { max-height: none; }
 }
 @media (max-width: 700px) {
-  /* phone: the cabinet window keeps its 15 numbers, the action lines live on the board */
-  .cv-window-head, .cv-window-claim, .cv-window-state { display: none; }
-  .cv-window .cv-tk-num { font-size: max(5px, 2.2cqw); }
-  .cv-window-ticket { padding: 1px 2px; }
-  .cv-window .cv-tk-nums { gap: 1px; }
+  /* phone arena: two-row head, taller glass, two tickets per swipe */
+  .cv-arena-head { flex-wrap: wrap; gap: 6px; padding: 7px 9px; }
+  .cv-arena-brand { width: 100%; justify-content: space-between; }
+  .cv-arena-session { font-size: 9px; }
+  .cv-arena-stats { width: 100%; justify-content: space-between; gap: 6px; font-size: 8.5px; }
+  .cv-arena-stats strong { font-size: 11px; }
+  .cv-head-vault { flex: 1 1 100%; padding: 7px 10px; font-size: 9px; text-align: center; }
+  .cv-cab { aspect-ratio: 1024 / 780; }
+  .cv-slot.cv-window { top: 65%; height: 19.5%; }
+  .cv-strip-page { padding: 0 6%; }
+  .cv-sticker .cv-tk-num { font-size: 8px; }
+  .cv-sticker-label { font-size: 7px; }
+  .cv-win-arrow { width: 6%; }
+  .cv-kill { width: 100%; max-width: 420px; }
 }
 
 @media (max-width: 620px) {
@@ -964,8 +1059,5 @@
   .cv-mint-emoji { font-size: 16px; }
   .cv-mint-sub { display: none; }
   .cv-tk-num { font-size: 9.5px; }
-  .cv-board-ticket .cv-tk-num { font-size: 11px; }
-  .cv-arena-stats { gap: 8px; font-size: 8.5px; }
-  .cv-cab { aspect-ratio: 1024 / 700; }
-  .cv-slot.cv-lcd { font-size: max(5px, 1.3cqw); }
+  .cv-slot.cv-lcd { font-size: max(5px, 1.35cqw); }
 }
