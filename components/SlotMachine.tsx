@@ -52,7 +52,18 @@ export default function SlotMachine({
   winStates: Record<string, { claimed: boolean; claimable: boolean }>
   claimedWins: number
 }) {
-  const CELL = 118 // px height of one digit cell on the drums
+  // Drum cell height — 76px on phones so the cabinet no longer eats the whole
+  // arena viewport (two full rows of consoles stay visible below it), 118px
+  // on desktop. Presentation only; the reel math reads CELL either way.
+  const [CELL, setCELL] = useState(118)
+  const compact = CELL < 100
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 900px)')
+    const apply = () => setCELL(mq.matches ? 66 : 118)
+    apply()
+    mq.addEventListener?.('change', apply)
+    return () => mq.removeEventListener?.('change', apply)
+  }, [])
   const STRIP = Array.from({ length: 30 }, (_, i) => i % 10) // 0-9 × 3 laps
 
   // ── Reel engine: { spinning, digit } ×2 — tens drum stops first ──────────
@@ -113,20 +124,21 @@ export default function SlotMachine({
     <div
       className="carn-cabinet"
       style={{
-        position: 'relative', zIndex: 2, borderRadius: 24, overflow: 'hidden',
+        position: 'relative', zIndex: 2, borderRadius: compact ? 16 : 24, overflow: 'hidden',
         background: 'linear-gradient(180deg,#2a0a18 0%,#1d0714 45%,#14040e 100%)',
-        border: '3px solid #b45309',
+        border: compact ? '2px solid #b45309' : '3px solid #b45309',
         boxShadow: `0 0 24px rgba(180,83,9,0.35), inset 0 0 60px rgba(0,0,0,0.45), inset 0 0 0 2px rgba(255,196,0,0.25)`,
-        display: 'flex', flexDirection: 'column', gap: 10,
+        display: 'flex', flexDirection: 'column', gap: compact ? 6 : 10,
         animation: jackpotHit ? 'carnivalJackpot 0.55s ease-in-out infinite' : 'none',
       }}
     >
       {/* ════ MARQUEE HEADER — arched gold fascia + chasing bulbs ════ */}
-      <div style={{ position: 'relative', padding: '14px 14px 8px', background: 'linear-gradient(180deg,#431407,#2a0a18 70%)', borderBottom: '2px solid #92400e' }}>
+      <div style={{ position: 'relative', padding: compact ? '8px 10px 6px' : '14px 14px 8px', background: 'linear-gradient(180deg,#431407,#2a0a18 70%)', borderBottom: '2px solid #92400e' }}>
         {/* title */}
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', lineHeight: 1.05 }}>
           <span style={{
-            fontFamily: 'Syne,sans-serif', fontWeight: 900, fontSize: 24, letterSpacing: '0.22em',
+            display: 'inline-block', lineHeight: 1.05,
+            fontFamily: 'Syne,sans-serif', fontWeight: 900, fontSize: compact ? 17 : 24, letterSpacing: compact ? '0.16em' : '0.22em',
             background: 'linear-gradient(180deg,#fff7cc 10%,#ffc400 45%,#ff5e0a 90%)',
             WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
             animation: 'carnivalMarqueeGlow 2.2s ease-in-out infinite',
@@ -135,11 +147,11 @@ export default function SlotMachine({
           </span>
         </div>
         {/* bulb arch — alternating candy bulbs, chase delay staggering */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 9 }}>
-          {Array.from({ length: 21 }, (_, i) => {
+        <div style={{ display: 'flex', justifyContent: 'center', gap: compact ? 6 : 8, marginTop: compact ? 6 : 9 }}>
+          {Array.from({ length: compact ? 13 : 21 }, (_, i) => {
             const cols = ['#ffd166', '#ff7a18', '#22d3ee', '#ff007f']
             return <div key={i} style={{
-              width: 8, height: 8, borderRadius: '50%', color: cols[i % cols.length],
+              width: compact ? 6 : 8, height: compact ? 6 : 8, borderRadius: '50%', color: cols[i % cols.length],
               background: 'currentColor',
               animation: 'carnivalBulb 0.9s ease-in-out infinite', animationDelay: `${(i % 2) * 0.45 + Math.floor(i / 2) * 0.05}s`,
             }} />
@@ -148,20 +160,20 @@ export default function SlotMachine({
       </div>
 
       {/* ════ MACHINE BODY — side LED strips + dual rollers + info screens ════ */}
-      <div style={{ position: 'relative', display: 'flex', gap: 10, padding: '10px 12px 6px' }}>
+      <div style={{ position: 'relative', display: 'flex', gap: compact ? 6 : 10, padding: compact ? '6px 8px 4px' : '10px 12px 6px' }}>
 
         {/* LEFT vertical LED strip */}
-        <LedStrip side="left" led={led} />
+        <LedStrip side="left" led={led} compact={compact} />
 
         {/* CENTER STACK */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 9 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: compact ? 6 : 9 }}>
 
           {/* ROLLER DECK — classic 4-window chassis: 2 reel windows (outer)
               + 2 stat windows (inner, wired up later: vault, players, …) */}
           <div style={{
-            position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, alignItems: 'stretch',
+            position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: compact ? 6 : 10, alignItems: 'stretch',
             background: 'linear-gradient(180deg,#16040c,#0d0208 90%)',
-            border: '2px solid #78350f', borderRadius: 16, padding: '10px 12px',
+            border: '2px solid #78350f', borderRadius: compact ? 12 : 16, padding: compact ? '6px 8px' : '10px 12px',
             boxShadow: 'inset 0 0 30px rgba(0,0,0,0.7), 0 0 14px rgba(120,53,15,0.35)',
           }}>
             <Reel drum={tens} tf={tensTf} cell={CELL} strip={STRIP} side="TENS" />
@@ -175,21 +187,21 @@ export default function SlotMachine({
           {/* Status pill + last-hit chips */}
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 7 }}>
             <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 11px', borderRadius: 20,
+              display: 'inline-flex', alignItems: 'center', gap: 5, padding: compact ? '2px 7px' : '3px 11px', borderRadius: 20,
               background: `rgba(0,0,0,0.5)`, border: `1px solid ${led.color}`,
               boxShadow: led.hot ? `0 0 10px ${led.color}66` : 'none',
             }}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: led.color, boxShadow: `0 0 6px ${led.color}`, animation: led.hot ? 'carnivalStrobe 0.5s infinite' : 'carnivalLampPulse 2s infinite' }} />
-              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: led.color }}>{led.label}</span>
+              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: compact ? 7 : 8, fontWeight: 700, letterSpacing: '0.14em', color: led.color }}>{led.label}</span>
             </div>
             {/* previous hits — popped tokens */}
             {prev5.length > 0 && (
               <div style={{ display: 'flex', gap: 4 }}>
                 {prev5.map((n, i) => (
                   <div key={i} style={{
-                    width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: compact ? 18 : 24, height: compact ? 18 : 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: 'radial-gradient(circle at 35% 30%,#fff3c4,#f59e0b 55%,#92400e)', border: '1px solid #fbbf24',
-                    fontFamily: 'Syne,sans-serif', fontSize: 10, fontWeight: 800, color: '#3b1d04',
+                    fontFamily: 'Syne,sans-serif', fontSize: compact ? 8 : 10, fontWeight: 800, color: '#3b1d04',
                     boxShadow: '0 0 7px rgba(245,158,11,0.55)', opacity: 0.85 - i * 0.13, margin: 1,
                   }}>{n}</div>
                 ))}
@@ -203,15 +215,15 @@ export default function SlotMachine({
         </div>
 
         {/* RIGHT vertical LED strip */}
-        <LedStrip side="right" led={led} />
+        <LedStrip side="right" led={led} compact={compact} />
       </div>
 
       {/* ════ CONTROL DECK — bank screen · rounds meter · 60s window clock ════ */}
-      <div style={{ display: 'flex', gap: 8, padding: '0 12px 4px', alignItems: 'stretch' }}>
+      <div style={{ display: 'flex', gap: compact ? 6 : 8, padding: compact ? '0 8px 2px' : '0 12px 4px', alignItems: 'stretch' }}>
         {/* bank screen */}
-        <div style={{ flex: '0 1 260px', minWidth: 0, background: '#08040a', border: '1px solid #78350f', borderRadius: 10, padding: '5px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: 'inset 0 0 16px rgba(0,0,0,0.8)' }}>
+        <div style={{ flex: '0 1 260px', minWidth: 0, background: '#08040a', border: '1px solid #78350f', borderRadius: 10, padding: compact ? '3px 8px' : '5px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: 'inset 0 0 16px rgba(0,0,0,0.8)' }}>
           <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 7, color: '#92400e', letterSpacing: '0.1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>🎪 {bankName.toUpperCase()}</span>
-          <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 16, fontWeight: 800, color: '#ffc400', textShadow: '0 0 10px rgba(255,196,0,0.8)', whiteSpace: 'nowrap' }}>{drawn}/90</span>
+          <span style={{ fontFamily: 'Syne,sans-serif', fontSize: compact ? 12 : 16, fontWeight: 800, color: '#ffc400', textShadow: '0 0 10px rgba(255,196,0,0.8)', whiteSpace: 'nowrap' }}>{drawn}/90</span>
         </div>
         {/* rounds progress meter */}
         <div style={{ flex: 1, minWidth: 90, display: 'flex', alignItems: 'center' }}>
@@ -220,28 +232,28 @@ export default function SlotMachine({
           </div>
         </div>
         {/* 60s window clock */}
-        <div style={{ marginLeft: 'auto', background: '#08040a', border: '1px solid #78350f', borderRadius: 10, padding: '3px 16px', boxShadow: 'inset 0 0 16px rgba(0,0,0,0.8)' }}>
-          <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 26, fontWeight: 800, lineHeight: 1.1, color: timer % 60 <= 10 ? '#ff4d6d' : '#ff7a18', textShadow: timer % 60 <= 10 ? '0 0 14px rgba(255,77,109,0.9)' : '0 0 14px rgba(255,122,24,0.85)' }}>{String(timer % 60).padStart(2, '0')}</span>
+        <div style={{ marginLeft: 'auto', background: '#08040a', border: '1px solid #78350f', borderRadius: 10, padding: compact ? '2px 10px' : '3px 16px', boxShadow: 'inset 0 0 16px rgba(0,0,0,0.8)' }}>
+          <span style={{ fontFamily: 'Syne,sans-serif', fontSize: compact ? 18 : 26, fontWeight: 800, lineHeight: 1.1, color: timer % 60 <= 10 ? '#ff4d6d' : '#ff7a18', textShadow: timer % 60 <= 10 ? '0 0 14px rgba(255,77,109,0.9)' : '0 0 14px rgba(255,122,24,0.85)' }}>{String(timer % 60).padStart(2, '0')}</span>
         </div>
       </div>
 
       {/* ════ PAYLINE LAMPS — one per win tier (same CAPSULES contract) ════ */}
-      <div style={{ display: 'flex', gap: 5, padding: '4px 12px 10px' }}>
+      <div style={{ display: 'flex', gap: compact ? 3 : 5, padding: compact ? '3px 8px 6px' : '4px 12px 10px' }}>
         {PAYLINE.map(pl => {
           const ws = winStates[pl.wt]
           const claimed = ws?.claimed, claimable = ws?.claimable && !ws?.claimed
           const on = !!claimable, dim = !!claimed
           return (
             <div key={pl.code} style={{
-              flex: 1, minWidth: 0, textAlign: 'center', borderRadius: 8, padding: '5px 3px 6px',
+              flex: 1, minWidth: 0, textAlign: 'center', borderRadius: 8, padding: compact ? '3px 2px 4px' : '5px 3px 6px',
               background: 'rgba(13,2,8,0.75)', border: `1px solid ${dim ? 'rgba(52,211,153,0.5)' : on ? pl.color : 'rgba(120,53,15,0.5)'}`,
               boxShadow: on ? `0 0 12px ${pl.color}88, inset 0 0 8px ${pl.color}44` : 'none',
               animation: on ? 'carnivalStrobe 0.09s infinite' : 'none', opacity: dim ? 0.55 : 1,
             }}>
               {/* lamp */}
-              <div style={{ margin: '0 auto 3px', width: 10, height: 10, borderRadius: '50%', background: dim ? '#134e31' : on ? pl.color : '#3b1d0a', color: dim ? '#34d399' : on ? pl.color : '#80512a', boxShadow: `0 0 ${on ? 10 : 4}px currentColor`, animation: on ? 'none' : 'carnivalLampPulse 2.6s infinite' }} />
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 7, fontWeight: 700, color: dim ? '#34d399' : on ? '#fff' : '#b45309', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dim ? 'PAID ✓' : on ? 'HIT!' : pl.label}</div>
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 6, color: on ? '#ffd166' : '#92400e' }}>{pl.pct}%</div>
+              <div style={{ margin: '0 auto 3px', width: compact ? 7 : 10, height: compact ? 7 : 10, borderRadius: '50%', background: dim ? '#134e31' : on ? pl.color : '#3b1d0a', color: dim ? '#34d399' : on ? pl.color : '#80512a', boxShadow: `0 0 ${on ? 10 : 4}px currentColor`, animation: on ? 'none' : 'carnivalLampPulse 2.6s infinite' }} />
+              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: compact ? 6 : 7, fontWeight: 700, color: dim ? '#34d399' : on ? '#fff' : '#b45309', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dim ? 'PAID ✓' : on ? 'HIT!' : pl.label}</div>
+              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: compact ? 5 : 6, color: on ? '#ffd166' : '#92400e' }}>{pl.pct}%</div>
             </div>
           )
         })}
@@ -251,13 +263,13 @@ export default function SlotMachine({
       {preGameSecs > 0 && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 8, borderRadius: 21, background: 'rgba(13,2,8,0.88)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#ffd166', letterSpacing: '0.25em' }}>REELS SPIN IN</div>
-          <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 46, fontWeight: 900, color: '#ffc400', lineHeight: 1, textShadow: '0 0 26px rgba(255,196,0,0.95),0 0 66px rgba(255,122,24,0.5)' }}>{fmtClock(preGameSecs)}</div>
+          <div style={{ fontFamily: 'Syne,sans-serif', fontSize: compact ? 28 : 46, fontWeight: 900, color: '#ffc400', lineHeight: 1, textShadow: '0 0 26px rgba(255,196,0,0.95),0 0 66px rgba(255,122,24,0.5)' }}>{fmtClock(preGameSecs)}</div>
           <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b45309', letterSpacing: '0.14em' }}>ACTIVATE YOUR TICKETS NOW</div>
         </div>
       )}
 
       {/* base LED strip footer */}
-      <div style={{ position: 'relative', height: 6, overflow: 'hidden', background: '#14040e' }}>
+      <div style={{ position: 'relative', height: compact ? 4 : 6, overflow: 'hidden', background: '#14040e' }}>
         <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg,${led.color},#ffc400 30%,#ff007f 60%,${led.color})`, opacity: 0.85, animation: led.anim, filter: 'blur(1px)' }} />
       </div>
     </div>
@@ -273,18 +285,18 @@ function fmtClock(total: number) {
 
 // ── LED strip ────────────────────────────────────────────────────────────────
 
-function LedStrip({ side, led }: { side: 'left' | 'right'; led: { color: string; anim: string; label: string; hot: boolean } }) {
+function LedStrip({ side, led, compact }: { side: 'left' | 'right'; led: { color: string; anim: string; label: string; hot: boolean }; compact?: boolean }) {
   return (
     <div style={{
-      flex: '0 0 14px', alignSelf: 'stretch', position: 'relative', borderRadius: 7, overflow: 'hidden',
+      flex: `0 0 ${compact ? 10 : 14}px`, alignSelf: 'stretch', position: 'relative', borderRadius: 7, overflow: 'hidden',
       background: `linear-gradient(180deg,${led.color}22,${led.color}44 40%,${led.color}22)`,
       border: `1px solid ${led.color}66`, boxShadow: `0 0 10px ${led.color}55`,
-      display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', padding: '4px 0',
+      display: 'flex', flexDirection: 'column', gap: compact ? 3 : 4, alignItems: 'center', padding: '4px 0',
     }}>
       {/* bulb ladder */}
-      {Array.from({ length: 9 }, (_, i) => (
+      {Array.from({ length: compact ? 5 : 9 }, (_, i) => (
         <div key={i} style={{
-          width: 5, height: 12, borderRadius: 3, background: led.color,
+          width: 5, height: compact ? 8 : 12, borderRadius: 3, background: led.color,
           boxShadow: `0 0 6px ${led.color}`, opacity: 0.75,
           animation: 'carnivalBulb 1.2s ease-in-out infinite', animationDelay: `${i * 0.13}s`,
         }} />
@@ -378,7 +390,7 @@ function Reel({
         <div style={{ position: 'absolute', top: '50%', left: 6, right: 6, transform: 'translateY(-50%)', height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,196,0,0.55),transparent)', pointerEvents: 'none' }} />
       </div>
       {/* drum label */}
-      <div style={{ textAlign: 'center', marginTop: 4, fontFamily: 'DM Mono,monospace', fontSize: 7, letterSpacing: '0.3em', color: drum.spinning || drum.digit === null ? '#92400e' : '#ffc400' }}>{side}{side === 'TENS' ? ' ✕10' : ' ✕1'}</div>
+      <div style={{ textAlign: 'center', marginTop: 2, fontFamily: 'DM Mono,monospace', fontSize: 7, letterSpacing: '0.3em', color: drum.spinning || drum.digit === null ? '#92400e' : '#ffc400' }}>{side}{side === 'TENS' ? ' ✕10' : ' ✕1'}</div>
     </div>
   )
 }

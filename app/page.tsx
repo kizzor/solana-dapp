@@ -8,6 +8,8 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adap
 import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { useEvmWallet } from '@/lib/use-evm-wallet'
 import SlotMachine from '@/components/SlotMachine'
+import CarnivalHeader from '@/components/CarnivalHeader'
+import CarnivalSlotMachine, { type MachineTicket } from '@/components/CarnivalSlotMachine'
 import { ROBINHOOD_CHAIN_ID, ROBINHOOD_CHAIN, SUPPORTED_EVM_CHAINS } from '@/lib/robinhood-config'
 // SUI imports
 // dapp-kit hooks — wallet state, connect/disconnect, and tx signing
@@ -38,7 +40,7 @@ const WIN_LABELS: Record<WinType, string> = {
   FULL_HOUSE_1: 'Bankrupt Ransome I', FULL_HOUSE_2: 'Bankrupt Ransome II', FULL_HOUSE_3: 'Bankrupt Ransome III',
 }
 const LED_COLORS: Record<WinType, string> = {
-  EARLY_FIVE: '#f59e0b', TOP_LINE: '#c084fc', MIDDLE_LINE: '#a78bfa', BOTTOM_LINE: '#a16207',
+  EARLY_FIVE: '#f59e0b', TOP_LINE: '#22d3ee', MIDDLE_LINE: '#67e8f9', BOTTOM_LINE: '#a16207',
   FULL_HOUSE_1: '#f472b6', FULL_HOUSE_2: '#ec4899', FULL_HOUSE_3: '#db2777',
 }
 // Win type payouts in basis points — FULL_HOUSE_3 is the 40% jackpot
@@ -147,7 +149,7 @@ const BANKS = [
   { id: 20, name: 'Carnival Bank', city: 'Rio', tz: -3, x: 33, y: 68, region: 'AMER', vault: '$1.0B' },
   { id: 21, name: 'Azores Vault', city: 'Lisbon', tz: 0, x: 43, y: 29, region: 'EUR', vault: '$1.4B' },
 ]
-const REGION_COLORS: { [k: string]: string } = { APAC: '#c084fc', EUR: '#a78bfa', AMER: '#f59e0b', MENA: '#f97316', AFR: '#a855f7', ASIA: '#ec4899' }
+const REGION_COLORS: { [k: string]: string } = { APAC: '#22d3ee', EUR: '#67e8f9', AMER: '#f59e0b', MENA: '#f97316', AFR: '#a855f7', ASIA: '#ec4899' }
 
 // ─── Self-contained stylized world continents (no external image dependency) ───
 const WORLD_CONTINENTS = [
@@ -183,9 +185,9 @@ const defaultWinStates = (): Record<WinType, WinState> => ({
 
 function getLiveBank(h: number) { return h % 22 }
 
-// ─── Ticket Generator ─────────────────────────────────────────────────────────
+// ─── Ticket Generator (same 3×9 / 15-number card the consoles always used) ───
 function generateDevice(id: number): Device {
-  const nftId = `HEIST-${String(id).padStart(4, '0')}`
+  const nftId = `TICKET-${String(id).padStart(4, '0')}`
   const colCounts = Array(9).fill(1)
   Array.from({ length: 9 }, (_, i) => i).sort(() => Math.random() - 0.5).slice(0, 6).forEach(i => colCounts[i]++)
   const colRows: number[][] = colCounts.map(cnt => [0, 1, 2].sort(() => Math.random() - 0.5).slice(0, cnt))
@@ -206,6 +208,27 @@ function generateDevice(id: number): Device {
     picked.forEach(n => used.add(n)); rows.forEach((r, i) => { grid[r][ci] = { num: picked[i], matched: false, clicked: false, missed: false } })
   }
   return { id, nftId, walletAddr: null, grid, claimed: new Set(), active: false, corrupted: false }
+}
+
+// ─── Carnival projections ────────────────────────────────────────────────────
+// A minted console IS a raffle ticket: its 15 printed numbers are the ticket's
+// numbers. The grid stays 3×9 // 15 numbers so the mint + claim APIs keep the
+// exact same contract; the carnival UI just prints the 15 filled cells.
+function ticketNumbers(d: Device): number[] {
+  return d.grid.flat().filter(c => c.num !== null).map(c => c.num as number).sort((a, b) => a - b)
+}
+
+// Highest pattern a ticket has completed — same win ladder as the arena LEDs
+function ticketWinType(d: Device): WinType | null {
+  const filled = d.grid.flat().filter(c => c.num)
+  if (!filled.length) return null
+  if (filled.every(c => c.clicked)) return 'FULL_HOUSE_1'
+  const rowDone = (r: number) => d.grid[r].filter(c => c.num).every(c => c.clicked)
+  if (rowDone(0)) return 'TOP_LINE'
+  if (rowDone(1)) return 'MIDDLE_LINE'
+  if (rowDone(2)) return 'BOTTOM_LINE'
+  if (filled.filter(c => c.clicked).length >= 5) return 'EARLY_FIVE'
+  return null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -279,25 +302,25 @@ function WorldMapSketch({ currentHour, onSelectBank, style, className }: { curre
   const hourCd = useHourCountdown()
   const [hov, setHov] = useState<number | null>(null)
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#0a0612', overflow: 'hidden', minHeight: 200, ...style }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#07030c', overflow: 'hidden', minHeight: 200, ...style }}>
       {/* Vector world map — always renders, never depends on an external image host */}
       <svg viewBox="0 0 400 210" preserveAspectRatio="xMidYMid slice" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
         <rect x="0" y="0" width="400" height="210" fill="#08111f" />
         {WORLD_CONTINENTS.map((pts, i) => (
-          <polygon key={i} points={pts} fill="rgba(178,107,255,0.10)" stroke="rgba(178,107,255,0.35)" strokeWidth="0.5" />
+          <polygon key={i} points={pts} fill="rgba(245,158,11,0.10)" stroke="rgba(245,158,11,0.35)" strokeWidth="0.5" />
         ))}
       </svg>
       <svg viewBox="0 0 400 210" preserveAspectRatio="xMidYMid slice" style={{ width: '100%', height: '100%', display: 'block', position: 'relative', zIndex: 2 }}>
         {Array.from({ length: 41 }, (_, i) => <line key={"vg" + i} x1={i * 10} y1="0" x2={i * 10} y2="210" stroke="#170f2b" strokeWidth="0.15" />)}
         {Array.from({ length: 22 }, (_, i) => <line key={"hg" + i} x1="0" y1={i * 10} x2="400" y2={i * 10} stroke="#170f2b" strokeWidth="0.15" />)}
-        <line x1="0" y1="105" x2="400" y2="105" stroke="#150d24" strokeWidth="0.6" strokeDasharray="4,4" />
-        <text x="4" y="103" fontSize="3.5" fill="#150d24">EQ</text>
+        <line x1="0" y1="105" x2="400" y2="105" stroke="#150c22" strokeWidth="0.6" strokeDasharray="4,4" />
+        <text x="4" y="103" fontSize="3.5" fill="#150c22">EQ</text>
         {BANKS.filter(b => b.id !== live).map(b => (
-          <line key={"cl" + b.id} x1={BANKS[live].x * 4} y1={BANKS[live].y * 2} x2={b.x * 4} y2={b.y * 2} stroke="#b26bff08" strokeWidth="0.5" strokeDasharray="2,5" />
+          <line key={"cl" + b.id} x1={BANKS[live].x * 4} y1={BANKS[live].y * 2} x2={b.x * 4} y2={b.y * 2} stroke="#fbbf2408" strokeWidth="0.5" strokeDasharray="2,5" />
         ))}
         {BANKS.map(b => {
           const isLive = b.id === live, isHov = b.id === hov
-          const rc = REGION_COLORS[b.region] || '#241538'
+          const rc = REGION_COLORS[b.region] || '#3a2052'
           const bx = b.x * 4, by = b.y * 2
           return (
             <g key={b.id} onClick={() => onSelectBank?.(b.id)} onMouseEnter={() => setHov(b.id)} onMouseLeave={() => setHov(null)} style={{ cursor: 'pointer' }}>
@@ -306,18 +329,18 @@ function WorldMapSketch({ currentHour, onSelectBank, style, className }: { curre
                 <rect x={bx - 5} y={by - 5} width="10" height="10" fill={rc + "15"} stroke={rc} strokeWidth="0.5"><animate attributeName="width" values="6;14;6" dur="2s" repeatCount="indefinite" /><animate attributeName="height" values="6;14;6" dur="2s" repeatCount="indefinite" /><animate attributeName="x" values={`${bx - 3};${bx - 7};${bx - 3}`} dur="2s" repeatCount="indefinite" /><animate attributeName="y" values={`${by - 3};${by - 7};${by - 3}`} dur="2s" repeatCount="indefinite" /></rect>
               </>}
               <rect x={bx - 2.5} y={by - 2.5} width="5" height="5" rx="0.5"
-                fill={isLive ? rc + "60" : isHov ? '#b26bff40' : 'transparent'}
-                stroke={isLive ? rc : isHov ? '#b26bff' : '#453071'} strokeWidth={isLive ? 1.5 : 0.8} />
-              <circle cx={bx} cy={by} r="1" fill={isLive ? rc : isHov ? '#b26bff' : '#2d1f4a'} />
+                fill={isLive ? rc + "60" : isHov ? '#fbbf2440' : 'transparent'}
+                stroke={isLive ? rc : isHov ? '#fbbf24' : '#453071'} strokeWidth={isLive ? 1.5 : 0.8} />
+              <circle cx={bx} cy={by} r="1" fill={isLive ? rc : isHov ? '#fbbf24' : '#2a1a3d'} />
               {(isHov || isLive) && <>
-                <rect x={bx - 14} y={by - 20} width="28" height="14" rx="1.5" fill="#010c18ee" stroke={isLive ? rc : '#b26bff'} strokeWidth="0.7" />
-                <text x={bx} y={by - 13} textAnchor="middle" fontSize="5" fill={isLive ? rc : '#b26bff'} fontWeight="bold">{b.city}</text>
-                <text x={bx} y={by - 7} textAnchor="middle" fontSize="3.5" fill="#a99bc4">{isLive ? '⏱ ' + fmtTime(hourCd) : b.vault}</text>
+                <rect x={bx - 14} y={by - 20} width="28" height="14" rx="1.5" fill="#010c18ee" stroke={isLive ? rc : '#fbbf24'} strokeWidth="0.7" />
+                <text x={bx} y={by - 13} textAnchor="middle" fontSize="5" fill={isLive ? rc : '#fbbf24'} fontWeight="bold">{b.city}</text>
+                <text x={bx} y={by - 7} textAnchor="middle" fontSize="3.5" fill="#b9a7d6">{isLive ? '⏱ ' + fmtTime(hourCd) : b.vault}</text>
               </>}
             </g>
           )
         })}
-        <text x="4" y="206" fontSize="3.5" fill="#241538">■ LIVE  □ SCHEDULED  — DECENTRALIZED VAULT LINK</text>
+        <text x="4" y="206" fontSize="3.5" fill="#3a2052">■ LIVE  □ SCHEDULED  — DECENTRALIZED VAULT LINK</text>
       </svg>
     </div>
   )
@@ -325,35 +348,35 @@ function WorldMapSketch({ currentHour, onSelectBank, style, className }: { curre
 
 function DeviceSkeleton({ children, title }: { children: React.ReactNode; title: string }) {
   return (
-    <div style={{ background: 'linear-gradient(180deg,#1a1029,#0b0614)', border: '2px solid #241538', borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+    <div style={{ background: 'linear-gradient(180deg,#1a1029,#0b0614)', border: '2px solid #3a2052', borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
       {/* Device top bar */}
-      <div style={{ background: 'linear-gradient(90deg,#150d24,#1a1029)', padding: '7px 10px', borderBottom: '1px solid #1a1029', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ background: 'linear-gradient(90deg,#150c22,#1a1029)', padding: '7px 10px', borderBottom: '1px solid #1a1029', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 14, height: 14, background: 'linear-gradient(to bottom,#b26bff 0%,#7c3aed 100%)', clipPath: 'polygon(50% 0%,100% 50%,50% 100%,0% 50%)' }} />
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 9, fontWeight: 700, color: '#b26bff', letterSpacing: '0.1em' }}>{title}</span>
+          <div style={{ width: 14, height: 14, background: 'linear-gradient(to bottom,#fbbf24 0%,#7c3aed 100%)', clipPath: 'polygon(50% 0%,100% 50%,50% 100%,0% 50%)' }} />
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 9, fontWeight: 700, color: '#fbbf24', letterSpacing: '0.1em' }}>{title}</span>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
-          {['#ff5c8a', '#f97316', '#a78bfa'].map((c, i) => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: c, boxShadow: `0 0 5px ${c}` }} />)}
+          {['#ff5c8a', '#f97316', '#67e8f9'].map((c, i) => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: c, boxShadow: `0 0 5px ${c}` }} />)}
         </div>
       </div>
       {/* LED strip top */}
-      <div style={{ background: '#150d24', height: 5, display: 'flex', gap: 3, alignItems: 'center', padding: '0 8px', borderBottom: '1px solid #0b0614' }}>
-        {Array.from({ length: 18 }, (_, i) => <div key={i} style={{ width: 4, height: 3, borderRadius: 1, background: i % 5 === 0 ? '#b26bff20' : '#170f2b' }} />)}
+      <div style={{ background: '#150c22', height: 5, display: 'flex', gap: 3, alignItems: 'center', padding: '0 8px', borderBottom: '1px solid #0b0614' }}>
+        {Array.from({ length: 18 }, (_, i) => <div key={i} style={{ width: 4, height: 3, borderRadius: 1, background: i % 5 === 0 ? '#fbbf2420' : '#170f2b' }} />)}
       </div>
       {/* Content */}
       <div style={{ padding: '12px 10px 10px' }}>{children}</div>
       {/* LED strip bottom */}
-      <div style={{ background: '#150d24', height: 5, display: 'flex', gap: 3, alignItems: 'center', padding: '0 8px', borderTop: '1px solid #0b0614' }}>
-        {Array.from({ length: 18 }, (_, i) => <div key={i} style={{ width: 4, height: 3, borderRadius: 1, background: i % 4 === 0 ? '#b26bff15' : '#170f2b' }} />)}
+      <div style={{ background: '#150c22', height: 5, display: 'flex', gap: 3, alignItems: 'center', padding: '0 8px', borderTop: '1px solid #0b0614' }}>
+        {Array.from({ length: 18 }, (_, i) => <div key={i} style={{ width: 4, height: 3, borderRadius: 1, background: i % 4 === 0 ? '#fbbf2415' : '#170f2b' }} />)}
       </div>
       {/* Device bottom bar */}
       <div style={{ background: '#080f1c', padding: '6px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #1a1029' }}>
         <div style={{ display: 'flex', gap: 3 }}>
-          {[0, 1, 2].map(i => <div key={i} style={{ width: 8, height: 6, borderRadius: 1, background: '#150d24', border: '1px solid #241538' }} />)}
+          {[0, 1, 2].map(i => <div key={i} style={{ width: 8, height: 6, borderRadius: 1, background: '#150c22', border: '1px solid #3a2052' }} />)}
         </div>
-        <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#241538', letterSpacing: '0.1em' }}>CARNIVAL SLOT TICKET</div>
+        <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#3a2052', letterSpacing: '0.1em' }}>CARNIVAL SLOT TICKET</div>
         <div style={{ display: 'flex', gap: 3 }}>
-          {[0, 1].map(i => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%,#1a2a3a,#0e0819)', border: '1px solid #241538' }} />)}
+          {[0, 1].map(i => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%,#1a2a3a,#09040e)', border: '1px solid #3a2052' }} />)}
         </div>
       </div>
     </div>
@@ -434,17 +457,17 @@ function DemoPanel() {
   return (
     <div>
       {/* Mini ticket */}
-      <div style={{ background: '#0a0612', border: '1px solid #150d24', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', borderBottom: '1px solid #150d24' }}>
-          {COL_HEADERS.map((h, i) => <div key={i} style={{ padding: '1px 0', textAlign: 'center', fontFamily: 'DM Mono,monospace', fontSize: 5, color: '#241538', borderRight: i < 8 ? '1px solid #150d24' : 'none', background: '#070310' }}>{h}</div>)}
+      <div style={{ background: '#07030c', border: '1px solid #150c22', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', borderBottom: '1px solid #150c22' }}>
+          {COL_HEADERS.map((h, i) => <div key={i} style={{ padding: '1px 0', textAlign: 'center', fontFamily: "'Share Tech Mono',monospace", fontSize: 5, color: '#3a2052', borderRight: i < 8 ? '1px solid #150c22' : 'none', background: '#070310' }}>{h}</div>)}
         </div>
         {localDev.grid.map((row, ri) => (
-          <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', borderBottom: ri < 2 ? '1px solid #150d24' : 'none' }}>
+          <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', borderBottom: ri < 2 ? '1px solid #150c22' : 'none' }}>
             {row.map((cell, ci) => (
               <div key={ci} style={{
-                height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: ci < 8 ? '1px solid #150d24' : 'none',
+                height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: ci < 8 ? '1px solid #150c22' : 'none',
                 background: cell.clicked ? 'rgba(255,255,255,0.1)' : 'transparent',
-                fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700,
+                fontFamily: "'Share Tech Mono',monospace", fontSize: 8, fontWeight: 700,
                 color: !cell.num ? 'transparent' : '#fff',
                 textShadow: cell.clicked ? '0 0 6px #fff,0 0 12px rgba(255,255,255,0.8)' : '0 0 2px rgba(255,255,255,0.3)',
                 opacity: !cell.num ? 0 : cell.clicked ? 1 : 0.4,
@@ -457,15 +480,15 @@ function DemoPanel() {
 
       {/* Current broadcast number + LEDs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <div style={{ background: '#070310', border: '1px solid #150d24', borderRadius: 6, padding: '4px 10px', textAlign: 'center', minWidth: 50 }}>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>BROADCAST</div>
+        <div style={{ background: '#070310', border: '1px solid #150c22', borderRadius: 6, padding: '4px 10px', textAlign: 'center', minWidth: 50 }}>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>BROADCAST</div>
           <div style={{
             fontFamily: 'Syne,sans-serif', fontSize: 28, fontWeight: 800, color: '#fff', lineHeight: 1,
             textShadow: '0 0 12px #fff,0 0 24px rgba(255,255,255,0.6)'
           }}>{demoNum ?? '—'}</div>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', marginBottom: 4 }}>WIN STATUS</div>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', marginBottom: 4 }}>WIN STATUS</div>
           {LED_TYPES.map((type, i) => {
             const ws = demoWinStates[type]
             const color = LED_COLORS[type]
@@ -473,7 +496,7 @@ function DemoPanel() {
               <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
                 <div style={{
                   width: 8, height: 6, borderRadius: 1, flexShrink: 0,
-                  background: ws.broken ? 'transparent' : ws.claimed || ws.claimable ? color : '#150d24',
+                  background: ws.broken ? 'transparent' : ws.claimed || ws.claimable ? color : '#150c22',
                   border: `1px solid ${ws.broken ? color + '40' : ws.claimed || ws.claimable ? color : '#1a1029'}`,
                   boxShadow: ws.broken ? 'none' : ws.claimable || ws.claimed ? `0 0 5px ${color}` : 'none',
                   animation: ws.broken ? 'none' : ws.flickering ? 'rapidFlicker 0.08s infinite' : ws.claimable && !ws.claimed ? 'ledBlink 0.5s infinite' : 'none',
@@ -481,7 +504,7 @@ function DemoPanel() {
                 }}>
                   {ws.broken && <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle,${color}50 20%,transparent 70%)`, animation: 'filamentGlow 2s infinite' }} />}
                 </div>
-                <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: ws.claimed ? '#a78bfa' : ws.claimable ? color : '#2d1f4a', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: ws.claimed ? '#67e8f9' : ws.claimable ? color : '#2a1a3d', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {WIN_LABELS[type]}
                 </div>
               </div>
@@ -491,13 +514,13 @@ function DemoPanel() {
       </div>
 
       {/* Messages */}
-      <div style={{ background: '#070310', border: '1px solid #150d24', borderRadius: 5, padding: '5px 8px', maxHeight: 60, overflowY: 'auto', marginBottom: 8 }}>
+      <div style={{ background: '#070310', border: '1px solid #150c22', borderRadius: 5, padding: '5px 8px', maxHeight: 60, overflowY: 'auto', marginBottom: 8 }}>
         {msgs.slice(-5).map((m, i) => (
-          <div key={i} style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', marginBottom: 1 }}>{m}</div>
+          <div key={i} style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#fbbf24', marginBottom: 1 }}>{m}</div>
         ))}
       </div>
 
-      <button className="keyboard-key keyboard-key-accent" onClick={startDemo} style={{ width: '100%', background: running ? '#150d24' : 'linear-gradient(to bottom,#b26bff 0%,#7c3aed 100%)', color: running ? '#453071' : '#000', border: running ? '1px solid #241538' : 'none', borderRadius: 8, padding: '10px', fontFamily: 'DM Mono,monospace', fontSize: 10, fontWeight: 700, cursor: running ? 'default' : 'pointer' }}>
+      <button className="keyboard-key keyboard-key-accent" onClick={startDemo} style={{ width: '100%', background: running ? '#150c22' : 'linear-gradient(to bottom,#fbbf24 0%,#7c3aed 100%)', color: running ? '#453071' : '#000', border: running ? '1px solid #3a2052' : 'none', borderRadius: 8, padding: '10px', fontFamily: "'Share Tech Mono',monospace", fontSize: 10, fontWeight: 700, cursor: running ? 'default' : 'pointer' }}>
         {running ? '⏳ DEMO RUNNING...' : '▶ RUN DEMO HACK'}
       </button>
     </div>
@@ -507,8 +530,8 @@ function DemoPanel() {
 // ─── Rules Panel ─────────────────────────────────────────────────────────────
 function RulesPanel() {
   return (
-    <div style={{ background: '#070310', border: '1px solid #150d24', borderRadius: 8, padding: '10px 12px' }}>
-      <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', marginBottom: 8, letterSpacing: '0.1em' }}>◉ HOW TO PLAY — ROBHIN HEIST RULES</div>
+    <div style={{ background: '#070310', border: '1px solid #150c22', borderRadius: 8, padding: '10px 12px' }}>
+      <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#fbbf24', marginBottom: 8, letterSpacing: '0.1em' }}>◉ HOW TO PLAY — ROBHIN HEIST RULES</div>
       {[
         ['1', 'MINT', 'Buy Carnival slot tickets (1 token each). Each ticket is a unique 3×9 bingo card — same under the hood.'],
         ['2', 'ACTIVATE', 'Connect your devices to the live bank. Only active devices participate.'],
@@ -519,12 +542,12 @@ function RulesPanel() {
         ['7', 'BANK HACK', 'When all 90 numbers are drawn, unclaimed winnings go to the treasury wallet. Game resets.'],
       ].map(([n, title, desc]) => (
         <div key={n} style={{ display: 'flex', gap: 8, marginBottom: 7, alignItems: 'flex-start' }}>
-          <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#150d24', border: '1px solid #b26bff40', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-            <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', fontWeight: 700 }}>{n}</span>
+          <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#150c22', border: '1px solid #fbbf2440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+            <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#fbbf24', fontWeight: 700 }}>{n}</span>
           </div>
           <div>
-            <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a99bc4', fontWeight: 700, marginBottom: 1 }}>{title}</div>
-            <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071', lineHeight: 1.5 }}>{desc}</div>
+            <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#b9a7d6', fontWeight: 700, marginBottom: 1 }}>{title}</div>
+            <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#453071', lineHeight: 1.5 }}>{desc}</div>
           </div>
         </div>
       ))}
@@ -539,7 +562,7 @@ function MintPanel({ wallet, devices, mintCount, mintToken, setMintCount, setMin
   onMint: () => void; onEnterGame: () => void; onConnectWallet: () => void
 }) {
   const [tab, setTab] = useState<'mint' | 'demo' | 'rules'>('mint')
-  const btnBase: React.CSSProperties = { fontFamily: 'DM Mono,monospace', fontSize: 11, cursor: 'pointer', borderRadius: 8, padding: '8px 14px', fontWeight: 600, border: 'none' }
+  const btnBase: React.CSSProperties = { fontFamily: "'Share Tech Mono',monospace", fontSize: 11, cursor: 'pointer', borderRadius: 8, padding: '8px 14px', fontWeight: 600, border: 'none' }
   return (
     <div>
       {/* Tab bar */}
@@ -548,8 +571,8 @@ function MintPanel({ wallet, devices, mintCount, mintToken, setMintCount, setMin
           <button key={k} onClick={() => setTab(k)} style={{
             ...btnBase, flex: 1, padding: '9px 6px', fontSize: 9,
             background: tab === k ? '#0a2a4a' : 'transparent',
-            color: tab === k ? '#b26bff' : '#453071',
-            border: `1px solid ${tab === k ? '#b26bff40' : '#150d24'}`
+            color: tab === k ? '#fbbf24' : '#453071',
+            border: `1px solid ${tab === k ? '#fbbf2440' : '#150c22'}`
           }}>
             {label}
           </button>
@@ -563,57 +586,57 @@ function MintPanel({ wallet, devices, mintCount, mintToken, setMintCount, setMin
         <div>
           {!wallet ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '20px 0' }}>
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', textAlign: 'center', lineHeight: 1.7 }}>Connect your wallet to mint<br />NFT hacking devices</div>
-              <button className="keyboard-key keyboard-key-accent" onClick={onConnectWallet} style={{ ...btnBase, padding: '14px 28px', fontSize: 12, fontWeight: 700, borderRadius: 10, boxShadow: '0 4px 20px rgba(178,107,255,0.3)' }}>CONNECT WALLET →</button>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', textAlign: 'center', lineHeight: 1.7 }}>Connect your wallet to mint<br />NFT hacking devices</div>
+              <button className="keyboard-key keyboard-key-accent" onClick={onConnectWallet} style={{ ...btnBase, padding: '14px 28px', fontSize: 12, fontWeight: 700, borderRadius: 10, boxShadow: '0 4px 20px rgba(245,158,11,0.3)' }}>CONNECT WALLET →</button>
             </div>
           ) : (
             <>
               {/* Price display */}
-              <div style={{ background: 'linear-gradient(90deg,rgba(178,107,255,0.06),transparent)', border: '1px solid rgba(178,107,255,0.12)', borderRadius: 6, padding: '7px 10px', marginBottom: 10 }}>
+              <div style={{ background: 'linear-gradient(90deg,rgba(245,158,11,0.06),transparent)', border: '1px solid rgba(245,158,11,0.12)', borderRadius: 6, padding: '7px 10px', marginBottom: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                  <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>PRICE PER TICKET</span>
-                  <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 16, fontWeight: 800, color: '#b26bff', textShadow: '0 0 8px rgba(178,107,255,0.4)' }}>${DEVICE_PRICE_USDC.toFixed(2)}<span style={{ fontSize: 9, fontWeight: 400, color: '#a99bc4', marginLeft: 3 }}>USD</span></span>
+                  <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>PRICE PER TICKET</span>
+                  <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 16, fontWeight: 800, color: '#fbbf24', textShadow: '0 0 8px rgba(245,158,11,0.4)' }}>${DEVICE_PRICE_USDC.toFixed(2)}<span style={{ fontSize: 9, fontWeight: 400, color: '#b9a7d6', marginLeft: 3 }}>USD</span></span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>ANY COIN: ETH · USDG · USDC · USDT · X<span style={{ color: '#453071' }}> | </span>1000 X LOCK 50% OFF</span>
-                  <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f59e0b' }}>1 HEIST = live from /api/session-state</span>
+                  <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>ANY COIN: ETH · USDG · USDC · USDT · X<span style={{ color: '#453071' }}> | </span>1000 X LOCK 50% OFF</span>
+                  <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#f59e0b' }}>1 HEIST = live from /api/session-state</span>
                 </div>
               </div>
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071', marginBottom: 6 }}>SELECT TOKEN</div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#453071', marginBottom: 6 }}>SELECT TOKEN</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
                 {['ETH', 'USDG', 'USDC', 'USDT', 'X'].map(t => (
                   <button key={t} onClick={() => setMintToken(t)} style={{
                     ...btnBase, padding: '10px 6px', fontSize: 10,
                     background: mintToken === t ? '#2e1065' : 'transparent',
-                    color: mintToken === t ? '#b26bff' : '#453071',
-                    border: `1px solid ${mintToken === t ? '#b26bff40' : '#150d24'}`
+                    color: mintToken === t ? '#fbbf24' : '#453071',
+                    border: `1px solid ${mintToken === t ? '#fbbf2440' : '#150c22'}`
                   }}>{t}</button>
                 ))}
               </div>
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071', marginBottom: 6 }}>QUANTITY</div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#453071', marginBottom: 6 }}>QUANTITY</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 8 }}>
                 {[1, 3, 5, 10].map(n => (
                   <button key={n} onClick={() => setMintCount(n)} style={{
                     ...btnBase, padding: '10px 6px', fontSize: 12,
                     background: mintCount === n ? '#2e1065' : 'transparent',
-                    color: mintCount === n ? '#b26bff' : '#453071',
-                    border: `1px solid ${mintCount === n ? '#b26bff40' : '#150d24'}`
+                    color: mintCount === n ? '#fbbf24' : '#453071',
+                    border: `1px solid ${mintCount === n ? '#fbbf2440' : '#150c22'}`
                   }}>{n}</button>
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
                 <input type="number" value={mintCount} onChange={e => setMintCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  style={{ flex: 1, background: '#150d24', border: '1px solid #150d24', borderRadius: 8, padding: '10px 12px', fontFamily: 'DM Mono,monospace', fontSize: 12, color: '#b26bff', outline: 'none' }} />
-                <button className="keyboard-key keyboard-key-accent" onClick={onMint} style={{ ...btnBase, padding: '12px 20px', fontSize: 12, fontWeight: 700, borderRadius: 10, boxShadow: '0 0 16px rgba(178,107,255,0.3)', whiteSpace: 'nowrap' }}>MINT →</button>
+                  style={{ flex: 1, background: '#150c22', border: '1px solid #150c22', borderRadius: 8, padding: '10px 12px', fontFamily: "'Share Tech Mono',monospace", fontSize: 12, color: '#fbbf24', outline: 'none' }} />
+                <button className="keyboard-key keyboard-key-accent" onClick={onMint} style={{ ...btnBase, padding: '12px 20px', fontSize: 12, fontWeight: 700, borderRadius: 10, boxShadow: '0 0 16px rgba(245,158,11,0.3)', whiteSpace: 'nowrap' }}>MINT →</button>
               </div>
               {devices.length > 0 && (
-                <div style={{ background: 'rgba(178,107,255,0.04)', border: '1px solid rgba(178,107,255,0.12)', borderRadius: 8, padding: '8px 10px', marginBottom: 12 }}>
-                  <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', marginBottom: 4 }}>YOUR TICKETS ({devices.length})</div>
+                <div style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.12)', borderRadius: 8, padding: '8px 10px', marginBottom: 12 }}>
+                  <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#fbbf24', marginBottom: 4 }}>YOUR TICKETS ({devices.length})</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                     {devices.slice(0, 6).map(d => (
-                      <div key={d.id} style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: d.active ? '#a78bfa' : '#2d1f4a', background: '#150d24', border: `1px solid ${d.active ? '#a78bfa30' : '#150d24'}`, borderRadius: 4, padding: '2px 6px' }}>{d.nftId}</div>
+                      <div key={d.id} style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: d.active ? '#67e8f9' : '#2a1a3d', background: '#150c22', border: `1px solid ${d.active ? '#67e8f930' : '#150c22'}`, borderRadius: 4, padding: '2px 6px' }}>{d.nftId}</div>
                     ))}
-                    {devices.length > 6 && <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>+{devices.length - 6}</div>}
+                    {devices.length > 6 && <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>+{devices.length - 6}</div>}
                   </div>
                 </div>
               )}
@@ -649,7 +672,7 @@ function LedProgress({ type, ws, devices }: { type: WinType; ws: WinState; devic
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
       <div style={{
         width: 10, height: 8, borderRadius: 2, flexShrink: 0, position: 'relative', overflow: 'hidden',
-        background: ws.broken ? 'transparent' : ws.claimed || ws.claimable ? color : '#150d24',
+        background: ws.broken ? 'transparent' : ws.claimed || ws.claimable ? color : '#150c22',
         border: `1px solid ${ws.broken ? color + '30' : ws.claimed || ws.claimable ? color : '#1a1029'}`,
         boxShadow: ws.broken ? 'none' : ws.claimable || ws.claimed ? `0 0 5px ${color},0 0 10px ${color}60` : 'none',
         animation: ws.broken ? 'none' : ws.flickering ? 'rapidFlicker 0.08s infinite' : ws.claimable && !ws.claimed ? 'ledBlink 0.5s infinite' : 'none',
@@ -658,10 +681,10 @@ function LedProgress({ type, ws, devices }: { type: WinType; ws: WinState; devic
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: ws.claimed ? '#a78bfa' : ws.claimable ? color : ws.broken ? color + '60' : '#453071', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>{WIN_LABELS[type]}</span>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>{Math.round(prog * 100)}%</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: ws.claimed ? '#67e8f9' : ws.claimable ? color : ws.broken ? color + '60' : '#453071', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>{WIN_LABELS[type]}</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>{Math.round(prog * 100)}%</span>
         </div>
-        <div style={{ height: 3, background: '#150d24', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ height: 3, background: '#150c22', borderRadius: 2, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${prog * 100}%`, background: prog >= 1 ? color : `linear-gradient(90deg,${color}60,${color})`, borderRadius: 2, boxShadow: prog >= 1 ? `0 0 5px ${color}` : 'none', transition: 'width 0.4s ease' }} />
         </div>
       </div>
@@ -711,193 +734,171 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
   const glowR = Math.round(bestPct * 255), glowG = Math.round((1 - bestPct) * 120)
   const proxColor = canClaim ? '#ec4899' : `rgb(${glowR},${glowG},${Math.round(40 + bestPct * 60)})`
   return (
-    <div className="device-console titanium-panel" style={{
-      /* ── TACTICAL CYBERDECK — alyama/design CyberdeckInterface chassis ──
-         Brushed titanium deck panel + 4 precision screw bolts + purple /
-         fuchsia proximity neon. Paint-only reskin of the previous carnival
-         gold bezel: every data binding, handler and win-prox signal that was
-         here is still here (bestPct/embedded corner beacons kept verbatim). */
-      position: 'relative', isolation: 'isolate',
-      border: '1px solid rgba(168,85,247,0.28)', borderRadius: 14, padding: 10,
-      boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 ${Math.round(10 + bestPct * 16)}px rgba(168,85,247,${(0.18 + bestPct * 0.25).toFixed(2)}), 0 0 ${Math.round(24 + bestPct * 30)}px rgba(217,70,239,${(0.08 + bestPct * 0.18).toFixed(2)})${canClaim ? ',0 0 44px rgba(217,70,239,0.55)' : ''}`,
-      display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none'
-    }}>
-      {/* precision screw bolts — chassis corners */}
-      {(['tl', 'tr', 'bl', 'br'] as const).map(corner => (
-        <div key={`bolt-${corner}`} className="screw-bolt" style={{
-          position: 'absolute', zIndex: 5,
-          top: corner.startsWith('t') ? 8 : undefined, bottom: corner.startsWith('b') ? 8 : undefined,
-          left: corner.endsWith('l') ? 8 : undefined, right: corner.endsWith('r') ? 8 : undefined
-        }} />
-      ))}
-      {/* deck face — module stack directly on the brushed titanium */}
-      <div style={{
-        position: 'relative', isolation: 'isolate', flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 10, overflow: 'hidden'
-      }}>
-      {/* ── CORNER LED BEACONS — 4× chassis-corner strobes wired to win-proximity ──
-          nearwin = best line/full-house proximity (0..1). Idle: ember 2.4s breathe.
-          ≥40%: amber. ≥70%: magenta-amber gradient. ≥95%: 0.22s strobe. Claimable:
-          full 8Hz rapidFlicker burst. Color/animation/opacity all inline-driven. */}
-      {(['tl', 'tr', 'bl', 'br'] as const).map(corner => {
-        let beaconColor = '#7a5c3e' // idle ember (unlit filament)
-        let beaconAnim = 'emberPulse 2.4s ease-in-out infinite'
-        let beaconGlow = 0.55
-        if (canClaim) { beaconColor = '#ec4899'; beaconAnim = 'rapidFlicker 0.125s infinite'; beaconGlow = 1 }
-        else if (device.active && bestPct >= 0.95) { beaconColor = '#f97316'; beaconAnim = 'ledBlink 0.22s infinite'; beaconGlow = 1 }
-        else if (device.active && bestPct >= 0.70) { beaconColor = '#fb923c'; beaconAnim = 'ledBlink 0.55s infinite'; beaconGlow = 0.9 }
-        else if (device.active && bestPct >= 0.40) { beaconColor = '#fbbf24'; beaconAnim = 'ledBlink 1.1s infinite'; beaconGlow = 0.8 }
-        return (
-          <div key={corner} className={`corner-led corner-led-${corner}`} title={`PROXIMITY ${Math.round(bestPct * 100)}% — ${Math.round((1 - bestPct) * 5)} hits to nearest win`} style={{
-            position: 'absolute', width: 8, height: 8, borderRadius: '50%', zIndex: 6, transition: 'background 0.4s, box-shadow 0.4s',
-            background: beaconColor, opacity: 0.9, animation: beaconAnim, pointerEvents: 'none',
-            boxShadow: `0 0 ${Math.round(6 + beaconGlow * 10)}px ${beaconColor}, 0 0 ${Math.round(14 + beaconGlow * 22)}px ${beaconColor}${Math.round(beaconGlow * 90).toString(16).padStart(2, '0')}, inset 0 0 3px rgba(0,0,0,0.4)`,
-            top: corner.startsWith('t') ? 5 : undefined, bottom: corner.startsWith('b') ? 5 : undefined,
-            left: corner.endsWith('l') ? 5 : undefined, right: corner.endsWith('r') ? 5 : undefined
-          }} />
-        )
-      })}
-      {/* brushed-metal scanline plate over the chassis face */}
-      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.14) 2px,rgba(0,0,0,0.14) 3px),repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(255,255,255,0.012) 3px,rgba(255,255,255,0.012) 4px)', pointerEvents: 'none', zIndex: 1, borderRadius: 16 }} />
-      {/* ── CYBERDECK HEADER — deck brand · matrix target chip · counter chip ── */}
-      <header style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, flexWrap: 'wrap', padding: '4px 2px 7px', borderBottom: '1px solid rgba(92,74,126,0.5)' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-          <span style={{ fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 15, letterSpacing: '0.12em', color: '#f0abfc', textShadow: '0 0 10px rgba(217,70,239,0.7)', whiteSpace: 'nowrap' }}>HEIST</span>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 9, fontWeight: 700, color: 'rgba(196,181,253,0.75)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(device.nftId || `TKT-${device.id}`).replace(/^HEIST-?/i, '') || String(device.id)}</span>
-        </div>
-        {/* matrix target chip — black label on cyan + glowing white-hot number */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: 3, background: '#12111b', border: '1px solid rgba(34,211,238,0.5)', boxShadow: '0 0 15px rgba(6,182,212,0.35)' }}>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 9, fontWeight: 700, color: '#0b0b12', background: '#22d3ee', borderRadius: 5, padding: '3px 6px', whiteSpace: 'nowrap' }}>MATRIX</span>
-          <span key={currentNum ?? 'x'} style={{ fontFamily: 'DM Mono,monospace', fontWeight: 700, fontSize: 18, lineHeight: 1, color: '#a5f3fc', textShadow: '0 0 8px #67e8f9,0 0 16px #22d3ee,0 0 26px #06b6d4', minWidth: 24, textAlign: 'center', animation: currentNum !== null ? 'numAppear 0.4s cubic-bezier(.34,1.56,.64,1)' : 'none' }}>{currentNum ?? '··'}</span>
-        </div>
-        {/* hits counter chip — cyan gradient, like the deck breach counter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, borderRadius: 6, padding: '4px 9px', background: 'linear-gradient(90deg,#22d3ee,#67e8f9)', color: '#020617', fontFamily: 'DM Mono,monospace', fontWeight: 700, fontSize: 11, boxShadow: '0 0 18px rgba(34,211,238,0.5)' }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#020617', animation: clickWindowOpen ? 'dot 1s infinite' : 'none' }} />
-          <span>{nc}/15</span>
-        </div>
-      </header>
-      {/* ── MODULE BAY — BUS//PWR eq strip + SIGNAL (line prox) / DATA (full
-          house prox) meters. Driven by the same bestPct/fhp values the old
-          footer meters used; purely presentational. ── */}
-      <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, borderRadius: 10, border: '1px solid rgba(126,58,222,0.4)', background: '#100e1a', boxShadow: 'inset 0 0 18px rgba(0,0,0,0.7)', padding: '7px 9px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, background: '#090810', border: '1px solid rgba(126,58,222,0.45)', padding: '4px 9px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 20 }}>
-            {[{ h: 85, c: '#22d3ee' }, { h: 55, c: '#34d399' }, { h: 90, c: '#d946ef' }, { h: 65, c: '#818cf8' }, { h: 75, c: '#e879f9' }].map((b, i) => (
-              <div key={`eq-${i}`} style={{ width: 4, borderRadius: 2, background: b.c, height: `${b.h}%`, boxShadow: `0 0 7px ${b.c}`, animation: `dot ${0.8 + (i % 3) * 0.3}s ease-in-out ${i * 0.09}s infinite alternate` }} />
-            ))}
+    <div className={`device-console cd-deck${canClaim ? ' is-claimable' : ''}${device.active ? ' is-on' : ''}`} data-hot={canClaim ? '1' : '0'}>
+      {/* neon rim hairline + marble faceplate (decorative layers) */}
+      <span className="cd-edge" aria-hidden="true" />
+      <span className="cd-marble" aria-hidden="true" />
+
+      <div className="cd-face">
+        {/* ══ TOP EMBLEM PLATE — crest · matrix target · ACTIVATE ══ */}
+        <header className="cd-top">
+          <div className="cd-emblem">
+            <svg className="cd-crest" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 1.6 22 11 12 22.4 2 11Z" />
+              <path d="M12 6.2 17.2 11 12 17 6.8 11Z" />
+            </svg>
+            <span className="cd-id">
+              <b className="cd-brand">ROBHIN</b>
+              <i className="cd-sub">HEIST</i>
+            </span>
+            <span className="cd-ticket">TKT {(device.nftId || `TKT-${device.id}`).replace(/^HEIST-?/i, '') || String(device.id)}</span>
           </div>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, color: '#c4b5fd', letterSpacing: '0.14em', whiteSpace: 'nowrap' }}>BUS//PWR</span>
-        </div>
-        <div style={{ flex: 1, minWidth: 140, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, color: '#67e8f9', letterSpacing: '0.1em' }}>
-            <span>SIGNAL / LINE PROX</span>
-            <span style={{ color: bestPct >= 0.95 ? '#34d399' : '#67e8f9' }}>{Math.round(bestPct * 100)}%</span>
+
+          <div className="cd-target" title="Active matrix number">
+            <span className="cd-target-lbl">MATRIX</span>
+            <span key={currentNum ?? 'x'} className="cd-target-num" style={{ animation: currentNum !== null ? 'cdNumIn 0.4s cubic-bezier(.34,1.56,.64,1)' : 'none' }}>{currentNum ?? '··'}</span>
           </div>
-          <div style={{ display: 'flex', gap: 2, height: 9, borderRadius: 4, background: '#050508', border: '1px solid rgba(126,58,222,0.55)', padding: 2 }}>
-            {Array.from({ length: 8 }, (_, i) => (
-              <div key={`seg-${i}`} style={{ flex: 1, borderRadius: 2, background: i < Math.round(bestPct * 8) ? (bestPct >= 0.95 ? '#34d399' : (i < 5 ? '#22d3ee' : '#d946ef')) : 'rgba(126,58,222,0.25)', boxShadow: i < Math.round(bestPct * 8) ? '0 0 6px rgba(34,211,238,0.55)' : 'none', transition: 'background 0.4s' }} />
-            ))}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, color: '#c4b5fd', letterSpacing: '0.1em' }}>
-            <span>DATA / FULL HOUSE</span>
-            <span style={{ color: '#a5f3fc' }}>{Math.round(fhp * 100)}%</span>
-          </div>
-        </div>
-      </div>
-      {/* ── MATRIX KEYPAD — recessed socket plate with mechanical keycaps
-          (9 cols × 3 rows, mapping preserved: same onCellClick(device.id,
-          ri, ci) routing and same click-state semantics). ── */}
-      <section style={{ position: 'relative', zIndex: 2, margin: '8px 0 0', flex: 1, borderRadius: 10, background: '#12111c', border: '1px solid rgba(92,63,140,0.5)', boxShadow: 'inset 0 3px 14px rgba(0,0,0,0.85)', padding: '8px 9px' }}>
-        <div className="screw-bolt" style={{ position: 'absolute', top: 5, left: 5 }} />
-        <div className="screw-bolt" style={{ position: 'absolute', top: 5, right: 5 }} />
-        <div className="screw-bolt" style={{ position: 'absolute', bottom: 5, left: 5 }} />
-        <div className="screw-bolt" style={{ position: 'absolute', bottom: 5, right: 5 }} />
-        <div style={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: 'repeat(9, minmax(0, 1fr))', gap: 'var(--deck-keygap, 5px)', minWidth: 0 }}>
-          {device.grid.map((row, ri) => row.map((cell, ci) => {
-            const isCur = cell.num !== null && cell.num === currentNum
-            const isClick = isCur && clickWindowOpen && !cell.clicked && device.active
-            const isEmpty = cell.num === null
-            const isMissed = cell.matched && !cell.clicked && cell.missed
-            const isHot = !isEmpty && DEVICE_HOT[ri * 9 + ci]
-            const stateCls = isEmpty ? ' is-blank' : isMissed ? ' is-missed' : cell.clicked ? ' is-active' : isClick ? ' is-target-exact' : ''
-            return (
-              <div key={`socket-${ri}-${ci}`} className="keycap-socket" style={{ minWidth: 0, minHeight: 0 }}>
-                <button onClick={() => isClick && onCellClick(device.id, ri, ci)} className={`device-key keycap-btn${stateCls}`} title={isEmpty ? 'BLANK SLOT (no number on ticket)' : isMissed ? 'MISSED' : String(cell.num)} style={{
-                  padding: 0, cursor: isClick ? 'pointer' : 'default',
-                  filter: isHot ? 'brightness(1.15)' : undefined,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, minHeight: 0
-                }}>
-                  <span style={{ fontFamily: 'DM Mono,monospace', fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>{isEmpty ? '◇' : cell.num}</span>
-                </button>
-              </div>
-            )
-          }))}
-        </div>
-        {/* deck terminal readout — CORE_BANK data relocated (window state /
-            bank name / hits / paid chips). Same variables as before. */}
-        <div style={{ marginTop: 7, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderRadius: 7, background: '#0a0812', border: '1px solid rgba(92,63,140,0.45)', padding: '4px 9px', minWidth: 0 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, fontFamily: 'DM Mono,monospace', fontSize: 9 }}>
-            <span style={{ color: '#22d3ee', fontWeight: 700 }}>&gt;</span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: clickWindowOpen ? '#a5f3fc' : 'rgba(196,181,253,0.6)', textShadow: clickWindowOpen ? '0 0 6px rgba(103,232,249,0.6)' : 'none' }}>{!device.active ? 'STANDBY — AWAITING ACTIVATION' : (BANKS[liveBank]?.name ?? '').toUpperCase() || 'SYNCING…'}</span>
+
+          {!device.active ? (
+            <button className="cd-activate" onClick={() => onActivate(device.id)} title="Activate this ticket">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21.5 19.5H2.5Z" /><path d="M12 11 15.2 16.6H8.8Z" /></svg>
+              <b>ACTIVATE</b>
+            </button>
+          ) : (
+            <span className="cd-live" data-live={clickWindowOpen ? '1' : '0'} title={clickWindowOpen ? 'Click window live' : 'Click window closed'}>
+              <i />{clickWindowOpen ? 'LIVE' : 'ARMED'}
+            </span>
+          )}
+        </header>
+
+        {/* ══ CORE — glowing LED rails flanking the neon matrix ══ */}
+        <div className="cd-core">
+          <span className="cd-rail cd-rail-l" aria-hidden="true">
+            {[0, 1, 2, 3].map(i => <i key={`pl-${i}`} data-lit={bestPct * 8 > i ? '1' : '0'} />)}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, fontFamily: 'DM Mono,monospace', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap' }}>
-            <span style={{ color: device.active ? (clickWindowOpen ? '#4ade80' : 'rgba(158,175,192,0.55)') : 'rgba(158,175,192,0.4)', textShadow: clickWindowOpen ? '0 0 6px rgba(74,222,128,0.7)' : 'none' }}>{device.active ? (clickWindowOpen ? 'OPEN' : 'WAIT') : 'OFFLINE'}</span>
-            <span style={{ color: '#a5f3fc' }}>{nc}/15</span>
-            {device.claimed.size > 0 && <span style={{ color: '#34d399', textShadow: '0 0 5px rgba(52,211,153,0.5)' }}>PAID ×{device.claimed.size}</span>}
+
+          <section className="cd-screen">
+            <div className="cd-grid">
+              {device.grid.map((row, ri) => row.map((cell, ci) => {
+                const isCur = cell.num !== null && cell.num === currentNum
+                const isClick = isCur && clickWindowOpen && !cell.clicked && device.active
+                const isEmpty = cell.num === null
+                const isMissed = cell.matched && !cell.clicked && cell.missed
+                const stateCls = isEmpty ? ' is-blank' : isMissed ? ' is-missed' : cell.clicked ? ' is-active' : isClick ? ' is-target-exact' : ''
+                return (
+                  <button key={`cell-${ri}-${ci}`} type="button" onClick={() => isClick && onCellClick(device.id, ri, ci)} className={`cd-cell${stateCls}`} disabled={!isClick} title={isEmpty ? 'BLANK SLOT (no number on ticket)' : isMissed ? 'MISSED' : String(cell.num)}>
+                    <span className="cd-cell-num">{isEmpty ? '◇' : cell.num}</span>
+                    {!isEmpty && <span className="cd-cell-tag cd-cell-tag-t" aria-hidden="true">S{cell.num}</span>}
+                    {!isEmpty && <span className="cd-cell-tag cd-cell-tag-b" aria-hidden="true">0{cell.num}</span>}
+                  </button>
+                )
+              }))}
+            </div>
+            <span className="cd-glass" aria-hidden="true" />
+          </section>
+
+          <span className="cd-rail cd-rail-r" aria-hidden="true">
+            {[4, 5, 6, 7].map(i => <i key={`pr-${i}`} data-lit={bestPct * 8 > i ? '1' : '0'} />)}
           </span>
         </div>
-      </section>
-      {/* Win-LED strip REMOVED (2026-10-12): the 7-slot win-state LED row + decorative
-          end-caps duplicated the number wells visually and read as a second set of
-          numbers inside the console. Win feedback remains live via the corner LED
-          beacons (proximity/claimable), the footer RANSOM bar state, and the rack
-          win states themselves. LED strip in MaximizedDevices view untouched. */}
-      {/* ── RANSOM ACTUATOR COMPARTMENT — neon-tube chamber (deck footer).
-          doClaim, onOpenVault and onActivate wiring unchanged — paint only.
-          Left optical sensor = window-live indicator; center embossed RANSOM
-          actuator = the claim button; right tactile switches = vault key (on
-          open) + hex readout of matched count. ── */}
-      <div style={{ position: 'relative', zIndex: 2, margin: '8px 0 0', flexShrink: 0, borderRadius: 14, padding: 8, background: 'linear-gradient(180deg,#1c142c 0%,#100d1c 55%,#0c0a14 100%)', border: '2px solid #e879f9', boxShadow: canClaim ? '0 0 22px rgba(217,70,239,0.75),0 0 42px rgba(168,85,247,0.45),inset 0 0 12px rgba(217,70,239,0.5)' : '0 0 12px rgba(217,70,239,0.4),inset 0 0 12px rgba(217,70,239,0.35)', animation: canClaim ? 'capHunt 1.4s ease-in-out infinite' : 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 9, minWidth: 0 }}>
-          {/* optical sensor — window-live indicator (decorative) */}
-          <div style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 10, background: '#0b0a12', border: '1px solid rgba(168,85,247,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, boxShadow: 'inset 0 0 10px rgba(0,0,0,0.9),0 0 12px rgba(217,70,239,0.3)' }}>
-            <div style={{ display: 'flex', gap: 3 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: clickWindowOpen ? '#22d3ee' : '#2c2a40', boxShadow: clickWindowOpen ? '0 0 7px #22d3ee' : 'none', animation: clickWindowOpen ? 'dot 1.1s infinite' : 'none' }} />
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#e879f9', boxShadow: '0 0 6px #e879f9', animation: 'dot 0.9s ease-in-out 0.4s infinite alternate' }} />
-            </div>
-            <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 7, fontWeight: 700, color: '#c4b5fd', letterSpacing: '0.12em' }}>{clickWindowOpen ? 'LIVE' : 'ACT'}</span>
-          </div>
-          {/* embossed RANSOM actuator — the claim button (canClaim-gated) */}
-          <button onClick={doClaim} disabled={!canClaim} className="ransom-emboss" style={{
-            flex: 1, minWidth: 0, minHeight: 44, borderRadius: 10, border: canClaim ? '1px solid rgba(240,171,252,0.7)' : '1px solid rgba(168,85,247,0.28)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-            cursor: canClaim ? 'pointer' : 'default',
-            fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: canClaim ? 20 : 14, letterSpacing: '0.26em', whiteSpace: 'nowrap',
-            color: canClaim ? '#f5d0fe' : device.claimed.size > 0 ? '#8ecfa8' : 'rgba(240,171,252,0.4)',
-            textShadow: canClaim ? '0 0 12px #f0abfc' : device.claimed.size > 0 ? '0 0 8px rgba(52,211,153,0.55)' : 'none'
-          }}>{device.claimed.size > 0 && !canClaim ? `SETTLED ×${device.claimed.size}` : 'RANSOM'}</button>
-          {/* tactile switches + hex digital readout */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {onOpenVault ? (
-                <button onClick={(e) => { e.stopPropagation(); onOpenVault() }} title="⚿ CLAIM FROM DECENTRALIZED VAULT — anytime before the next round" style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0, padding: 0, cursor: 'pointer', background: '#251e33', border: '1px solid rgba(196,181,253,0.55)', boxShadow: '0 0 8px rgba(168,85,247,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono,monospace', fontSize: 9, color: '#a5f3fc' }}>⚿</button>
-              ) : (
-                <span style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0, background: '#251e33', border: '1px solid rgba(196,181,253,0.3)' }} />
-              )}
-              {!device.active ? (
-                <button className="keyboard-key keyboard-key-accent keyboard-key-sm" onClick={() => onActivate(device.id)} style={{ borderRadius: 4, padding: '1px 6px', fontFamily: 'DM Mono,monospace', fontSize: 7, fontWeight: 700 }}>ON</button>
-              ) : (
-                <span style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0, background: '#251e33', border: '1px solid rgba(196,181,253,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ width: 4, height: 4, borderRadius: 2, background: '#67e8f9', boxShadow: '0 0 5px #67e8f9' }} /></span>
-              )}
-            </div>
-            <div style={{ width: 40, height: 40, borderRadius: 9, background: '#08070d', border: '1px solid rgba(217,70,239,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 12px rgba(217,70,239,0.4),0 0 14px rgba(217,70,239,0.4)' }}>
-              <span style={{ fontFamily: 'DM Mono,monospace', fontWeight: 700, fontSize: 16, color: '#f5d0fe', textShadow: '0 0 10px #d946ef' }}>{nc}</span>
-            </div>
-          </div>
+
+        {/* ══ TERMINAL STRIP — sector · signal · buffer · vault ══ */}
+        <div className="cd-status">
+          <span className="cd-caret">&gt;</span>
+          <span className="cd-status-text">{(BANKS[liveBank]?.name ?? '').toUpperCase() || (device.active ? 'SYNCING…' : 'STANDBY — AWAITING ACTIVATION')}</span>
+          <span className="cd-status-sig">SIG {Math.round(bestPct * 100)}%</span>
+          <span className="cd-status-count">{nc}/15</span>
+          {onOpenVault && (
+            <button className="cd-vault" onClick={(e) => { e.stopPropagation(); onOpenVault() }} title="⚿ Claim from the decentralized vault">⚿</button>
+          )}
         </div>
+
+        {/* ══ BOTTOM PLATE — RANSOM actuator + readouts ══ */}
+        <footer className="cd-foot">
+          <span className="cd-threat" title={`Security countermeasure tier ${Math.min(bankruptCount + 1, 3)}`}>{Math.min(bankruptCount + 1, 3)}</span>
+          <button onClick={doClaim} disabled={!canClaim} className="cd-ransom" data-settled={device.claimed.size > 0 ? '1' : '0'}>
+            {device.claimed.size > 0 && !canClaim ? `SETTLED ×${device.claimed.size}` : 'RANSOM'}
+          </button>
+          <span className="cd-ff" data-on={canClaim ? '1' : '0'} title={`Fast Five — ${Math.min(nc, 5)}/5 keys buffered`}>
+            <b>{Math.min(nc, 5)}/5</b>
+            <i>FF</i>
+          </span>
+          <span className="cd-count" title="Keys cracked">{nc}</span>
+        </footer>
       </div>
-      </div>{/* inner dark face */}
     </div>
   )
+}
+
+// ─── Matrix rain backdrop ────────────────────────────────────────────────────
+// Decorative falling-glyph field behind the arena. Drawn on a fixed canvas at
+// ~55% of viewport resolution and throttled to ~18fps, so it costs no layout
+// and causes no React re-renders. Skipped entirely under reduced-motion.
+function MatrixRain({ className = '' }: { className?: string }) {
+  const ref = useRef<HTMLCanvasElement | null>(null)
+  useEffect(() => {
+    const canvas = ref.current
+    if (!canvas) return
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const GLYPHS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノ#$%&*+=<>|/\\'
+    let w = 0, h = 0, cell = 14, cols = 0
+    let drops: number[] = []
+    let speeds: number[] = []
+    let raf = 0, last = 0
+    const resize = () => {
+      // draw at the canvas' own on-screen size (60%), so the panel-sized
+      // rain and a full-viewport rain share one code path
+      const r = canvas.getBoundingClientRect()
+      const cw = r.width || window.innerWidth
+      const ch = r.height || window.innerHeight
+      const scale = cw < 700 ? 0.85 : 0.75
+      w = Math.max(1, Math.round(cw * scale))
+      h = Math.max(1, Math.round(ch * scale))
+      canvas.width = w
+      canvas.height = h
+      cell = cw < 700 ? 11 : 14
+      cols = Math.ceil(w / cell)
+      // start the columns spread across the panel, so the wall is already
+      // raining on the first frame instead of filling in from above
+      const rowCount = Math.max(1, Math.ceil(h / cell))
+      drops = Array.from({ length: cols }, () => Math.random() * rowCount)
+      speeds = Array.from({ length: cols }, () => 0.35 + Math.random() * 0.75)
+      ctx.fillStyle = '#030806'
+      ctx.fillRect(0, 0, w, h)
+      ctx.font = `700 ${Math.max(8, cell - 3)}px "DM Mono", monospace`
+      ctx.textBaseline = 'top'
+    }
+    const draw = (t: number) => {
+      raf = requestAnimationFrame(draw)
+      if (t - last < 55) return
+      last = t
+      // fade the previous frame so every glyph leaves a phosphor trail
+      ctx.fillStyle = 'rgba(3, 8, 6, 0.13)'
+      ctx.fillRect(0, 0, w, h)
+      ctx.font = `700 ${Math.max(8, cell - 3)}px "DM Mono", monospace`
+      for (let i = 0; i < cols; i++) {
+        const y = drops[i] * cell
+        const ch = GLYPHS[(Math.random() * GLYPHS.length) | 0]
+        ctx.fillStyle = Math.random() < 0.06 ? 'rgba(216,255,232,0.95)' : 'rgba(0,255,120,0.6)'
+        ctx.fillText(ch, i * cell, y)
+        drops[i] += speeds[i]
+        if (y > h && Math.random() > 0.97) drops[i] = -Math.random() * 12
+      }
+    }
+    resize()
+    raf = requestAnimationFrame(draw)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null
+    ro?.observe(canvas)
+    window.addEventListener('resize', resize)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro?.disconnect()
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+  return <canvas ref={ref} className={`matrix-rain ${className}`.trim()} aria-hidden="true" />
 }
 
 // ─── Vault SVG Sketch ────────────────────────────────────────────────────────
@@ -909,81 +910,81 @@ function VaultSketch({ pct, paid }: { pct: number; paid: number }) {
   return (
     <svg viewBox="0 0 120 110" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
       {/* ── Vault room walls ── */}
-      <rect x="6" y="18" width="108" height="80" rx="3" fill="#0a0612" stroke="#1f1330" strokeWidth="1.5" />
+      <rect x="6" y="18" width="108" height="80" rx="3" fill="#07030c" stroke="#1d1130" strokeWidth="1.5" />
       {/* Floor */}
-      <line x1="6" y1="96" x2="114" y2="96" stroke="#1f1330" strokeWidth="1" />
+      <line x1="6" y1="96" x2="114" y2="96" stroke="#1d1130" strokeWidth="1" />
 
       {/* ── Money fill liquid ── */}
       <clipPath id="roomClip"><rect x="7" y="19" width="106" height="76" rx="2" /></clipPath>
-      <rect x="7" y={fillY} width="106" height={98 - fillY} fill="rgba(178,107,255,0.07)" clipPath="url(#roomClip)" style={{ transition: 'all 1.4s cubic-bezier(.4,0,.2,1)' }} />
-      {pct > 0 && <ellipse cx="60" cy={fillY} rx="53" ry="2.5" fill="rgba(178,107,255,0.25)" style={{ transition: 'cy 1.4s cubic-bezier(.4,0,.2,1)' }} />}
+      <rect x="7" y={fillY} width="106" height={98 - fillY} fill="rgba(245,158,11,0.07)" clipPath="url(#roomClip)" style={{ transition: 'all 1.4s cubic-bezier(.4,0,.2,1)' }} />
+      {pct > 0 && <ellipse cx="60" cy={fillY} rx="53" ry="2.5" fill="rgba(245,158,11,0.25)" style={{ transition: 'cy 1.4s cubic-bezier(.4,0,.2,1)' }} />}
 
       {/* ── Money stacks on floor ── */}
       {Array.from({ length: stacks }, (_, i) => {
         const sx = 14 + i * 14, sy = 88
-        const col = i % 3 === 0 ? '#a78bfa' : i % 3 === 1 ? '#16a34a' : '#15803d'
+        const col = i % 3 === 0 ? '#67e8f9' : i % 3 === 1 ? '#16a34a' : '#15803d'
         return (
           <g key={i}>
             <rect x={sx} y={sy - 10} width="10" height="10" rx="1" fill={col} opacity="0.85" />
-            <line x1={sx} y1={sy - 7} x2={sx + 10} y2={sy - 7} stroke="#0a0612" strokeWidth="0.7" opacity="0.6" />
-            <line x1={sx} y1={sy - 4} x2={sx + 10} y2={sy - 4} stroke="#0a0612" strokeWidth="0.7" opacity="0.6" />
-            <text x={sx + 5} y={sy - 2} textAnchor="middle" fontSize="3.5" fill="#0a0612" fontWeight="bold">$</text>
+            <line x1={sx} y1={sy - 7} x2={sx + 10} y2={sy - 7} stroke="#07030c" strokeWidth="0.7" opacity="0.6" />
+            <line x1={sx} y1={sy - 4} x2={sx + 10} y2={sy - 4} stroke="#07030c" strokeWidth="0.7" opacity="0.6" />
+            <text x={sx + 5} y={sy - 2} textAnchor="middle" fontSize="3.5" fill="#07030c" fontWeight="bold">$</text>
           </g>
         )
       })}
 
       {/* ── Vault door frame ── */}
-      <rect x="30" y="20" width="60" height="74" rx="4" fill="#0f0a1c" stroke="#2d1f4a" strokeWidth="2" />
+      <rect x="30" y="20" width="60" height="74" rx="4" fill="#0f0a1c" stroke="#2a1a3d" strokeWidth="2" />
       {/* Door inner bevel */}
       <rect x="34" y="24" width="52" height="66" rx="3" fill="none" stroke="#0a2a45" strokeWidth="1" />
 
       {/* ── Door fill (claimed portion = door cracking open) ── */}
       {pct > 0 && (
         <rect x="30" y="20" width={Math.round(pct * 60)} height="74" rx="4"
-          fill="rgba(178,107,255,0.04)" style={{ transition: 'width 1.4s ease' }} />
+          fill="rgba(245,158,11,0.04)" style={{ transition: 'width 1.4s ease' }} />
       )}
 
       {/* ── Locking bolts — 3 right side ── */}
       {[30, 52, 74].map((y, i) => (
         <g key={i}>
-          <rect x="82" y={y} width="10" height="8" rx="2" fill="#170f2b" stroke="#2d1f4a" strokeWidth="1" />
-          <rect x="86" y={y + 2} width="6" height="4" rx="1" fill={pct > 0.3 ? '#b26bff60' : '#0f0a1c'}
+          <rect x="82" y={y} width="10" height="8" rx="2" fill="#170f2b" stroke="#2a1a3d" strokeWidth="1" />
+          <rect x="86" y={y + 2} width="6" height="4" rx="1" fill={pct > 0.3 ? '#fbbf2460' : '#0f0a1c'}
             style={{ transition: 'fill 0.5s ease' }} />
         </g>
       ))}
 
       {/* ── Central dial ── */}
-      <circle cx="60" cy="57" r="18" fill="#060f1c" stroke="#2d1f4a" strokeWidth="1.5" />
-      <circle cx="60" cy="57" r="13" fill="none" stroke="#150d24" strokeWidth="1" />
+      <circle cx="60" cy="57" r="18" fill="#060f1c" stroke="#2a1a3d" strokeWidth="1.5" />
+      <circle cx="60" cy="57" r="13" fill="none" stroke="#150c22" strokeWidth="1" />
       {/* Dial notches */}
       {Array.from({ length: 12 }, (_, i) => {
         const a = i * 30 * Math.PI / 180, r1 = 13, r2 = 16
-        return <line key={i} x1={60 + r1 * Math.sin(a)} y1={57 - r1 * Math.cos(a)} x2={60 + r2 * Math.sin(a)} y2={57 - r2 * Math.cos(a)} stroke="#2d1f4a" strokeWidth="0.8" />
+        return <line key={i} x1={60 + r1 * Math.sin(a)} y1={57 - r1 * Math.cos(a)} x2={60 + r2 * Math.sin(a)} y2={57 - r2 * Math.cos(a)} stroke="#2a1a3d" strokeWidth="0.8" />
       })}
       {/* Dial pointer — rotates with pct */}
       <line x1="60" y1="57"
         x2={60 + 10 * Math.sin(pct * 6.28)} y2={57 - 10 * Math.cos(pct * 6.28)}
-        stroke="#b26bff" strokeWidth="1.5" strokeLinecap="round"
+        stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round"
         style={{ transition: 'all 1.4s ease' }} />
-      <circle cx="60" cy="57" r="2.5" fill="#2d1f4a" />
+      <circle cx="60" cy="57" r="2.5" fill="#2a1a3d" />
       {/* Center jewel */}
-      <circle cx="60" cy="57" r="1.2" fill={pct > 0 ? '#b26bff' : '#150d24'} style={{ transition: 'fill 0.5s ease' }} />
+      <circle cx="60" cy="57" r="1.2" fill={pct > 0 ? '#fbbf24' : '#150c22'} style={{ transition: 'fill 0.5s ease' }} />
 
       {/* ── Handle ── */}
-      <rect x="74" y="54" width="12" height="6" rx="3" fill="#170f2b" stroke="#2d1f4a" strokeWidth="1" />
-      <circle cx="86" cy="57" r="3" fill="#170f2b" stroke="#2d1f4a" strokeWidth="1" />
+      <rect x="74" y="54" width="12" height="6" rx="3" fill="#170f2b" stroke="#2a1a3d" strokeWidth="1" />
+      <circle cx="86" cy="57" r="3" fill="#170f2b" stroke="#2a1a3d" strokeWidth="1" />
 
       {/* ── Hinges left side ── */}
       {[28, 68].map((y, i) => (
         <g key={i}>
-          <rect x="26" y={y} width="6" height="12" rx="2" fill="#0f0a1c" stroke="#2d1f4a" strokeWidth="1" />
-          <line x1="26" y1={y + 6} x2="32" y2={y + 6} stroke="#2d1f4a" strokeWidth="0.5" />
+          <rect x="26" y={y} width="6" height="12" rx="2" fill="#0f0a1c" stroke="#2a1a3d" strokeWidth="1" />
+          <line x1="26" y1={y + 6} x2="32" y2={y + 6} stroke="#2a1a3d" strokeWidth="0.5" />
         </g>
       ))}
 
       {/* ── Amount label ── */}
-      <text x="60" y="105" textAnchor="middle" fontSize="7" fill="#b26bff" fontWeight="700"
-        fontFamily='DM Mono,monospace'>${(paid / 1000).toFixed(0)}K CLAIMED</text>
+      <text x="60" y="105" textAnchor="middle" fontSize="7" fill="#fbbf24" fontWeight="700"
+        fontFamily="'Share Tech Mono',monospace">${(paid / 1000).toFixed(0)}K CLAIMED</text>
     </svg>
   )
 }
@@ -995,21 +996,21 @@ function HeistChart({ prices, trend, live, contractAddr }: { prices: number[]; t
   const pts = prices.map((p, i) => `${(i / Math.max(prices.length - 1, 1)) * W},${H - 4 - (((p - min) / range) * (H - 10))}`).join(' ')
   const lx = (prices.length - 1) / Math.max(prices.length - 1, 1) * W
   const ly = H - 4 - (((prices[prices.length - 1] - min) / range) * (H - 10))
-  const col = trend ? '#a78bfa' : '#ff5c8a'
+  const col = trend ? '#67e8f9' : '#ff5c8a'
   if (!contractAddr) return (
     <div style={{
       height: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      background: '#0a0612', border: '1px dashed #150d24', borderRadius: 6, gap: 4
+      background: '#07030c', border: '1px dashed #150c22', borderRadius: 6, gap: 4
     }}>
       <div style={{ fontSize: 16 }}>📈</div>
-      <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#150d24', textAlign: 'center', lineHeight: 1.4 }}>enter contract addr{'\n'}to show live chart</span>
+      <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#150c22', textAlign: 'center', lineHeight: 1.4 }}>enter contract addr{'\n'}to show live chart</span>
     </div>
   )
   return (
-    <div style={{ background: '#0a0612', border: '1px solid #150d24', borderRadius: 6, padding: '4px 6px' }}>
+    <div style={{ background: '#07030c', border: '1px solid #150c22', borderRadius: 6, padding: '4px 6px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-        <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>HEIST/USDT</span>
-        <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, color: col }}>{trend ? '▲' : '▼'} ${live.toFixed(4)}</span>
+        <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>HEIST/USDT</span>
+        <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, fontWeight: 700, color: col }}>{trend ? '▲' : '▼'} ${live.toFixed(4)}</span>
       </div>
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
         <defs>
@@ -1019,7 +1020,7 @@ function HeistChart({ prices, trend, live, contractAddr }: { prices: number[]; t
           </linearGradient>
         </defs>
         {[0.25, 0.5, 0.75].map(f => (
-          <line key={f} x1="0" y1={H * f} x2={W} y2={H * f} stroke="#150d24" strokeWidth="0.5" />
+          <line key={f} x1="0" y1={H * f} x2={W} y2={H * f} stroke="#150c22" strokeWidth="0.5" />
         ))}
         {prices.length > 1 && <polygon points={`0,${H} ${pts} ${W},${H}`} fill="url(#cg)" />}
         {prices.length > 1 && <polyline points={pts} fill="none" stroke={col} strokeWidth="1.5" strokeLinejoin="round" />}
@@ -1044,7 +1045,7 @@ function WinnersTerminal({ winRecords }: { winRecords: WinRecord[] }) {
     if (winRecords.length <= prevLen.current) return
     const rec = winRecords[winRecords.length - 1]
     prevLen.current = winRecords.length
-    const cols = ['#b26bff', '#f59e0b', '#c084fc', '#a855f7', '#ec4899']
+    const cols = ['#fbbf24', '#f59e0b', '#22d3ee', '#a855f7', '#ec4899']
     const col = cols[(winRecords.length - 1) % cols.length]
     const full = `> ${WIN_LABELS[rec.wt]} · ${rec.claimers.join('+')} · ${rec.heistEach ?? 0} HEIST each`
     let i = 0
@@ -1061,9 +1062,9 @@ function WinnersTerminal({ winRecords }: { winRecords: WinRecord[] }) {
   useEffect(() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }, [lines])
 
   return (
-    <div ref={scrollRef} style={{ overflowY: 'auto', maxHeight: 72, fontFamily: 'DM Mono,monospace', fontSize: 8, lineHeight: 1.7 }}>
+    <div ref={scrollRef} style={{ overflowY: 'auto', maxHeight: 72, fontFamily: "'Share Tech Mono',monospace", fontSize: 8, lineHeight: 1.7 }}>
       {lines.length === 0 ? (
-        <span style={{ color: '#150d24' }}>awaiting claim<span style={{ opacity: cursor ? 1 : 0, color: '#2d1f4a' }}>_</span></span>
+        <span style={{ color: '#150c22' }}>awaiting claim<span style={{ opacity: cursor ? 1 : 0, color: '#2a1a3d' }}>_</span></span>
       ) : lines.map((l, i) => (
         <div key={i} style={{ color: l.col, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {l.text}{i === lines.length - 1 && <span style={{ opacity: cursor ? 1 : 0 }}>_</span>}
@@ -1100,11 +1101,11 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
       <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
         {/* Pink bank/round screen (PNG left capsule) */}
         <div style={{ flex: '0 1 300px', minWidth: 0, background: '#08040a', border: '1px solid #2a0d1a', borderRadius: 12, boxShadow: 'inset 0 0 16px rgba(0,0,0,0.75)', padding: '5px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 7, color: '#4a0d2a', letterSpacing: '0.1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>🏦 {BANKS[liveBank].name.toUpperCase()}</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#4a0d2a', letterSpacing: '0.1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>🏦 {BANKS[liveBank].name.toUpperCase()}</span>
           <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 17, fontWeight: 800, color: '#ff4fa3', textShadow: '0 0 10px rgba(255,79,163,0.8)', whiteSpace: 'nowrap' }}>{drawn}/90</span>
         </div>
         {/* ⚡ MATRIX chip */}
-        <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 9, fontWeight: 700, color: '#e9d5ff', letterSpacing: '0.14em', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.5)', borderRadius: 8, padding: '4px 10px', textShadow: '0 0 6px rgba(168,85,247,0.7)' }}>⚡ MATRIX →</span>
+        <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 9, fontWeight: 700, color: '#e9d5ff', letterSpacing: '0.14em', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.5)', borderRadius: 8, padding: '4px 10px', textShadow: '0 0 6px rgba(168,85,247,0.7)' }}>⚡ MATRIX →</span>
         {/* Red seconds screen (PNG right dark screen) — 60s countdown to next number */}
         <div style={{ marginLeft: 'auto', background: '#08040a', border: '1px solid #2a0d1a', borderRadius: 12, boxShadow: 'inset 0 0 16px rgba(0,0,0,0.75)', padding: '4px 16px' }}>
           <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 28, fontWeight: 800, lineHeight: 1.1, color: timer <= 10 ? '#ff5c8a' : '#ff4fa3', textShadow: '0 0 14px rgba(255,79,163,0.85),0 0 34px rgba(255,79,163,0.4)' }}>{String(timer % 60).padStart(2, '0')}</span>
@@ -1114,7 +1115,7 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
       {/* ════ KEYPAD DECK — device consoles wired into the chassis ════ */}
       <div style={{ position: 'relative', zIndex: 2, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10, alignItems: 'start' }}>
         {devices.length === 0 ? (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '18px 8px', color: '#4a3a68', fontFamily: 'DM Mono,monospace', fontSize: 9 }}>
+          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '18px 8px', color: '#4a3a68', fontFamily: "'Share Tech Mono',monospace", fontSize: 9 }}>
             NO TICKETS — MINT TICKETS FROM THE LOBBY TO SPIN THE CARNIVAL
           </div>
         ) : devices.map(d => (
@@ -1132,7 +1133,7 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
           border: `1px solid ${clickWindowOpen ? 'rgba(126,249,255,0.4)' : 'rgba(255,92,138,0.2)'}`, borderRadius: 20
         }}>
           <div style={{ width: 4, height: 4, borderRadius: '50%', background: clickWindowOpen ? '#7ef9ff' : '#ff5c8a', animation: clickWindowOpen ? 'dot 1s infinite' : 'none' }} />
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: clickWindowOpen ? '#7ef9ff' : '#ff5c8a' }}>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: clickWindowOpen ? '#7ef9ff' : '#ff5c8a' }}>
             {clickWindowOpen ? 'CLICK WINDOW OPEN' : 'WINDOW CLOSED'}
           </span>
         </div>
@@ -1142,7 +1143,7 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
               <div key={i} style={{
                 width: 22, height: 22, borderRadius: 4, display: 'flex', alignItems: 'center',
                 justifyContent: 'center', background: '#120d20', border: '1px solid #2a2140',
-                fontFamily: 'DM Mono,monospace', fontSize: 9, color: '#7ef9ff',
+                fontFamily: "'Share Tech Mono',monospace", fontSize: 9, color: '#7ef9ff',
                 opacity: 0.72 - i * 0.12, textShadow: '0 0 5px rgba(126,249,255,0.6)'
               }}>{n}</div>
             ))}
@@ -1152,7 +1153,7 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
           <div style={{ height: 5, background: '#120d20', borderRadius: 3, overflow: 'hidden', border: '1px solid #1c1330', position: 'relative' }}>
             <div style={{
               height: '100%', width: `${pct}%`, borderRadius: 3, transition: 'width 0.6s ease',
-              background: 'linear-gradient(90deg,#a855f7,#c084fc,#ff4fa3)',
+              background: 'linear-gradient(90deg,#a855f7,#22d3ee,#ff4fa3)',
               boxShadow: '0 0 6px rgba(168,85,247,0.5)'
             }} />
             {Array.from({ length: 9 }, (_, i) => (
@@ -1161,7 +1162,7 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
           </div>
         </div>
         <div style={{ flex: '1 1 220px', minWidth: 180, background: '#0a0714', border: '1px solid #241a38', borderRadius: 8, padding: '4px 8px' }}>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#4a3a68', letterSpacing: '0.1em', marginBottom: 2 }}>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#4a3a68', letterSpacing: '0.1em', marginBottom: 2 }}>
             🏆 WINNER FEED
           </div>
           <WinnersTerminal winRecords={winRecords} />
@@ -1169,9 +1170,9 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
       </div>
       {preGameSecs > 0 && calledOrder.length === 0 && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,6,20,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 20 }}>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a78bfa', letterSpacing: '0.2em' }}>HACK INITIATES IN</div>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#67e8f9', letterSpacing: '0.2em' }}>HACK INITIATES IN</div>
           <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 46, fontWeight: 800, color: '#ff4fa3', lineHeight: 1, textShadow: '0 0 24px rgba(255,79,163,0.9),0 0 60px rgba(255,79,163,0.45)' }}>{fmtTime(preGameSecs)}</div>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#4a3a68' }}>ACTIVATE YOUR DEVICES NOW</div>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#4a3a68' }}>ACTIVATE YOUR DEVICES NOW</div>
         </div>
       )}
 
@@ -1193,13 +1194,13 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
               animation: claimable ? 'capHunt 0.14s infinite' : 'none'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
-                <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 7, fontWeight: 700, color: claimed ? '#34d399' : claimable ? '#ec4899' : '#a78bfa', whiteSpace: 'nowrap' }}>{cap.code}</span>
-                <span className="num-tab" style={{ fontFamily: 'DM Mono,monospace', fontSize: 6, color: '#4a3a68' }}>{Math.round(WIN_BPS[cap.wt] / 100)}%</span>
+                <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, fontWeight: 700, color: claimed ? '#34d399' : claimable ? '#ec4899' : '#67e8f9', whiteSpace: 'nowrap' }}>{cap.code}</span>
+                <span className="num-tab" style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 6, color: '#4a3a68' }}>{Math.round(WIN_BPS[cap.wt] / 100)}%</span>
               </div>
               <div style={{ height: 3, background: '#120d20', borderRadius: 2, margin: '3px 0 2px', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${claimed ? 100 : Math.round(prog * 100)}%`, borderRadius: 2, background: barColor, boxShadow: claimable ? `0 0 6px ${barColor}` : 'none', transition: 'width 0.4s ease,background 0.3s' }} />
               </div>
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 6, color: claimed ? '#34d399' : claimable ? '#ec4899' : expired ? '#50081f' : '#4a3a68', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 6, color: claimed ? '#34d399' : claimable ? '#ec4899' : expired ? '#50081f' : '#4a3a68', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {locked ? 'LOCKED' : claimed ? '✓ HACKED — PAID' : claimable ? '◈ HIT RANSOM!' : expired ? '✕ BREACHED' : cap.label}
               </div>
             </div>
@@ -1211,27 +1212,27 @@ function HackMatrixDisplay({ calledNums, calledOrder, clickWindowOpen, preGameSe
         <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 15, fontWeight: 800, letterSpacing: '0.18em', color: '#ff4fa3', textShadow: '0 0 14px rgba(255,79,163,0.85),0 0 34px rgba(255,79,163,0.4)' }}>CLAIM</span>
         {/* Vault HEIST tokens */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#b26bff', boxShadow: '0 0 6px #b26bff' }} />
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.05em' }}>DECENTRALIZED VAULT</span>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', fontWeight: 700 }}>{Math.max(0, Math.floor(vaultHeist - totalPaidHeist)).toLocaleString()} HEIST</span>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fbbf24', boxShadow: '0 0 6px #fbbf24' }} />
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', letterSpacing: '0.05em' }}>DECENTRALIZED VAULT</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#fbbf24', fontWeight: 700 }}>{Math.max(0, Math.floor(vaultHeist - totalPaidHeist)).toLocaleString()} HEIST</span>
         </div>
         {/* Devices */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7', boxShadow: '0 0 6px #a855f7' }} />
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.05em' }}>DEVICES</span>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a855f7', fontWeight: 700 }}>{deviceCount}/20</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', letterSpacing: '0.05em' }}>DEVICES</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#a855f7', fontWeight: 700 }}>{deviceCount}/20</span>
         </div>
         {/* Claimed */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ec4899', boxShadow: '0 0 6px #ec4899' }} />
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.05em' }}>CLAIMED</span>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#ec4899', fontWeight: 700 }}>{winRecords.length}/7 wins</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', letterSpacing: '0.05em' }}>CLAIMED</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#ec4899', fontWeight: 700 }}>{winRecords.length}/7 wins</span>
         </div>
         {/* USDC equivalent */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b' }} />
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.05em' }}>VALUE</span>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f59e0b', fontWeight: 700 }}>${heistRateUsd != null ? (Math.max(0, vaultHeist - totalPaidHeist) * heistRateUsd).toFixed(2) : '—'}</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', letterSpacing: '0.05em' }}>VALUE</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#f59e0b', fontWeight: 700 }}>${heistRateUsd != null ? (Math.max(0, vaultHeist - totalPaidHeist) * heistRateUsd).toFixed(2) : '—'}</span>
         </div>
       </div>
       </div>
@@ -1267,8 +1268,8 @@ const AZ_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
 const NEON_PALETTE = [
   { name: 'Violet', hex: '#a855f7' },
-  { name: 'Blue', hex: '#c084fc' },
-  { name: 'Green', hex: '#b26bff' },
+  { name: 'Blue', hex: '#22d3ee' },
+  { name: 'Green', hex: '#fbbf24' },
   { name: 'Indigo/Cyan', hex: '#06b6d4' },
   { name: 'Orange', hex: '#f59e0b' },
   { name: 'Red', hex: '#ff5c8a' },
@@ -1307,11 +1308,11 @@ function SmallDmTerminal({
 }) {
   const [minimized, setMinimized] = useState(false)
   const [messages, setMessages] = useState<Array<{ sender: string; text: string; color?: string; img?: string; audio?: string }>>([
-    { sender: 'SYSTEM', text: `ENCRYPTED P2P TUNNEL // TARGET: ${targetUser}`, color: '#b26bff' },
+    { sender: 'SYSTEM', text: `ENCRYPTED P2P TUNNEL // TARGET: ${targetUser}`, color: '#fbbf24' },
     { sender: targetUser, text: 'Heist channel secured. Send coordinates.', color: '#ec4899' },
   ])
   const [dmInput, setDmInput] = useState('')
-  const [dmColor, setDmColor] = useState('#b26bff')
+  const [dmColor, setDmColor] = useState('#fbbf24')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -1398,14 +1399,14 @@ function SmallDmTerminal({
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             onClick={() => onToggleBlock(targetUser)}
-            style={{ background: 'transparent', border: 'none', color: isBlocked ? '#a78bfa' : '#ff5c8a', fontSize: 8, cursor: 'pointer' }}
+            style={{ background: 'transparent', border: 'none', color: isBlocked ? '#67e8f9' : '#ff5c8a', fontSize: 8, cursor: 'pointer' }}
             title={isBlocked ? "Unblock User" : "Block User"}
           >
             {isBlocked ? 'UNBLOCK' : 'BLOCK'}
           </button>
           <button
             onClick={() => setMinimized(m => !m)}
-            style={{ background: 'transparent', border: 'none', color: '#b26bff', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}
+            style={{ background: 'transparent', border: 'none', color: '#fbbf24', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}
             title="Minimize"
           >
             {minimized ? '□' : '—'}
@@ -1423,11 +1424,11 @@ function SmallDmTerminal({
       {!minimized && (
         <>
           {/* Chat Messages */}
-          <div ref={listRef} style={{ height: 96, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 5, background: '#0a0612' }}>
+          <div ref={listRef} style={{ height: 96, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 5, background: '#07030c' }}>
             {messages.map((m, i) => (
               <div key={i} style={{ fontSize: 8, lineHeight: 1.4 }}>
-                <span style={{ color: m.color || '#b26bff', fontWeight: 700 }}>[{m.sender}]: </span>
-                <span style={{ color: m.color || '#f8fafc' }}>{m.text}</span>
+                <span style={{ color: m.color || '#fbbf24', fontWeight: 700 }}>[{m.sender}]: </span>
+                <span style={{ color: m.color || '#fdf6e3' }}>{m.text}</span>
                 {m.img && <img src={m.img} alt="" style={{ maxWidth: '100%', maxHeight: 80, borderRadius: 4, marginTop: 4, display: 'block', border: '1px solid #ec4899' }} />}
                 {m.audio && <audio controls src={m.audio} style={{ width: '100%', height: 26, marginTop: 4 }} />}
               </div>
@@ -1469,12 +1470,12 @@ function SmallDmTerminal({
               onKeyDown={e => e.key === 'Enter' && sendDm()}
               placeholder={isBlocked ? "USER BLOCKED" : "SEND ENCRYPTED DM..."}
               disabled={isBlocked}
-              style={{ flex: 1, background: 'transparent', border: 'none', padding: '4px 8px', fontFamily: 'DM Mono,monospace', fontSize: 8, color: dmColor, outline: 'none' }}
+              style={{ flex: 1, background: 'transparent', border: 'none', padding: '4px 8px', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: dmColor, outline: 'none' }}
             />
             <button
               onClick={sendDm}
               disabled={isBlocked}
-              style={{ background: 'rgba(236,72,153,0.2)', border: 'none', borderLeft: '1px solid rgba(236,72,153,0.3)', padding: '4px 8px', color: '#ec4899', cursor: isBlocked ? 'default' : 'pointer', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700 }}
+              style={{ background: 'rgba(236,72,153,0.2)', border: 'none', borderLeft: '1px solid rgba(236,72,153,0.3)', padding: '4px 8px', color: '#ec4899', cursor: isBlocked ? 'default' : 'pointer', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, fontWeight: 700 }}
             >
               TX
             </button>
@@ -1511,19 +1512,19 @@ function MintedConsolesModal({
         maxWidth: 620,
         maxHeight: '85vh',
         background: '#040d18',
-        border: '1px solid #b26bff',
+        border: '1px solid #fbbf24',
         borderRadius: 12,
-        boxShadow: '0 0 40px rgba(178,107,255,0.25)',
+        boxShadow: '0 0 40px rgba(245,158,11,0.25)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
         fontFamily: 'DM Mono, monospace',
       }}>
         {/* Header */}
-        <div style={{ padding: '10px 14px', background: 'rgba(178,107,255,0.12)', borderBottom: '1px solid #b26bff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '10px 14px', background: 'rgba(245,158,11,0.12)', borderBottom: '1px solid #fbbf24', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 14 }}>📟</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#b26bff' }}>MINTED TICKETS TERMINAL [{devices.length} ARMED]</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24' }}>MINTED TICKETS TERMINAL [{devices.length} ARMED]</span>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#ff5c8a', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✕</button>
         </div>
@@ -1531,18 +1532,18 @@ function MintedConsolesModal({
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {devices.length === 0 ? (
-            <div style={{ padding: 30, textAlign: 'center', color: '#a99bc4', fontSize: 11 }}>
-              NO CONSOLES DETECTED. MINT CONSOLES FROM THE VAULT OR ROBINHOOD LOCK PANEL TO INITIATE HACKING MATRIX.
+            <div style={{ padding: 30, textAlign: 'center', color: '#b9a7d6', fontSize: 11 }}>
+              NO TICKETS DETECTED. MINT RAFFLE TICKETS FROM THE VAULT OR ROBINHOOD LOCK PANEL TO ENTER THE SLOT MACHINE.
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
               {devices.map((d, idx) => (
-                <div key={d.id} style={{ background: '#081626', border: '1px solid rgba(178,107,255,0.25)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div key={d.id} style={{ background: '#081626', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: '#b26bff' }}>CONSOLE #{idx + 1} ({d.nftId ? d.nftId.slice(0, 8) : `#DEV-${d.id}`})</span>
-                    <span style={{ fontSize: 8, color: d.active ? '#a78bfa' : '#f59e0b', background: 'rgba(167,139,250,0.1)', padding: '1px 5px', borderRadius: 3 }}>{d.active ? 'ACTIVE' : 'READY'}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#fbbf24' }}>CONSOLE #{idx + 1} ({d.nftId ? d.nftId.slice(0, 8) : `#DEV-${d.id}`})</span>
+                    <span style={{ fontSize: 8, color: d.active ? '#67e8f9' : '#f59e0b', background: 'rgba(103,232,249,0.1)', padding: '1px 5px', borderRadius: 3 }}>{d.active ? 'ACTIVE' : 'READY'}</span>
                   </div>
-                  <div style={{ fontSize: 7, color: '#a99bc4' }}>HASH: {d.walletAddr ? d.walletAddr.slice(0, 16) + '...' : 'LOCAL_STORAGE_NFT'}</div>
+                  <div style={{ fontSize: 7, color: '#b9a7d6' }}>HASH: {d.walletAddr ? d.walletAddr.slice(0, 16) + '...' : 'LOCAL_STORAGE_NFT'}</div>
                   {/* Micro 3x9 Matrix Preview */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 2, background: '#020810', padding: 4, borderRadius: 4 }}>
                     {d.grid.flatMap((row, rIdx) => row.map((cell, cIdx) => (
@@ -1550,14 +1551,14 @@ function MintedConsolesModal({
                         key={`${rIdx}-${cIdx}`}
                         style={{
                           aspectRatio: '1',
-                          background: cell.num ? 'rgba(178,107,255,0.15)' : 'rgba(255,255,255,0.02)',
-                          border: `1px solid ${cell.num ? 'rgba(178,107,255,0.4)' : 'transparent'}`,
+                          background: cell.num ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.02)',
+                          border: `1px solid ${cell.num ? 'rgba(245,158,11,0.4)' : 'transparent'}`,
                           borderRadius: 2,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontSize: 6,
-                          color: cell.num ? '#b26bff' : '#33205e',
+                          color: cell.num ? '#fbbf24' : '#33205e',
                         }}
                       >
                         {cell.num || ''}
@@ -1571,9 +1572,9 @@ function MintedConsolesModal({
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '8px 14px', background: '#020710', borderTop: '1px solid rgba(178,107,255,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 8, color: '#a99bc4' }}>
+        <div style={{ padding: '8px 14px', background: '#020710', borderTop: '1px solid rgba(245,158,11,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 8, color: '#b9a7d6' }}>
           <span>DECENTRALIZED HARDWARE SPECS: 27 NODES · 15 RANDOM SEEDS</span>
-          <button onClick={onClose} style={{ background: 'rgba(178,107,255,0.15)', border: '1px solid #b26bff', color: '#b26bff', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>CLOSE</button>
+          <button onClick={onClose} style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid #fbbf24', color: '#fbbf24', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>CLOSE</button>
         </div>
       </div>
     </div>
@@ -1620,7 +1621,7 @@ function LobbyMapWithOverlays({
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())
   const [operatives, setOperatives] = useState<OperativeUser[]>(INITIAL_OPERATIVES)
   const [showConsolesModal, setShowConsolesModal] = useState(false)
-  const [selectedColor, setSelectedColor] = useState('#b26bff')
+  const [selectedColor, setSelectedColor] = useState('#fbbf24')
   const [quickMintCount, setQuickMintCount] = useState(1)
   const [heistPanelOpen, setHeistPanelOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth > 600 : true)
   const [hudMenuOpen, setHudMenuOpen] = useState(false)
@@ -1705,7 +1706,7 @@ function LobbyMapWithOverlays({
           y1: y,
           x2: 50 + (Math.random() - 0.5) * 40,
           y2: 50 + (Math.random() - 0.5) * 40,
-          color: ['#b26bff', '#c084fc', '#f59e0b', '#ec4899'][Math.floor(Math.random() * 4)],
+          color: ['#fbbf24', '#22d3ee', '#f59e0b', '#ec4899'][Math.floor(Math.random() * 4)],
           opacity: 1,
         }
       ])
@@ -1757,8 +1758,8 @@ function LobbyMapWithOverlays({
       const laserId = Math.random().toString()
       setLasers(prev => [
         ...prev,
-        { id: laserId, x1: 50, y1: 50, x2: 20, y2: 30, color: '#b26bff', opacity: 1 },
-        { id: laserId + '_2', x1: 50, y1: 50, x2: 80, y2: 70, color: '#c084fc', opacity: 1 },
+        { id: laserId, x1: 50, y1: 50, x2: 20, y2: 30, color: '#fbbf24', opacity: 1 },
+        { id: laserId + '_2', x1: 50, y1: 50, x2: 80, y2: 70, color: '#22d3ee', opacity: 1 },
       ])
       setTimeout(() => {
         setLasers(prev => prev.filter(l => !l.id.startsWith(laserId)))
@@ -1769,8 +1770,8 @@ function LobbyMapWithOverlays({
 
   // Chat state
   const [lines, setLines] = useState<Array<{ sender: string; m: string; t?: string; src?: string; audioSrc?: string; color?: string }>>([
-    { sender: 'SYSTEM', m: 'HEIST TERMINAL ACTIVE · DECENTRALIZED VAULT SECURED', t: 'sys', color: '#b26bff' },
-    { sender: 'CIPHER_9', m: 'All 4 hacking consoles deployed and synchronized.', t: 'user', color: '#c084fc' },
+    { sender: 'SYSTEM', m: 'HEIST TERMINAL ACTIVE · DECENTRALIZED VAULT SECURED', t: 'sys', color: '#fbbf24' },
+    { sender: 'CIPHER_9', m: 'All 4 raffle tickets minted and synchronized.', t: 'user', color: '#22d3ee' },
     { sender: 'ZERO_DAY', m: 'Monitoring target bank security node.', t: 'user', color: '#ffd166' },
   ])
   const [input, setInput] = useState('')
@@ -1828,7 +1829,7 @@ function LobbyMapWithOverlays({
   const visibleLines = lines.filter(l => !blockedUsers.has(l.sender))
 
   return (
-    <div className="lobby-map-stage" style={{ position: 'relative', background: '#0a0612', border: '1px solid rgba(178,107,255,0.3)', borderRadius: 12, overflow: 'hidden', minHeight: 560, display: 'flex', flexDirection: 'column' }}>
+    <div className="lobby-map-stage" style={{ position: 'relative', background: '#07030c', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 12, overflow: 'hidden', minHeight: 560, display: 'flex', flexDirection: 'column' }}>
       
       {/* ── Main Map Container (100% Full View Area) ── */}
       <div style={{ position: 'relative', flex: 1, minHeight: 560, width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -1917,8 +1918,8 @@ function LobbyMapWithOverlays({
             {/* Left: Terminal Identity & Live Map Target */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#b26bff', animation: 'ledBlink 1.5s infinite', boxShadow: '0 0 8px #b26bff' }} />
-                <span style={{ fontSize: 10, color: '#b26bff', fontWeight: 700 }}>TERMINAL://GLOBAL_HEIST_HUD</span>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fbbf24', animation: 'ledBlink 1.5s infinite', boxShadow: '0 0 8px #fbbf24' }} />
+                <span style={{ fontSize: 10, color: '#fbbf24', fontWeight: 700 }}>TERMINAL://GLOBAL_HEIST_HUD</span>
               </div>
             </div>
 
@@ -1928,14 +1929,14 @@ function LobbyMapWithOverlays({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                background: 'linear-gradient(90deg, rgba(178,107,255,0.15), rgba(0,184,255,0.15))',
-                border: '1px solid rgba(178,107,255,0.4)',
+                background: 'linear-gradient(90deg, rgba(245,158,11,0.15), rgba(0,184,255,0.15))',
+                border: '1px solid rgba(245,158,11,0.4)',
                 borderRadius: 4,
                 padding: '2px 8px',
                 animation: 'ledBlink 2.5s infinite',
               }}>
                 <span style={{ fontSize: 8 }}>◈</span>
-                <span style={{ fontSize: 7.5, color: '#b26bff', fontWeight: 700 }}>
+                <span style={{ fontSize: 7.5, color: '#fbbf24', fontWeight: 700 }}>
                   [{mintNotifications[0].heistId}] <span style={{ color: '#fff' }}>{mintNotifications[0].username}</span> MINTED <span style={{ color: '#ffd166' }}>{mintNotifications[0].count} TICKETS</span>!
                 </span>
               </div>
@@ -1943,16 +1944,16 @@ function LobbyMapWithOverlays({
 
             {/* Right: Arranged Top Action Icons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              {/* ⚙ OPTIONS Dropdown: Colour / Consoles / Create Room */}
+              {/* ⚙ OPTIONS Dropdown: Colour / Tickets / Create Room */}
               <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => setHudMenuOpen(o => !o)}
                   style={{
                     padding: '8px 10px',
-                    background: hudMenuOpen ? 'rgba(178,107,255,0.2)' : 'rgba(178,107,255,0.12)',
-                    border: '1px solid #b26bff',
+                    background: hudMenuOpen ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.12)',
+                    border: '1px solid #fbbf24',
                     borderRadius: 4,
-                    color: '#b26bff',
+                    color: '#fbbf24',
                     fontSize: 7.5,
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -1967,11 +1968,11 @@ function LobbyMapWithOverlays({
                   ⚙ OPTIONS {hudMenuOpen ? '▴' : '▾'}
                 </button>
                 {hudMenuOpen && (
-                  <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', minWidth: 172, background: 'rgba(3,14,28,0.97)', border: '1px solid rgba(178,107,255,0.4)', borderRadius: 6, boxShadow: '0 10px 30px rgba(0,0,0,0.7)', zIndex: 40, padding: 5, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', minWidth: 172, background: 'rgba(3,14,28,0.97)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 6, boxShadow: '0 10px 30px rgba(0,0,0,0.7)', zIndex: 40, padding: 5, display: 'flex', flexDirection: 'column', gap: 3 }}>
                     {/* Colour */}
                     <div
                       onClick={() => setHudColourOpen(o => !o)}
-                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 7px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 700, color: '#b26bff', background: hudColourOpen ? 'rgba(178,107,255,0.1)' : 'transparent' }}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 7px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 700, color: '#fbbf24', background: hudColourOpen ? 'rgba(245,158,11,0.1)' : 'transparent' }}
                     >
                       <span>🎨 COLOUR</span><span style={{ fontSize: 7 }}>{hudColourOpen ? '▴' : '▾'}</span>
                     </div>
@@ -1997,12 +1998,12 @@ function LobbyMapWithOverlays({
                         ))}
                       </div>
                     )}
-                    {/* Consoles */}
+                    {/* Tickets */}
                     <div
                       onClick={() => { setShowConsolesModal(true); setHudMenuOpen(false) }}
-                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 7px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 700, color: '#c084fc' }}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 7px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 700, color: '#22d3ee' }}
                     >
-                      <span>📟 CONSOLES</span><span style={{ fontSize: 7, color: '#a99bc4' }}>{devices.length}</span>
+                      <span>🎟 TICKETS</span><span style={{ fontSize: 7, color: '#b9a7d6' }}>{devices.length}</span>
                     </div>
                     {/* Create Room */}
                     <div
@@ -2033,9 +2034,9 @@ function LobbyMapWithOverlays({
                   alignItems: 'center',
                   gap: 3,
                 }}
-                title="Enter Hack Matrix"
+                title="Enter the slot machine"
               >
-                <span>◈</span> MATRIX →
+                <span>◈</span> SLOT MACHINE →
               </button>
 
               {/* Heist List toggle — the vertical drawer key on the extreme left edge is the visual control;
@@ -2057,7 +2058,7 @@ function LobbyMapWithOverlays({
                   border: 0,
                 }}
               >
-                👥 HEIST LIST ({operatives.length})
+                👥 TICKET HOLDERS ({operatives.length})
               </button>
             </div>
           </div>
@@ -2091,25 +2092,25 @@ function LobbyMapWithOverlays({
                     WebkitBackdropFilter: 'blur(3px)',
                     padding: '4px 10px',
                     borderRadius: 6,
-                    borderLeft: `2px solid ${l.color || '#b26bff'}`,
+                    borderLeft: `2px solid ${l.color || '#fbbf24'}`,
                     width: 'fit-content',
                     maxWidth: '85%',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
                   }}
                 >
                   {l.t === 'sys' ? (
-                    <span style={{ color: '#b26bff', fontWeight: 700 }}>[SYS_OP] {l.m}</span>
+                    <span style={{ color: '#fbbf24', fontWeight: 700 }}>[SYS_OP] {l.m}</span>
                   ) : (
                     <span>
-                      <strong style={{ color: l.sender === (nickname || 'OPERATIVE').toUpperCase() ? '#b26bff' : '#c084fc' }}>root@{l.sender}:~$ </strong>
-                      <span style={{ color: l.color || '#f8fafc' }}>{l.m}</span>
+                      <strong style={{ color: l.sender === (nickname || 'OPERATIVE').toUpperCase() ? '#fbbf24' : '#22d3ee' }}>root@{l.sender}:~$ </strong>
+                      <span style={{ color: l.color || '#fdf6e3' }}>{l.m}</span>
                     </span>
                   )}
                   {l.src && (
                     <img
                       src={l.src}
                       alt=""
-                      style={{ maxWidth: '100%', maxHeight: 110, borderRadius: 4, marginTop: 4, display: 'block', border: '1px solid rgba(178,107,255,0.3)' }}
+                      style={{ maxWidth: '100%', maxHeight: 110, borderRadius: 4, marginTop: 4, display: 'block', border: '1px solid rgba(245,158,11,0.3)' }}
                     />
                   )}
                   {l.audioSrc && (
@@ -2133,7 +2134,7 @@ function LobbyMapWithOverlays({
                 background: 'rgba(17,24,39, 0.88)',
                 backdropFilter: 'blur(10px)',
                 WebkitBackdropFilter: 'blur(10px)',
-                border: '1px solid rgba(178,107,255,0.3)',
+                border: '1px solid rgba(245,158,11,0.3)',
                 borderRadius: 8,
                 boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
                 zIndex: 20,
@@ -2145,25 +2146,25 @@ function LobbyMapWithOverlays({
               {/* ── Quick Mint Console Tab (Above Heist List) ── */}
               <div style={{
                 padding: '8px 10px',
-                background: 'linear-gradient(180deg, rgba(178,107,255,0.14), rgba(4,18,34,0.95))',
-                borderBottom: '1px solid rgba(178,107,255,0.25)',
+                background: 'linear-gradient(180deg, rgba(245,158,11,0.14), rgba(4,18,34,0.95))',
+                borderBottom: '1px solid rgba(245,158,11,0.25)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 5,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 7.5, fontWeight: 800, color: '#b26bff', letterSpacing: '0.05em' }}>QUICK MINT</span>
+                  <span style={{ fontSize: 7.5, fontWeight: 800, color: '#fbbf24', letterSpacing: '0.05em' }}>QUICK MINT</span>
                   <div style={{ position: 'relative' }}>
                     <button
                       onClick={() => setMintTokenMenuOpen(o => !o)}
                       aria-expanded={mintTokenMenuOpen}
                       aria-label="Select mint token"
-                      style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '7px 8px', borderRadius: 3, border: '1px solid rgba(255,209,102,0.25)', cursor: 'pointer', fontFamily: 'DM Mono,monospace', lineHeight: 1, minHeight: 24 }}
+                      style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '7px 8px', borderRadius: 3, border: '1px solid rgba(255,209,102,0.25)', cursor: 'pointer', fontFamily: "'Share Tech Mono',monospace", lineHeight: 1, minHeight: 24 }}
                     >{mintToken || 'ETH'} ▾</button>
                     {mintTokenMenuOpen && (
-                      <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 3, background: '#0e0819', border: '1px solid rgba(255,209,102,0.35)', borderRadius: 4, zIndex: 60, minWidth: 64, boxShadow: '0 6px 18px rgba(0,0,0,0.6)' }}>
+                      <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 3, background: '#09040e', border: '1px solid rgba(255,209,102,0.35)', borderRadius: 4, zIndex: 60, minWidth: 64, boxShadow: '0 6px 18px rgba(0,0,0,0.6)' }}>
                         {(['ETH', 'USDG', 'USDC', 'USDT', 'X'] as const).map(t => (
-                          <div key={t} onClick={() => { if (setMintToken) setMintToken(t); setMintTokenMenuOpen(false) }} style={{ padding: '3px 8px', fontSize: 7.5, cursor: 'pointer', color: (mintToken || 'ETH') === t ? '#ffd166' : '#a99bc4', fontWeight: (mintToken || 'ETH') === t ? 800 : 400, background: (mintToken || 'ETH') === t ? 'rgba(255,209,102,0.1)' : 'transparent' }}>{t}</div>
+                          <div key={t} onClick={() => { if (setMintToken) setMintToken(t); setMintTokenMenuOpen(false) }} style={{ padding: '3px 8px', fontSize: 7.5, cursor: 'pointer', color: (mintToken || 'ETH') === t ? '#ffd166' : '#b9a7d6', fontWeight: (mintToken || 'ETH') === t ? 800 : 400, background: (mintToken || 'ETH') === t ? 'rgba(255,209,102,0.1)' : 'transparent' }}>{t}</div>
                         ))}
                       </div>
                     )}
@@ -2196,8 +2197,8 @@ function LobbyMapWithOverlays({
                     style={{
                       width: 40,
                       minHeight: 66,
-                      background: '#150d24',
-                      border: '1px solid #b26bff40',
+                      background: '#150c22',
+                      border: '1px solid #fbbf2440',
                       borderLeft: 'none',
                       borderRadius: '0 5px 5px 0',
                       display: 'flex',
@@ -2219,11 +2220,11 @@ function LobbyMapWithOverlays({
                         width: 24,
                         height: 24,
                         padding: 0,
-                        background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
-                        border: '1px solid #b26bff55',
-                        borderTop: '1px solid #b26bffaa',
+                        background: 'linear-gradient(180deg,#2a1a3d,#1d1130)',
+                        border: '1px solid #fbbf2455',
+                        borderTop: '1px solid #fbbf24aa',
                         borderRadius: 3,
-                        color: '#b26bff',
+                        color: '#fbbf24',
                         fontSize: 7,
                         fontWeight: 800,
                         lineHeight: 1,
@@ -2233,7 +2234,7 @@ function LobbyMapWithOverlays({
                         justifyContent: 'center'
                       }}
                     >▲</button>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: '#b26bff', fontFamily: 'DM Mono,monospace', lineHeight: 1 }}>{quickMintCount}</div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#fbbf24', fontFamily: "'Share Tech Mono',monospace", lineHeight: 1 }}>{quickMintCount}</div>
                     <button
                       className="keyboard-key keyboard-key-sm"
                       aria-label="Decrease mint amount"
@@ -2243,11 +2244,11 @@ function LobbyMapWithOverlays({
                         width: 24,
                         height: 24,
                         padding: 0,
-                        background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
-                        border: '1px solid #b26bff55',
-                        borderBottom: '1px solid #b26bffaa',
+                        background: 'linear-gradient(180deg,#2a1a3d,#1d1130)',
+                        border: '1px solid #fbbf2455',
+                        borderBottom: '1px solid #fbbf24aa',
                         borderRadius: 3,
-                        color: '#b26bff',
+                        color: '#fbbf24',
                         fontSize: 7,
                         fontWeight: 800,
                         lineHeight: 1,
@@ -2262,7 +2263,7 @@ function LobbyMapWithOverlays({
               </div>
 
               {/* Heist List Header — search icon swaps the count for an inline search bar */}
-              <div style={{ padding: '4px 6px', background: 'rgba(14,8,25,0.98)', borderBottom: '1px solid rgba(178,107,255,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
+              <div style={{ padding: '4px 6px', background: 'rgba(14,8,25,0.98)', borderBottom: '1px solid rgba(245,158,11,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
                 {operativeSearchOpen ? (
                   <input
                     autoFocus
@@ -2270,16 +2271,16 @@ function LobbyMapWithOverlays({
                     onChange={e => setOperativeSearch(e.target.value)}
                     placeholder="SEARCH OPERATIVE..."
                     onKeyDown={e => { if (e.key === 'Escape') { setOperativeSearchOpen(false); setOperativeSearch('') } }}
-                    style={{ flex: 1, minWidth: 0, background: '#150d24', border: '1px solid #b26bff55', borderRadius: 4, padding: '2px 5px', fontSize: 7.5, fontFamily: 'DM Mono,monospace', color: '#f8fafc', outline: 'none' }}
+                    style={{ flex: 1, minWidth: 0, background: '#150c22', border: '1px solid #fbbf2455', borderRadius: 4, padding: '2px 5px', fontSize: 7.5, fontFamily: "'Share Tech Mono',monospace", color: '#fdf6e3', outline: 'none' }}
                   />
                 ) : (
-                  <span style={{ fontSize: 7.5, fontWeight: 700, color: '#b26bff' }}>◈ HEIST LIST</span>
+                  <span style={{ fontSize: 7.5, fontWeight: 700, color: '#fbbf24' }}>◈ TICKET HOLDERS</span>
                 )}
                 {operativeSearchOpen ? (
                   <button
                     onClick={() => { setOperativeSearchOpen(false); setOperativeSearch('') }}
                     aria-label="Close operative search"
-                    style={{ background: 'transparent', border: '1px solid #241538', borderRadius: 3, padding: '7px 9px', fontSize: 10, lineHeight: 1, color: '#a99bc4', cursor: 'pointer' }}
+                    style={{ background: 'transparent', border: '1px solid #3a2052', borderRadius: 3, padding: '7px 9px', fontSize: 10, lineHeight: 1, color: '#b9a7d6', cursor: 'pointer' }}
                   >✕</button>
                 ) : (
                   <>
@@ -2287,9 +2288,9 @@ function LobbyMapWithOverlays({
                       onClick={() => setOperativeSearchOpen(true)}
                       aria-label="Search operatives"
                       title="Search operatives"
-                      style={{ background: 'rgba(167,139,250,0.12)', border: 'none', borderRadius: 3, padding: '7px 8px', fontSize: 10, lineHeight: 1, color: '#a78bfa', cursor: 'pointer' }}
+                      style={{ background: 'rgba(103,232,249,0.12)', border: 'none', borderRadius: 3, padding: '7px 8px', fontSize: 10, lineHeight: 1, color: '#67e8f9', cursor: 'pointer' }}
                     >🔍</button>
-                    <span style={{ fontSize: 6.5, color: '#a78bfa', background: 'rgba(167,139,250,0.12)', padding: '1px 4px', borderRadius: 3 }}>{operatives.length} ACTIVE</span>
+                    <span style={{ fontSize: 6.5, color: '#67e8f9', background: 'rgba(103,232,249,0.12)', padding: '1px 4px', borderRadius: 3 }}>{operatives.length} ACTIVE</span>
                   </>
                 )}
               </div>
@@ -2318,10 +2319,10 @@ function LobbyMapWithOverlays({
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <div style={{ width: 3.5, height: 3.5, borderRadius: '50%', background: op.status === 'online' ? '#a78bfa' : op.status === 'in_heist' ? '#f59e0b' : '#c084fc', flexShrink: 0 }} />
-                          <span style={{ fontSize: 6.5, fontWeight: 700, color: isBlocked ? '#ff5c8a' : '#f8fafc', textDecoration: isBlocked ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
+                          <div style={{ width: 3.5, height: 3.5, borderRadius: '50%', background: op.status === 'online' ? '#67e8f9' : op.status === 'in_heist' ? '#f59e0b' : '#22d3ee', flexShrink: 0 }} />
+                          <span style={{ fontSize: 6.5, fontWeight: 700, color: isBlocked ? '#ff5c8a' : '#fdf6e3', textDecoration: isBlocked ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
                         </div>
-                        <span style={{ fontSize: 6, color: '#a99bc4', flexShrink: 0 }}>{op.devices} devs</span>
+                        <span style={{ fontSize: 6, color: '#b9a7d6', flexShrink: 0 }}>{op.devices} devs</span>
                       </div>
 
                       {/* Actions: DM & Block (Only visible if selected) */}
@@ -2335,7 +2336,7 @@ function LobbyMapWithOverlays({
                               background: 'rgba(236,72,153,0.15)',
                               border: '1px solid rgba(236,72,153,0.35)',
                               borderRadius: 3,
-                              color: isBlocked ? '#7d6b99' : '#ec4899',
+                              color: isBlocked ? '#9d8bbb' : '#ec4899',
                               fontSize: 6.5,
                               fontWeight: 700,
                               cursor: isBlocked ? 'default' : 'pointer',
@@ -2350,7 +2351,7 @@ function LobbyMapWithOverlays({
                               background: isBlocked ? 'rgba(255,92,138,0.2)' : 'rgba(125,107,153,0.1)',
                               border: `1px solid ${isBlocked ? '#ff5c8a' : 'rgba(125,107,153,0.3)'}`,
                               borderRadius: 3,
-                              color: isBlocked ? '#ff5c8a' : '#7d6b99',
+                              color: isBlocked ? '#ff5c8a' : '#9d8bbb',
                               fontSize: 6.5,
                               fontWeight: 700,
                               cursor: 'pointer',
@@ -2364,7 +2365,7 @@ function LobbyMapWithOverlays({
                   )
                 })}
                 {operatives.filter(op => op.name.toLowerCase().includes(operativeSearch.trim().toLowerCase())).length === 0 && (
-                  <div style={{ textAlign: 'center', fontSize: 7, color: '#a99bc4', padding: '8px 0' }}>NO MATCHING OPERATIVES</div>
+                  <div style={{ textAlign: 'center', fontSize: 7, color: '#b9a7d6', padding: '8px 0' }}>NO MATCHING OPERATIVES</div>
                 )}
                 </div>
                 {/* A–Z quick-jump rail: hover/click a letter to scroll to the first matching operative */}
@@ -2378,7 +2379,7 @@ function LobbyMapWithOverlays({
                     justifyContent: 'center',
                     gap: 0,
                     background: 'rgba(14,8,25,0.98)',
-                    borderLeft: '1px solid rgba(178,107,255,0.15)',
+                    borderLeft: '1px solid rgba(245,158,11,0.15)',
                     padding: '2px 0',
                     overflow: 'hidden',
                   }}
@@ -2394,10 +2395,10 @@ function LobbyMapWithOverlays({
                         fontSize: 5.5,
                         lineHeight: 1,
                         padding: '0.5px 0',
-                        color: '#7d6b99',
+                        color: '#9d8bbb',
                         cursor: 'pointer',
                         userSelect: 'none',
-                        fontFamily: 'DM Mono,monospace',
+                        fontFamily: "'Share Tech Mono',monospace",
                       }}
                     >{L}</span>
                   ))}
@@ -2448,7 +2449,7 @@ function LobbyMapWithOverlays({
             style={{
               display: 'flex',
               alignItems: 'center',
-              borderTop: '1px solid rgba(178,107,255,0.25)',
+              borderTop: '1px solid rgba(245,158,11,0.25)',
               background: 'rgba(17,24,39, 0.85)',
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)',
@@ -2459,9 +2460,9 @@ function LobbyMapWithOverlays({
             <button
               onClick={() => fileRef.current?.click()}
               style={{
-                background: 'rgba(178,107,255,0.08)',
+                background: 'rgba(245,158,11,0.08)',
                 border: 'none',
-                borderRight: '1px solid rgba(178,107,255,0.2)',
+                borderRight: '1px solid rgba(245,158,11,0.2)',
                 padding: '8px 12px',
                 color: '#ffd166',
                 cursor: 'pointer',
@@ -2479,15 +2480,15 @@ function LobbyMapWithOverlays({
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()}
-              placeholder="ENTER TRANSMISSION COMMAND TO GLOBAL HEIST MATRIX..."
+              placeholder="ENTER TRANSMISSION COMMAND TO THE CARNIVAL..."
               className="chat-text-input"
               style={{
                 flex: 1,
                 background: 'rgba(2,8,16,0.6)',
-                border: '1px solid rgba(178,107,255,0.35)',
+                border: '1px solid rgba(245,158,11,0.35)',
                 borderRadius: 6,
                 padding: '8px 12px',
-                fontFamily: 'DM Mono,monospace',
+                fontFamily: "'Share Tech Mono',monospace",
                 fontSize: 8.5,
                 color: selectedColor,
                 outline: 'none',
@@ -2498,14 +2499,14 @@ function LobbyMapWithOverlays({
               disabled={!input.trim()}
               className="chat-send-btn"
               style={{
-                background: input.trim() ? 'linear-gradient(135deg, #39ff14, #00c853)' : 'rgba(178,107,255,0.12)',
+                background: input.trim() ? 'linear-gradient(135deg, #39ff14, #00c853)' : 'rgba(245,158,11,0.12)',
                 border: 'none',
                 borderRadius: 6,
                 padding: '8px 18px',
                 margin: 4,
-                color: input.trim() ? '#fff' : '#7d6b99',
+                color: input.trim() ? '#fff' : '#9d8bbb',
                 cursor: input.trim() ? 'pointer' : 'not-allowed',
-                fontFamily: 'DM Mono,monospace',
+                fontFamily: "'Share Tech Mono',monospace",
                 fontSize: 8.5,
                 fontWeight: 800,
                 letterSpacing: '0.08em',
@@ -2519,7 +2520,7 @@ function LobbyMapWithOverlays({
         </div>
       </div>
 
-      {/* ── Minted Consoles Modal ── */}
+      {/* ── Minted Tickets Modal ── */}
       {showConsolesModal && (
         <MintedConsolesModal
           devices={devices}
@@ -2532,37 +2533,37 @@ function LobbyMapWithOverlays({
         const canCreate = roomName.trim().length >= 2 && /^[A-Za-z0-9]{4}$/.test(roomPasskey) && roomMembers.size > 0
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(1,8,16,0.9)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setCreateRoomOpen(false) }}>
-            <div style={{ background: '#0e0819', border: '1px solid rgba(168,85,247,0.5)', borderRadius: 14, padding: 18, width: '100%', maxWidth: 380, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 0 40px rgba(168,85,247,0.25)', fontFamily: 'DM Mono, monospace' }}>
+            <div style={{ background: '#09040e', border: '1px solid rgba(168,85,247,0.5)', borderRadius: 14, padding: 18, width: '100%', maxWidth: 380, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 0 40px rgba(168,85,247,0.25)', fontFamily: 'DM Mono, monospace' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 800, color: '#a855f7' }}>🔒 CREATE PRIVATE ROOM</span>
-                <button onClick={() => setCreateRoomOpen(false)} style={{ background: '#150d24', border: '1px solid #241538', color: '#a99bc4', borderRadius: 5, padding: '3px 8px', fontSize: 8, cursor: 'pointer' }}>✕</button>
+                <button onClick={() => setCreateRoomOpen(false)} style={{ background: '#150c22', border: '1px solid #3a2052', color: '#b9a7d6', borderRadius: 5, padding: '3px 8px', fontSize: 8, cursor: 'pointer' }}>✕</button>
               </div>
-              <div style={{ fontSize: 8, color: '#a99bc4', marginBottom: 14 }}>Seperate chat window for invited operatives only. Rooms persist until the game ends.</div>
+              <div style={{ fontSize: 8, color: '#b9a7d6', marginBottom: 14 }}>Seperate chat window for invited operatives only. Rooms persist until the game ends.</div>
 
-              <div style={{ fontSize: 8, color: '#b26bff', fontWeight: 700, marginBottom: 5 }}>ROOM NAME</div>
+              <div style={{ fontSize: 8, color: '#fbbf24', fontWeight: 700, marginBottom: 5 }}>ROOM NAME</div>
               <input
                 value={roomName}
                 onChange={e => setRoomName(e.target.value)}
                 placeholder="e.g. VAULT_CREW"
                 maxLength={16}
-                style={{ width: '100%', boxSizing: 'border-box', background: '#150d24', border: '1px solid #241538', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: '#a855f7', outline: 'none', marginBottom: 10 }}
+                style={{ width: '100%', boxSizing: 'border-box', background: '#150c22', border: '1px solid #3a2052', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: '#a855f7', outline: 'none', marginBottom: 10 }}
               />
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                <span style={{ fontSize: 8, color: '#b26bff', fontWeight: 700 }}>PASSKEY (4 CHARS)</span>
-                <span style={{ fontSize: 7, color: '#a99bc4' }}>{roomPasskey.length}/4</span>
+                <span style={{ fontSize: 8, color: '#fbbf24', fontWeight: 700 }}>PASSKEY (4 CHARS)</span>
+                <span style={{ fontSize: 7, color: '#b9a7d6' }}>{roomPasskey.length}/4</span>
               </div>
               <input
                 value={roomPasskey}
                 onChange={e => setRoomPasskey(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4))}
                 placeholder="e.g. X9K2"
-                style={{ width: '100%', boxSizing: 'border-box', background: '#150d24', border: '1px solid #241538', borderRadius: 8, padding: '10px 12px', fontSize: 14, letterSpacing: '0.35em', color: '#ffd166', outline: 'none', marginBottom: 4 }}
+                style={{ width: '100%', boxSizing: 'border-box', background: '#150c22', border: '1px solid #3a2052', borderRadius: 8, padding: '10px 12px', fontSize: 14, letterSpacing: '0.35em', color: '#ffd166', outline: 'none', marginBottom: 4 }}
               />
               {!/^[A-Za-z0-9]{4}$/.test(roomPasskey) && roomPasskey.length > 0 && (
                 <div style={{ fontSize: 7, color: '#ff5c8a', marginBottom: 8 }}>Exactly 4 letters/numbers required</div>
               )}
 
-              <div style={{ fontSize: 8, color: '#b26bff', fontWeight: 700, margin: '10px 0 5px' }}>ALLOWED OPERATIVES ({roomMembers.size} selected)</div>
+              <div style={{ fontSize: 8, color: '#fbbf24', fontWeight: 700, margin: '10px 0 5px' }}>ALLOWED OPERATIVES ({roomMembers.size} selected)</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 150, overflowY: 'auto', marginBottom: 12 }}>
                 {operatives.filter(op => !blockedUsers.has(op.name)).map(op => (
                   <div
@@ -2575,8 +2576,8 @@ function LobbyMapWithOverlays({
                     })}
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: 5, cursor: 'pointer', background: roomMembers.has(op.name) ? 'rgba(168,85,247,0.14)' : 'rgba(10,22,38,0.6)', border: `1px solid ${roomMembers.has(op.name) ? '#a855f7' : 'rgba(51,65,85,0.4)'}` }}
                   >
-                    <span style={{ fontSize: 8, color: roomMembers.has(op.name) ? '#d8b4fe' : '#f8fafc', fontWeight: 700 }}>{op.name}</span>
-                    <span style={{ fontSize: 8, color: roomMembers.has(op.name) ? '#a855f7' : '#a99bc4' }}>{roomMembers.has(op.name) ? '✓ IN' : '+ ADD'}</span>
+                    <span style={{ fontSize: 8, color: roomMembers.has(op.name) ? '#d8b4fe' : '#fdf6e3', fontWeight: 700 }}>{op.name}</span>
+                    <span style={{ fontSize: 8, color: roomMembers.has(op.name) ? '#a855f7' : '#b9a7d6' }}>{roomMembers.has(op.name) ? '✓ IN' : '+ ADD'}</span>
                   </div>
                 ))}
               </div>
@@ -2589,7 +2590,7 @@ function LobbyMapWithOverlays({
                   setHeistPanelOpen(false)
                 }}
                 disabled={!canCreate}
-                style={{ width: '100%', padding: 12, background: canCreate ? 'linear-gradient(135deg,#a855f7,#6d28d9)' : '#150d24', color: canCreate ? '#fff' : '#241538', border: `1px solid ${canCreate ? '#a855f7' : '#241538'}`, borderRadius: 10, fontSize: 11, fontWeight: 800, cursor: canCreate ? 'pointer' : 'default', fontFamily: 'Syne, sans-serif' }}
+                style={{ width: '100%', padding: 12, background: canCreate ? 'linear-gradient(135deg,#a855f7,#6d28d9)' : '#150c22', color: canCreate ? '#fff' : '#3a2052', border: `1px solid ${canCreate ? '#a855f7' : '#3a2052'}`, borderRadius: 10, fontSize: 11, fontWeight: 800, cursor: canCreate ? 'pointer' : 'default', fontFamily: 'Syne, sans-serif' }}
               >
                 🔒 LAUNCH PRIVATE ROOM
               </button>
@@ -2679,15 +2680,15 @@ function ChatTerminal({ nickname }: { nickname: string }) {
   const currentMedia = playing && mediaQueue[playIdx] ? mediaQueue[playIdx] : null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', background: '#0e0819', border: '1px solid #150d24', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ padding: '5px 10px', borderBottom: '1px solid #150d24', fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-        <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#a78bfa', animation: 'dot 1.5s infinite' }} />
+    <div style={{ display: 'flex', flexDirection: 'column', background: '#09040e', border: '1px solid #150c22', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ padding: '5px 10px', borderBottom: '1px solid #150c22', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+        <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#67e8f9', animation: 'dot 1.5s infinite' }} />
         SECURE CHAT
-        {mediaQueue.length > 0 && <span style={{ marginLeft: 'auto', fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f59e0b' }}>▶ {playIdx + 1}/{mediaQueue.length} queued</span>}
+        {mediaQueue.length > 0 && <span style={{ marginLeft: 'auto', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#f59e0b' }}>▶ {playIdx + 1}/{mediaQueue.length} queued</span>}
       </div>
       {/* Media player — sequential queue */}
       {currentMedia && (
-        <div style={{ background: '#070310', borderBottom: '1px solid #150d24', padding: 4 }}>
+        <div style={{ background: '#070310', borderBottom: '1px solid #150c22', padding: 4 }}>
           {currentMedia.type === 'image' ? (
             <img src={currentMedia.src} alt="" onLoad={() => setTimeout(handleMediaEnd, 2000)}
               style={{ width: '100%', maxHeight: 120, objectFit: 'contain', borderRadius: 4, display: 'block' }} />
@@ -2695,26 +2696,26 @@ function ChatTerminal({ nickname }: { nickname: string }) {
             <video ref={videoRef} src={currentMedia.src} autoPlay controls onEnded={handleMediaEnd}
               style={{ width: '100%', maxHeight: 120, borderRadius: 4, display: 'block' }} />
           )}
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f59e0b', padding: '2px 4px' }}>{currentMedia.name} · {playIdx + 1}/{mediaQueue.length}</div>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#f59e0b', padding: '2px 4px' }}>{currentMedia.name} · {playIdx + 1}/{mediaQueue.length}</div>
         </div>
       )}
       <div ref={scrollRef} style={{ height: 200, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 3 }}>
         {lines.map((l, i) => (
           <div key={i}>
             <div style={{
-              fontFamily: 'DM Mono,monospace', fontSize: 8,
-              color: l.t === 'sys' ? '#b26bff' : l.t === 'user' ? '#c084fc' : l.t === 'img' ? '#f59e0b' : '#453071',
+              fontFamily: "'Share Tech Mono',monospace", fontSize: 8,
+              color: l.t === 'sys' ? '#fbbf24' : l.t === 'user' ? '#22d3ee' : l.t === 'img' ? '#f59e0b' : '#453071',
               fontWeight: l.t === 'user' ? 600 : 400
             }}>{l.m}</div>
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', borderTop: '1px solid #150d24' }}>
+      <div style={{ display: 'flex', borderTop: '1px solid #150c22' }}>
         <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={handleFile} style={{ display: 'none' }} />
-        <button onClick={() => fileRef.current?.click()} style={{ background: '#150d24', border: 'none', borderRight: '1px solid #150d24', padding: '6px 9px', color: '#f59e0b', cursor: 'pointer', fontSize: 12 }}>📎</button>
+        <button onClick={() => fileRef.current?.click()} style={{ background: '#150c22', border: 'none', borderRight: '1px solid #150c22', padding: '6px 9px', color: '#f59e0b', cursor: 'pointer', fontSize: 12 }}>📎</button>
         <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder="TYPE MESSAGE..."
-          style={{ flex: 1, background: 'transparent', border: 'none', padding: '6px 7px', fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#c084fc', outline: 'none' }} />
-        <button onClick={send} style={{ background: '#150d24', border: 'none', borderLeft: '1px solid #150d24', padding: '6px 9px', color: '#453071', cursor: 'pointer', fontFamily: 'DM Mono,monospace', fontSize: 8 }}>TX</button>
+          style={{ flex: 1, background: 'transparent', border: 'none', padding: '6px 7px', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#22d3ee', outline: 'none' }} />
+        <button onClick={send} style={{ background: '#150c22', border: 'none', borderLeft: '1px solid #150c22', padding: '6px 9px', color: '#453071', cursor: 'pointer', fontFamily: "'Share Tech Mono',monospace", fontSize: 8 }}>TX</button>
       </div>
     </div>
   )
@@ -2728,27 +2729,27 @@ function GameStats({ devices, calledNums, bankruptCount, liveBank, nickname, win
   const LED_TYPES: WinType[] = ['EARLY_FIVE', 'TOP_LINE', 'MIDDLE_LINE', 'BOTTOM_LINE', 'FULL_HOUSE_1', 'FULL_HOUSE_2', 'FULL_HOUSE_3']
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ background: '#0e0819', border: '1px solid #150d24', borderRadius: 12, padding: 10 }}>
-        <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071', marginBottom: 7 }}>GAME STATS</div>
+      <div style={{ background: '#09040e', border: '1px solid #150c22', borderRadius: 12, padding: 10 }}>
+        <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#453071', marginBottom: 7 }}>GAME STATS</div>
         {[['AGENT', nickname], ['TARGET', BANKS[liveBank].name.split(' ')[0]], ['DRAWN', `${calledNums.size}/90`], ['DEVICES', `${devices.filter(d => d.active).length}/${devices.length}`], ['BANKRUPT', `${bankruptCount}/3`]].map(([k, v]) => (
-          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid #150d24' }}>
-            <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>{k}</span>
-            <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a99bc4', fontWeight: 600 }}>{v}</span>
+          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid #150c22' }}>
+            <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>{k}</span>
+            <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#b9a7d6', fontWeight: 600 }}>{v}</span>
           </div>
         ))}
         {/* Contract address input for HEIST price feed */}
-        <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px solid #150d24' }}>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', marginBottom: 3 }}>HEIST CONTRACT</div>
+        <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px solid #150c22' }}>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', marginBottom: 3 }}>HEIST CONTRACT</div>
           <input value={contractAddr} onChange={e => setContractAddr(e.target.value)}
             placeholder="0x... or token addr"
             style={{
-              width: '100%', background: '#150d24', border: `1px solid ${contractAddr ? '#b26bff40' : '#150d24'}`, borderRadius: 5, padding: '4px 6px',
-              fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', outline: 'none', boxSizing: 'border-box'
+              width: '100%', background: '#150c22', border: `1px solid ${contractAddr ? '#fbbf2440' : '#150c22'}`, borderRadius: 5, padding: '4px 6px',
+              fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#fbbf24', outline: 'none', boxSizing: 'border-box'
             }} />
         </div>
       </div>
-      <div style={{ background: '#0e0819', border: '1px solid #150d24', borderRadius: 10, padding: 10 }}>
-        <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', marginBottom: 7 }}>WIN STATUS</div>
+      <div style={{ background: '#09040e', border: '1px solid #150c22', borderRadius: 10, padding: 10 }}>
+        <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', marginBottom: 7 }}>WIN STATUS</div>
         {LED_TYPES.map(type => <LedProgress key={type} type={type} ws={winStates[type]} devices={devices} />)}
       </div>
     </div>
@@ -2760,15 +2761,15 @@ function NicknameModal({ onConfirm }: { onConfirm: (name: string) => void }) {
   const [name, setName] = useState(''), [err, setErr] = useState('')
   const go = () => { if (name.trim().length < 3) { setErr('Min 3 chars'); return } if (name.trim().length > 16) { setErr('Max 16 chars'); return } onConfirm(name.trim()) }
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'linear-gradient(135deg,#0a0612,#0e0819)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-      <div style={{ background: '#0e0819', border: '1px solid #2e1065', borderRadius: 20, padding: 32, maxWidth: 340, width: '100%', boxShadow: '0 0 60px rgba(178,107,255,0.08)' }}>
-        <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 28, fontWeight: 800, color: '#b26bff', textShadow: '0 0 20px #b26bff60', marginBottom: 4 }}>ROBHIN HEIST</div>
-        <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 9, color: '#453071', letterSpacing: '0.15em', marginBottom: 24 }}>HACK THE BANKS — CLAIM THE DECENTRALIZED VAULT</div>
-        <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 9, color: '#a99bc4', marginBottom: 8 }}>CHOOSE YOUR AGENT NAME</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'linear-gradient(135deg,#07030c,#09040e)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+      <div style={{ background: '#09040e', border: '1px solid #2e1065', borderRadius: 20, padding: 32, maxWidth: 340, width: '100%', boxShadow: '0 0 60px rgba(245,158,11,0.08)' }}>
+        <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 28, fontWeight: 800, color: '#fbbf24', textShadow: '0 0 20px #fbbf2460', marginBottom: 4 }}>ROBHIN HEIST</div>
+        <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 9, color: '#453071', letterSpacing: '0.15em', marginBottom: 24 }}>HACK THE BANKS — CLAIM THE DECENTRALIZED VAULT</div>
+        <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 9, color: '#b9a7d6', marginBottom: 8 }}>CHOOSE YOUR AGENT NAME</div>
         <input autoFocus value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && go()} placeholder="e.g. GHOST_ZERO" maxLength={16}
-          style={{ width: '100%', background: '#150d24', border: '1px solid #241538', borderRadius: 10, padding: '12px 14px', fontFamily: 'DM Mono,monospace', fontSize: 14, color: '#b26bff', outline: 'none', boxSizing: 'border-box', marginBottom: 6, caretColor: '#b26bff' }} />
-        {err && <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#ff5c8a', marginBottom: 8 }}>{err}</div>}
-        <button className="keyboard-key keyboard-key-accent" onClick={go} style={{ width: '100%', borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 6 }}>ENTER THE MATRIX →</button>
+          style={{ width: '100%', background: '#150c22', border: '1px solid #3a2052', borderRadius: 10, padding: '12px 14px', fontFamily: "'Share Tech Mono',monospace", fontSize: 14, color: '#fbbf24', outline: 'none', boxSizing: 'border-box', marginBottom: 6, caretColor: '#fbbf24' }} />
+        {err && <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#ff5c8a', marginBottom: 8 }}>{err}</div>}
+        <button className="keyboard-key keyboard-key-accent" onClick={go} style={{ width: '100%', borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 6 }}>ENTER THE SLOT MACHINE →</button>
       </div>
     </div>
   )
@@ -2801,7 +2802,7 @@ function RoomChatTerminal({
   const [minimized, setMinimized] = useState(false)
   const [messages, setMessages] = useState<RoomMsg[]>(() => roomMsgStore.get(room.id) ?? [
     { sender: 'SYSTEM', text: `PRIVATE ROOM // ${room.name} // KEY: ${room.passkey}`, color: '#a855f7' },
-    { sender: 'SYSTEM', text: `ALLOWED: ${room.members.join(', ')}`, color: '#a99bc4' },
+    { sender: 'SYSTEM', text: `ALLOWED: ${room.members.join(', ')}`, color: '#b9a7d6' },
   ])
   const [roomInput, setRoomInput] = useState('')
   const [roomColor, setRoomColor] = useState('#a855f7')
@@ -2818,7 +2819,7 @@ function RoomChatTerminal({
     const others = room.members.filter(m => m !== sender)
     if (others.length > 0) {
       const responder = others[Math.floor(Math.random() * others.length)]
-      setTimeout(() => setMessages(p => [...p, { sender: responder, text: `[SECURE] Copy that — room "${room.name}" synced.`, color: '#c084fc' }]), 1100)
+      setTimeout(() => setMessages(p => [...p, { sender: responder, text: `[SECURE] Copy that — room "${room.name}" synced.`, color: '#22d3ee' }]), 1100)
     }
   }
 
@@ -2850,10 +2851,10 @@ function RoomChatTerminal({
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <span style={{ fontSize: 9, color: '#a855f7', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>🔒 TERM://ROOM/{room.name}</span>
           <span style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 4px', borderRadius: 3 }}>🔑 {room.passkey}</span>
-          <span style={{ fontSize: 7, color: '#a99bc4' }}>👥 {room.members.length}</span>
+          <span style={{ fontSize: 7, color: '#b9a7d6' }}>👥 {room.members.length}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button onClick={() => setMinimized(m => !m)} style={{ background: 'transparent', border: 'none', color: '#b26bff', fontSize: 11, cursor: 'pointer', fontWeight: 700 }} title="Minimize">{minimized ? '□' : '—'}</button>
+          <button onClick={() => setMinimized(m => !m)} style={{ background: 'transparent', border: 'none', color: '#fbbf24', fontSize: 11, cursor: 'pointer', fontWeight: 700 }} title="Minimize">{minimized ? '□' : '—'}</button>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#ff5c8a', fontSize: 11, cursor: 'pointer', fontWeight: 700 }} title="Close room">✕</button>
         </div>
       </div>
@@ -2861,16 +2862,16 @@ function RoomChatTerminal({
       {!minimized && (
         <>
           {/* Allowed members strip */}
-          <div style={{ padding: '3px 8px', fontSize: 7, color: '#a99bc4', background: 'rgba(5,15,25,0.9)', borderBottom: '1px solid rgba(168,85,247,0.2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ padding: '3px 8px', fontSize: 7, color: '#b9a7d6', background: 'rgba(5,15,25,0.9)', borderBottom: '1px solid rgba(168,85,247,0.2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             ALLOWED: {room.members.join(' · ')}
           </div>
 
           {/* Messages */}
-          <div ref={listRef} style={{ height: 170, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, background: '#0a0612' }}>
+          <div ref={listRef} style={{ height: 170, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, background: '#07030c' }}>
             {messages.map((m, i) => (
               <div key={i} style={{ fontSize: 8, lineHeight: 1.4 }}>
                 <span style={{ color: m.color || '#a855f7', fontWeight: 700 }}>[{m.sender}]: </span>
-                <span style={{ color: m.color || '#f8fafc' }}>{m.text}</span>
+                <span style={{ color: m.color || '#fdf6e3' }}>{m.text}</span>
                 {m.img && <img src={m.img} alt="" style={{ maxWidth: '100%', maxHeight: 80, borderRadius: 4, marginTop: 4, display: 'block', border: '1px solid #a855f7' }} />}
                 {m.audio && <audio controls src={m.audio} style={{ width: '100%', height: 26, marginTop: 4 }} />}
               </div>
@@ -2879,7 +2880,7 @@ function RoomChatTerminal({
 
           {/* Colour strip */}
           <div style={{ display: 'flex', gap: 4, padding: '4px 8px', background: 'rgba(5,15,25,0.9)', borderTop: '1px solid rgba(168,85,247,0.2)', alignItems: 'center' }}>
-            <span style={{ fontSize: 7, color: '#a99bc4' }}>COLOR:</span>
+            <span style={{ fontSize: 7, color: '#b9a7d6' }}>COLOR:</span>
             {NEON_PALETTE.map(p => (
               <div key={p.hex} onClick={() => setRoomColor(p.hex)} title={p.name} style={{ width: 10, height: 10, borderRadius: 2, background: p.hex, cursor: 'pointer', border: roomColor === p.hex ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.15)' }} />
             ))}
@@ -2892,9 +2893,9 @@ function RoomChatTerminal({
               onChange={e => setRoomInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendRoom()}
               placeholder={`MESSAGE #${room.name}...`}
-              style={{ flex: 1, background: 'transparent', border: 'none', padding: '7px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, color: roomColor, outline: 'none', minWidth: 0 }}
+              style={{ flex: 1, background: 'transparent', border: 'none', padding: '7px 9px', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: roomColor, outline: 'none', minWidth: 0 }}
             />
-            <button onClick={sendRoom} style={{ background: 'rgba(168,85,247,0.25)', border: 'none', borderLeft: '1px solid rgba(168,85,247,0.35)', padding: '7px 12px', color: '#d8b4fe', cursor: 'pointer', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700 }}>SEND</button>
+            <button onClick={sendRoom} style={{ background: 'rgba(168,85,247,0.25)', border: 'none', borderLeft: '1px solid rgba(168,85,247,0.35)', padding: '7px 12px', color: '#d8b4fe', cursor: 'pointer', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, fontWeight: 700 }}>SEND</button>
           </div>
         </>
       )}
@@ -2927,27 +2928,27 @@ function MaximizedDevices({ devices, currentNum, clickWindowOpen, calledNums, on
     txRef.current = null; tyRef.current = null
   }
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'linear-gradient(180deg,#0a0612,#0e0819)', zIndex: 100, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+    <div style={{ position: 'fixed', inset: 0, background: 'linear-gradient(180deg,#07030c,#09040e)', zIndex: 100, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 10px', borderBottom: '1px solid #1a1029', background: 'rgba(2,13,26,0.98)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>◈ DEVICES</span>
-          <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#453071' }}>{devices.filter(d => d.active).length}/{devices.length} active</span>
-          {total > 1 && <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#241538' }}>pg {page + 1}/{total}</span>}
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>◈ DEVICES</span>
+          <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#453071' }}>{devices.filter(d => d.active).length}/{devices.length} active</span>
+          {total > 1 && <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#3a2052' }}>pg {page + 1}/{total}</span>}
         </div>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           {total > 1 && Array.from({ length: total }, (_, i) => (
             <button key={i} onClick={() => setPage(i)} style={{
               width: 7, height: 7, borderRadius: '50%', border: 'none', cursor: 'pointer', padding: 0,
-              background: i === page ? '#b26bff' : '#241538', boxShadow: i === page ? '0 0 5px #b26bff' : 'none'
+              background: i === page ? '#fbbf24' : '#3a2052', boxShadow: i === page ? '0 0 5px #fbbf24' : 'none'
             }} />
           ))}
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-            style={{ width: 24, height: 24, borderRadius: 6, background: '#150d24', border: '1px solid #241538', color: page === 0 ? '#241538' : '#a99bc4', cursor: page === 0 ? 'default' : 'pointer', fontFamily: 'DM Mono,monospace', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+            style={{ width: 24, height: 24, borderRadius: 6, background: '#150c22', border: '1px solid #3a2052', color: page === 0 ? '#3a2052' : '#b9a7d6', cursor: page === 0 ? 'default' : 'pointer', fontFamily: "'Share Tech Mono',monospace", fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
           <button onClick={() => setPage(p => Math.min(total - 1, p + 1))} disabled={page >= total - 1}
-            style={{ width: 24, height: 24, borderRadius: 6, background: '#150d24', border: '1px solid #241538', color: page >= total - 1 ? '#241538' : '#a99bc4', cursor: page >= total - 1 ? 'default' : 'pointer', fontFamily: 'DM Mono,monospace', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
-          <button onClick={onClose} style={{ background: '#150d24', border: '1px solid #241538', color: '#a99bc4', borderRadius: 7, padding: '4px 10px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>⊟ EXIT</button>
+            style={{ width: 24, height: 24, borderRadius: 6, background: '#150c22', border: '1px solid #3a2052', color: page >= total - 1 ? '#3a2052' : '#b9a7d6', cursor: page >= total - 1 ? 'default' : 'pointer', fontFamily: "'Share Tech Mono',monospace", fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+          <button onClick={onClose} style={{ background: '#150c22', border: '1px solid #3a2052', color: '#b9a7d6', borderRadius: 7, padding: '4px 10px', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, cursor: 'pointer' }}>⊟ EXIT</button>
         </div>
       </div>
       {/* 2-col grid, 6 devices per page, scrollable */}
@@ -2976,7 +2977,7 @@ function MaximizedDevices({ devices, currentNum, clickWindowOpen, calledNums, on
         </div>
       </div>
       {total > 1 && (
-        <div style={{ textAlign: 'center', padding: '5px', fontFamily: 'DM Mono,monospace', fontSize: 8, color: 'rgba(51,65,85,0.7)', flexShrink: 0 }}>
+        <div style={{ textAlign: 'center', padding: '5px', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: 'rgba(51,65,85,0.7)', flexShrink: 0 }}>
           ← SWIPE OR USE ARROWS TO NAVIGATE ·  6 DEVICES PER PAGE →
         </div>
       )}
@@ -3015,18 +3016,18 @@ function VaultClaimPanel({ wallet, announce }: { wallet: string | null; announce
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 8, color: '#ffd166', fontWeight: 700 }}>⚿ YOUR DECENTRALIZED VAULT CLAIMS</span>
-        {wallet && <span style={{ fontSize: 8, color: '#a99bc4' }}>{wallet.slice(0, 6)}…{wallet.slice(-4)}</span>}
+        {wallet && <span style={{ fontSize: 8, color: '#b9a7d6' }}>{wallet.slice(0, 6)}…{wallet.slice(-4)}</span>}
       </div>
-      {!wallet && <div style={{ fontSize: 8, color: '#2d1f4a', textAlign: 'center', padding: '6px 0' }}>CONNECT A SUI WALLET TO CLAIM</div>}
-      {wallet && !data && <div style={{ fontSize: 8, color: '#2d1f4a', textAlign: 'center', padding: '6px 0' }}>CHECKING CLAIMS…</div>}
+      {!wallet && <div style={{ fontSize: 8, color: '#2a1a3d', textAlign: 'center', padding: '6px 0' }}>CONNECT A SUI WALLET TO CLAIM</div>}
+      {wallet && !data && <div style={{ fontSize: 8, color: '#2a1a3d', textAlign: 'center', padding: '6px 0' }}>CHECKING CLAIMS…</div>}
       {wallet && data && claimable.length === 0 && claimed.length === 0 && (
-        <div style={{ fontSize: 8, color: '#2d1f4a', textAlign: 'center', padding: '6px 0' }}>NO CLAIMABLE WINS RIGHT NOW</div>
+        <div style={{ fontSize: 8, color: '#2a1a3d', textAlign: 'center', padding: '6px 0' }}>NO CLAIMABLE WINS RIGHT NOW</div>
       )}
       {claimable.map((c: any) => (
         <div key={c.winType} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, padding: '5px 7px', background: 'rgba(255,209,102,0.06)', border: '1px solid rgba(255,209,102,0.25)', borderRadius: 5 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 8, fontWeight: 700, color: '#ffd166', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.label}</div>
-            <div style={{ fontSize: 8, color: '#a99bc4' }}>≈ {((c.estPayout || 0) / 1e9).toFixed(4)} SUI</div>
+            <div style={{ fontSize: 8, color: '#b9a7d6' }}>≈ {((c.estPayout || 0) / 1e9).toFixed(4)} SUI</div>
           </div>
           <button onClick={() => claim(c.winType, c.key)} disabled={busy === c.winType} style={{
             flexShrink: 0, padding: '4px 9px', background: busy === c.winType ? '#3a3f2a' : 'linear-gradient(135deg,#f59e0b,#d97706)',
@@ -3037,7 +3038,7 @@ function VaultClaimPanel({ wallet, announce }: { wallet: string | null; announce
       {claimed.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
           {claimed.map((c: any) => (
-            <span key={c.winType} style={{ fontSize: 8, color: '#a78bfa', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 3, padding: '2px 5px' }}>✓ {c.label}</span>
+            <span key={c.winType} style={{ fontSize: 8, color: '#67e8f9', background: 'rgba(103,232,249,0.08)', border: '1px solid rgba(103,232,249,0.2)', borderRadius: 3, padding: '2px 5px' }}>✓ {c.label}</span>
           ))}
         </div>
       )}
@@ -3118,10 +3119,10 @@ function MissionsDemo() {
   const reset = () => { setDrawn([]); setMatched1(new Set()); setMatched2(new Set()); setLog(['⬡ DEMO MODE — Watch 2 devices compete for the vault...']); setWon(null); setRunning(false) }
 
   const renderGrid = (grid: number[][], matched: Set<number>, label: string, color: string) => (
-    <div style={{ background: '#150d24', border: '1px solid ' + (won === label ? color : 'rgba(36,21,56,0.3)'), padding: 12, flex: 1, boxShadow: won === label ? '0 0 20px ' + color + '40' : 'none', transition: 'all 0.3s' }}>
+    <div style={{ background: '#150c22', border: '1px solid ' + (won === label ? color : 'rgba(58,32,82,0.3)'), padding: 12, flex: 1, boxShadow: won === label ? '0 0 20px ' + color + '40' : 'none', transition: 'all 0.3s' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
         <span style={{ fontSize: 10, color, fontWeight: 700 }}>DEVICE {label}</span>
-        <span style={{ fontSize: 9, color: '#7d6b99' }}>{matched.size}/15 matched</span>
+        <span style={{ fontSize: 9, color: '#9d8bbb' }}>{matched.size}/15 matched</span>
       </div>
       {grid.map((row, ri) => (
         <div key={ri} style={{ display: 'flex', gap: 3, marginBottom: 3 }}>
@@ -3131,8 +3132,8 @@ function MissionsDemo() {
             return (<div key={ci} style={{
               flex: 1, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: isMatch ? color + '30' : isLast ? 'rgba(255,255,0,0.15)' : 'rgba(0,0,0,0.4)',
-              border: '1px solid ' + (isMatch ? color : isLast ? '#ffff00' : 'rgba(36,21,56,0.3)'),
-              fontSize: 9, fontWeight: isMatch ? 700 : 400, color: isMatch ? color : cell === 0 ? '#241538' : '#7d6b99',
+              border: '1px solid ' + (isMatch ? color : isLast ? '#ffff00' : 'rgba(58,32,82,0.3)'),
+              fontSize: 9, fontWeight: isMatch ? 700 : 400, color: isMatch ? color : cell === 0 ? '#3a2052' : '#9d8bbb',
               boxShadow: isMatch ? '0 0 8px ' + color + '60' : 'none', transition: 'all 0.2s'
             }}>
               {cell === 0 ? '' : cell}
@@ -3149,38 +3150,38 @@ function MissionsDemo() {
     <div style={{ flex: 1, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>📋 MISSIONS — GAME DEMO</div>
-          <div style={{ fontSize: 9, color: '#7d6b99', marginTop: 2 }}>Watch a live game simulation with 2 devices competing</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fdf6e3' }}>📋 MISSIONS — GAME DEMO</div>
+          <div style={{ fontSize: 9, color: '#9d8bbb', marginTop: 2 }}>Watch a live game simulation with 2 devices competing</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={reset} style={{ padding: '6px 14px', background: 'rgba(36,21,56,0.3)', border: '1px solid rgba(36,21,56,0.5)', color: '#7d6b99', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>RESET</button>
-          <button className="keyboard-key keyboard-key-accent" onClick={runStep} disabled={running || !!won} style={{ padding: '6px 14px', background: running || won ? 'rgba(178,107,255,0.1)' : 'linear-gradient(to bottom,#b26bff 0%,#7c3aed 100%)', color: running || won ? '#7d6b99' : '#000', fontSize: 10, fontWeight: 700, cursor: running || won ? 'default' : 'pointer' }}>
+          <button onClick={reset} style={{ padding: '6px 14px', background: 'rgba(58,32,82,0.3)', border: '1px solid rgba(58,32,82,0.5)', color: '#9d8bbb', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>RESET</button>
+          <button className="keyboard-key keyboard-key-accent" onClick={runStep} disabled={running || !!won} style={{ padding: '6px 14px', background: running || won ? 'rgba(245,158,11,0.1)' : 'linear-gradient(to bottom,#fbbf24 0%,#7c3aed 100%)', color: running || won ? '#9d8bbb' : '#000', fontSize: 10, fontWeight: 700, cursor: running || won ? 'default' : 'pointer' }}>
             {won ? 'GAME OVER' : running ? 'DRAWING...' : '▶ DRAW NUMBER'}
           </button>
         </div>
       </div>
       {drawN && <div style={{ background: 'rgba(47,243,173,0.06)', border: '1px solid rgba(47,243,173,0.2)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 9, color: '#7d6b99' }}>LAST DRAWN</span>
-        <span style={{ fontSize: 28, fontWeight: 800, color: '#b26bff' }}>{drawN}</span>
-        <span style={{ fontSize: 9, color: '#7d6b99' }}>{drawn.length}/90 numbers drawn</span>
-        {won && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: '#b26bff' }}>🏆 DEVICE {won} WINS!</span>}
+        <span style={{ fontSize: 9, color: '#9d8bbb' }}>LAST DRAWN</span>
+        <span style={{ fontSize: 28, fontWeight: 800, color: '#fbbf24' }}>{drawN}</span>
+        <span style={{ fontSize: 9, color: '#9d8bbb' }}>{drawn.length}/90 numbers drawn</span>
+        {won && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: '#fbbf24' }}>🏆 DEVICE {won} WINS!</span>}
       </div>}
       <div style={{ display: 'flex', gap: 12 }}>
-        {renderGrid(GRID1, matched1, 'A', '#b26bff')}
-        {renderGrid(GRID2, matched2, 'B', '#c084fc')}
+        {renderGrid(GRID1, matched1, 'A', '#fbbf24')}
+        {renderGrid(GRID2, matched2, 'B', '#22d3ee')}
       </div>
-      <div style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 12 }}>
-        <div style={{ fontSize: 9, color: '#7d6b99', marginBottom: 8 }}>📡 DRAW LOG</div>
-        {log.map((l, i) => (<div key={i} style={{ fontSize: 9, color: i === 0 ? '#b26bff' : '#453071', padding: '3px 0', borderBottom: '1px solid rgba(10,25,40,0.5)' }}>{l}</div>))}
+      <div style={{ background: '#150c22', border: '1px solid rgba(58,32,82,0.2)', padding: 12 }}>
+        <div style={{ fontSize: 9, color: '#9d8bbb', marginBottom: 8 }}>📡 DRAW LOG</div>
+        {log.map((l, i) => (<div key={i} style={{ fontSize: 9, color: i === 0 ? '#fbbf24' : '#453071', padding: '3px 0', borderBottom: '1px solid rgba(10,25,40,0.5)' }}>{l}</div>))}
       </div>
-      <div style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 12 }}>
-        <div style={{ fontSize: 9, color: '#7d6b99', marginBottom: 8 }}>📖 WIN CONDITIONS</div>
+      <div style={{ background: '#150c22', border: '1px solid rgba(58,32,82,0.2)', padding: 12 }}>
+        <div style={{ fontSize: 9, color: '#9d8bbb', marginBottom: 8 }}>📖 WIN CONDITIONS</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
           {[['EARLY FIVE', 'First 5 cells matched', '10%'], ['TOP LINE', 'All 5 cells in row 1', '10%'], ['MIDDLE LINE', 'All 5 cells in row 2', '10%'], ['BOTTOM LINE', 'All 5 cells in row 3', '10%'], ['BANKRUPT I', 'All 15 cells matched', '15%'], ['BANKRUPT III', '3rd full house', '30%']].map(([name, desc, pct]) => (
-            <div key={name} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(36,21,56,0.2)', padding: '8px 10px' }}>
-              <div style={{ fontSize: 9, color: '#b26bff', fontWeight: 700, marginBottom: 2 }}>{name}</div>
-              <div style={{ fontSize: 8, color: '#7d6b99', marginBottom: 4 }}>{desc}</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#c084fc' }}>{pct} vault</div>
+            <div key={name} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(58,32,82,0.2)', padding: '8px 10px' }}>
+              <div style={{ fontSize: 9, color: '#fbbf24', fontWeight: 700, marginBottom: 2 }}>{name}</div>
+              <div style={{ fontSize: 8, color: '#9d8bbb', marginBottom: 4 }}>{desc}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#22d3ee' }}>{pct} vault</div>
             </div>
           ))}
         </div>
@@ -3237,67 +3238,67 @@ function NetworkHub({ nickname, wallet }: { nickname: string; wallet: string | n
       {/* Left: rooms list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: '#b26bff', fontWeight: 700 }}>🌐 NETWORK ROOMS</span>
-          <button onClick={() => setShowCreate(s => !s)} style={{ fontSize: 9, padding: '4px 8px', background: 'rgba(178,107,255,0.1)', border: '1px solid rgba(178,107,255,0.3)', color: '#b26bff', cursor: 'pointer' }}>+ NEW</button>
+          <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>🌐 NETWORK ROOMS</span>
+          <button onClick={() => setShowCreate(s => !s)} style={{ fontSize: 9, padding: '4px 8px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', cursor: 'pointer' }}>+ NEW</button>
         </div>
-        {showCreate && <div style={{ background: '#150d24', border: '1px solid rgba(178,107,255,0.3)', padding: 10 }}>
-          <input value={newRoom} onChange={e => setNewRoom(e.target.value)} placeholder="Room name..." onKeyDown={e => e.key === 'Enter' && createRoom()} style={{ width: '100%', background: 'transparent', border: 'none', color: '#b26bff', fontSize: 10, outline: 'none', marginBottom: 6, boxSizing: 'border-box' }} />
+        {showCreate && <div style={{ background: '#150c22', border: '1px solid rgba(245,158,11,0.3)', padding: 10 }}>
+          <input value={newRoom} onChange={e => setNewRoom(e.target.value)} placeholder="Room name..." onKeyDown={e => e.key === 'Enter' && createRoom()} style={{ width: '100%', background: 'transparent', border: 'none', color: '#fbbf24', fontSize: 10, outline: 'none', marginBottom: 6, boxSizing: 'border-box' }} />
           <button className="keyboard-key keyboard-key-accent" onClick={createRoom} style={{ width: '100%', padding: '5px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>CREATE ROOM</button>
         </div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflowY: 'auto' }}>
           {rooms.map(r => (
-            <div key={r.id} onClick={() => setActiveRoom(r.id)} style={{ padding: '8px 10px', background: activeRoom === r.id ? 'rgba(178,107,255,0.08)' : 'rgba(0,0,0,0.3)', border: '1px solid ' + (activeRoom === r.id ? 'rgba(178,107,255,0.4)' : 'rgba(36,21,56,0.3)'), cursor: 'pointer', transition: 'all 0.15s' }}>
+            <div key={r.id} onClick={() => setActiveRoom(r.id)} style={{ padding: '8px 10px', background: activeRoom === r.id ? 'rgba(245,158,11,0.08)' : 'rgba(0,0,0,0.3)', border: '1px solid ' + (activeRoom === r.id ? 'rgba(245,158,11,0.4)' : 'rgba(58,32,82,0.3)'), cursor: 'pointer', transition: 'all 0.15s' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 10, color: activeRoom === r.id ? '#b26bff' : '#f8fafc', fontWeight: 700 }}>{r.name}</span>
-                <span style={{ fontSize: 8, color: '#7d6b99' }}>{r.members} online</span>
+                <span style={{ fontSize: 10, color: activeRoom === r.id ? '#fbbf24' : '#fdf6e3', fontWeight: 700 }}>{r.name}</span>
+                <span style={{ fontSize: 8, color: '#9d8bbb' }}>{r.members} online</span>
               </div>
-              <div style={{ fontSize: 8, color: '#7d6b99', marginTop: 2 }}>{r.topic}</div>
+              <div style={{ fontSize: 8, color: '#9d8bbb', marginTop: 2 }}>{r.topic}</div>
             </div>
           ))}
         </div>
         {/* Voice chat controls */}
-        <div style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 10 }}>
-          <div style={{ fontSize: 9, color: '#7d6b99', marginBottom: 8 }}>🎙 VOICE COMMS</div>
+        <div style={{ background: '#150c22', border: '1px solid rgba(58,32,82,0.2)', padding: 10 }}>
+          <div style={{ fontSize: 9, color: '#9d8bbb', marginBottom: 8 }}>🎙 VOICE COMMS</div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-            <button onClick={() => setMuteMic(m => !m)} style={{ flex: 1, padding: '6px 0', background: muteMic ? 'rgba(255,92,138,0.15)' : 'rgba(178,107,255,0.1)', border: '1px solid ' + (muteMic ? 'rgba(255,92,138,0.4)' : 'rgba(178,107,255,0.3)'), color: muteMic ? '#ff5c8a' : '#b26bff', fontSize: 9, cursor: 'pointer' }}>
+            <button onClick={() => setMuteMic(m => !m)} style={{ flex: 1, padding: '6px 0', background: muteMic ? 'rgba(255,92,138,0.15)' : 'rgba(245,158,11,0.1)', border: '1px solid ' + (muteMic ? 'rgba(255,92,138,0.4)' : 'rgba(245,158,11,0.3)'), color: muteMic ? '#ff5c8a' : '#fbbf24', fontSize: 9, cursor: 'pointer' }}>
               {muteMic ? '🎙 MUTED' : '🎙 LIVE'}
             </button>
-            <button onClick={() => setMuteSpeaker(m => !m)} style={{ flex: 1, padding: '6px 0', background: muteSpeaker ? 'rgba(255,92,138,0.15)' : 'rgba(178,107,255,0.1)', border: '1px solid ' + (muteSpeaker ? 'rgba(255,92,138,0.4)' : 'rgba(178,107,255,0.3)'), color: muteSpeaker ? '#ff5c8a' : '#b26bff', fontSize: 9, cursor: 'pointer' }}>
+            <button onClick={() => setMuteSpeaker(m => !m)} style={{ flex: 1, padding: '6px 0', background: muteSpeaker ? 'rgba(255,92,138,0.15)' : 'rgba(245,158,11,0.1)', border: '1px solid ' + (muteSpeaker ? 'rgba(255,92,138,0.4)' : 'rgba(245,158,11,0.3)'), color: muteSpeaker ? '#ff5c8a' : '#fbbf24', fontSize: 9, cursor: 'pointer' }}>
               {muteSpeaker ? '🔇 OFF' : '🔊 ON'}
             </button>
           </div>
-          <button onClick={() => setVoiceConnected(v => !v)} style={{ width: '100%', padding: '6px 0', background: voiceConnected ? 'rgba(255,92,138,0.15)' : 'rgba(178,107,255,0.1)', border: '1px solid ' + (voiceConnected ? 'rgba(255,92,138,0.4)' : 'rgba(178,107,255,0.3)'), color: voiceConnected ? '#ff5c8a' : '#b26bff', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => setVoiceConnected(v => !v)} style={{ width: '100%', padding: '6px 0', background: voiceConnected ? 'rgba(255,92,138,0.15)' : 'rgba(245,158,11,0.1)', border: '1px solid ' + (voiceConnected ? 'rgba(255,92,138,0.4)' : 'rgba(245,158,11,0.3)'), color: voiceConnected ? '#ff5c8a' : '#fbbf24', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
             {voiceConnected ? '📻 DISCONNECT' : '📻 JOIN VOICE'}
           </button>
-          {voiceConnected && <div style={{ marginTop: 6, fontSize: 8, color: '#b26bff', animation: 'ledBlink 1s infinite', textAlign: 'center' }}>● CONNECTED — WALKIE TALKIE ACTIVE</div>}
+          {voiceConnected && <div style={{ marginTop: 6, fontSize: 8, color: '#fbbf24', animation: 'ledBlink 1s infinite', textAlign: 'center' }}>● CONNECTED — WALKIE TALKIE ACTIVE</div>}
         </div>
       </div>
       {/* Right: chat */}
-      <div style={{ display: 'flex', flexDirection: 'column', background: '#150d24', border: '1px solid rgba(36,21,56,0.2)' }}>
-        <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(36,21,56,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: '#b26bff', fontWeight: 700 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', background: '#150c22', border: '1px solid rgba(58,32,82,0.2)' }}>
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(58,32,82,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>
             {activeRoom ? rooms.find(r => r.id === activeRoom)?.name || activeRoom : 'SELECT A ROOM'}
           </span>
-          {activeRoom && <span style={{ fontSize: 9, color: '#7d6b99' }}>{rooms.find(r => r.id === activeRoom)?.members} operatives online</span>}
+          {activeRoom && <span style={{ fontSize: 9, color: '#9d8bbb' }}>{rooms.find(r => r.id === activeRoom)?.members} operatives online</span>}
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {activeRoom ? msgs.map((m, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <div style={{ width: 24, height: 24, background: 'rgba(178,107,255,0.1)', border: '1px solid rgba(178,107,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#b26bff', flexShrink: 0 }}>{m.user[0]}</div>
+              <div style={{ width: 24, height: 24, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#fbbf24', flexShrink: 0 }}>{m.user[0]}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 2 }}>
-                  <span style={{ fontSize: 9, color: '#b26bff', fontWeight: 700 }}>{m.user}</span>
+                  <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 700 }}>{m.user}</span>
                   <span style={{ fontSize: 8, color: '#453071' }}>{fmtTs(m.ts)}</span>
                 </div>
-                <div style={{ fontSize: 10, color: '#f8fafc' }}>{m.text}</div>
+                <div style={{ fontSize: 10, color: '#fdf6e3' }}>{m.text}</div>
               </div>
             </div>
           )) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#453071', fontSize: 10 }}>Select a room to start chatting</div>
           )}
         </div>
-        {activeRoom && <div style={{ padding: 10, borderTop: '1px solid rgba(36,21,56,0.2)', display: 'flex', gap: 8 }}>
-          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMsg()} placeholder="Message..." style={{ flex: 1, background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(36,21,56,0.3)', color: '#f8fafc', fontSize: 10, padding: '6px 10px', outline: 'none' }} />
+        {activeRoom && <div style={{ padding: 10, borderTop: '1px solid rgba(58,32,82,0.2)', display: 'flex', gap: 8 }}>
+          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMsg()} placeholder="Message..." style={{ flex: 1, background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(58,32,82,0.3)', color: '#fdf6e3', fontSize: 10, padding: '6px 10px', outline: 'none' }} />
           <button className="keyboard-key keyboard-key-accent" onClick={sendMsg} style={{ padding: '6px 14px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>SEND</button>
         </div>}
       </div>
@@ -3400,6 +3401,12 @@ function Ransome() {
   const [winRecords, setWinRecords] = useState<WinRecord[]>([])
   const [roundNum, setRoundNum] = useState(0)
   const [contractAddr, setContractAddr] = useState('')
+  // ── Carnival UI state ─────────────────────────────────────────────────────
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+  const [minting, setMinting] = useState(false)
+  const [lastWinAmount, setLastWinAmount] = useState(0)
+  const [claimedUsd, setClaimedUsd] = useState(0)
   // claimers accumulating per round per winType
   const pendingClaimers = useRef<Record<WinType, string[]>>({ EARLY_FIVE: [], TOP_LINE: [], MIDDLE_LINE: [], BOTTOM_LINE: [], FULL_HOUSE_1: [], FULL_HOUSE_2: [], FULL_HOUSE_3: [] })
   const roundTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -3889,6 +3896,27 @@ function Ransome() {
     })
   }, [devices, phase])
 
+  // Carnival auto-mark: the slot machine marks matched numbers for you, so every
+  // matched cell becomes clicked the moment its number is drawn (no click window).
+  useEffect(() => {
+    if (phase !== 'game') return
+    setDevices(ds => {
+      let any = false
+      const next = ds.map(d => {
+        if (!d.active || d.corrupted) return d
+        let changed = false
+        const grid = d.grid.map(row => row.map(c => {
+          if (c.matched && !c.clicked && !c.missed) { changed = true; return { ...c, clicked: true } }
+          return c
+        }))
+        if (!changed) return d
+        any = true
+        return { ...d, grid }
+      })
+      return any ? next : ds
+    })
+  }, [phase, calledNums, devices])
+
   const handleCellClick = (devId: number, r: number, c: number) => {
     if (!clickWindowOpen || !currentNum) return
     setDevices(ds => ds.map(d => {
@@ -4071,6 +4099,12 @@ function Ransome() {
   
   // ─── Mint devices (SUI or Solana) ──────────────────────────────────────
   const mintDevices = async (overrideCount?: number) => {
+    if (minting) return
+    setMinting(true)
+    try { await mintTickets(overrideCount) } finally { setMinting(false) }
+  }
+
+  const mintTickets = async (overrideCount?: number) => {
     const count = overrideCount ?? mintCount
 
     // DEV MODE — local-only mint ONLY when no wallet is connected (pure UI testing)
@@ -4151,7 +4185,10 @@ function Ransome() {
     drawnRef.current = new Set(); drawLockRef.current = false
     pendingAnnounce.current = []; warnedRef.current = false
     stopSessionClock(); setSessionSecs(0)
-    setPhase('game'); startPreGame(60); announce('🔴 HACK IN 60 SECONDS')
+    // every raffle ticket the wallet holds is live for this session
+    setDevices(ds => ds.map(d => ({ ...d, active: true })))
+    setLastWinAmount(0); setClaimedUsd(0)
+    setPhase('game'); startPreGame(60); announce('🎰 ROLLER ARMED — FIRST DRAW IN 60 SECONDS')
   }
   const terminateGame = () => {
     stopMaster(); stopSessionClock()
@@ -4169,18 +4206,18 @@ function Ransome() {
     const indefinite = regPauseEnd === 0
     const timeLeft = indefinite ? null : Math.max(0, regPauseEnd - now)
     return (
-      <div data-theme={theme} style={{ minHeight: '100vh', background: '#0a0612', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div data-theme={theme} style={{ minHeight: '100vh', background: '#07030c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', maxWidth: 500, padding: 40 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🔧</div>
           <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 28, fontWeight: 800, color: '#f59e0b', marginBottom: 12 }}>UNDER CONSTRUCTION</div>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 11, color: '#a99bc4', lineHeight: 1.8, marginBottom: 20 }}>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 11, color: '#b9a7d6', lineHeight: 1.8, marginBottom: 20 }}>
             The game is currently paused for maintenance.
             {!indefinite && timeLeft !== null && (
               <><br />Resuming in: <span style={{ color: '#f59e0b', fontWeight: 700 }}>{fmtTime(Math.ceil(timeLeft / 1000))}</span></>
             )}
             {indefinite && <><br />Please check back later.</>}
           </div>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#241538' }}>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#3a2052' }}>
             ROBHIN HEIST — MAINTENANCE MODE
           </div>
         </div>
@@ -4188,107 +4225,105 @@ function Ransome() {
     )
   }
 
-  if (phase === 'setup') return (
-    <div data-theme={theme} style={{ minHeight: '100vh', background: '#0a0612', position: 'relative', overflow: 'hidden' }}>
-      <div className="skin-aurora" />
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <NicknameModal onConfirm={name => { setNickname(name); setPhase('lobby') }} />
+  // ── CARNIVAL — ticket projections & wallet controls ───────────────────────
+  const vaultUsd = onChainSession?.vaultTotal ?? VAULT_ESTIMATE
+  const lobbyTickets = useMemo(
+    () => devices.map(d => ({ id: d.id, serial: `#${1000 + d.id}`, numbers: ticketNumbers(d) })),
+    [devices]
+  )
+  const machineTickets: MachineTicket[] = useMemo(() => devices.map(d => {
+    const numbers = ticketNumbers(d)
+    const matched = numbers.filter(n => calledNums.has(n))
+    const wt = ticketWinType(d)
+    const st = wt ? winStates[wt] : null
+    const claimable = !!wt && !!st && st.claimable && !st.claimed && !st.expired && !d.claimed.has(wt)
+    return {
+      id: d.id,
+      serial: `#${1000 + d.id}`,
+      numbers,
+      matched,
+      win: !!wt,
+      claimable,
+      prizeLabel: wt ? WIN_LABELS[wt] : undefined,
+      payout: wt ? Math.round(((vaultUsd || 0) * WIN_BPS[wt]) / 10000) : 0,
+    }
+  }), [devices, calledNums, winStates, vaultUsd])
+
+  const claimableCount = machineTickets.filter(t => t.claimable).length
+  const claimableTotal = machineTickets.reduce((s, t) => s + (t.claimable ? (t.payout || 0) : 0), 0)
+
+  // Claim a winning ticket — the split still runs through the existing claim API
+  const handleTicketClaim = (devId: number) => {
+    const d = devices.find(x => x.id === devId)
+    if (!d) return
+    let wt = ticketWinType(d)
+    if (!wt) return
+    if (wt.startsWith('FULL_HOUSE')) {
+      const fh = (['FULL_HOUSE_1', 'FULL_HOUSE_2', 'FULL_HOUSE_3'] as WinType[])
+        .find(k => winStates[k].claimable && !winStates[k].claimed && !winStates[k].expired)
+      if (fh) wt = fh
+    }
+    const payout = Math.round(((vaultUsd || 0) * WIN_BPS[wt]) / 10000)
+    setLastWinAmount(payout)
+    setClaimedUsd(c => c + payout)
+    handleClaim(devId, wt)
+  }
+
+  const walletSlotNode = wallet ? (
+    <>
+      <div className="cv-stat">
+        <span className="cv-stat-k">{chain === 'evm' ? 'EVM' : 'SOL'}</span>
+        <strong className="cv-stat-v">{wallet.slice(0, 4)}…{wallet.slice(-4)}</strong>
+      </div>
+      <button
+        className="cv-icon-btn"
+        title="Disconnect wallet"
+        onClick={() => (chain === 'evm' ? disconnectEvm() : disconnect())}
+      >✕</button>
+    </>
+  ) : null
+
+  const connectSlotNode = (
+    <>
+      {chain !== 'solana' && <button className="cv-btn" onClick={connectEvm}>CONNECT EVM</button>}
+      <WalletMultiButton />
+    </>
+  )
+
+  const devBar = DEV_MODE ? (
+    <div style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 900, display: 'flex', gap: 4 }}>
+      <button onClick={devDrawNext} title="Draw next number now" style={{ background: 'rgba(21,13,36,0.92)', border: '1px solid #22d3ee55', borderRadius: 6, padding: '3px 7px', fontSize: 8, cursor: 'pointer', color: '#22d3ee' }}>⏩ DRAW</button>
+      <button onClick={devSettleNow} title="Settle pending claims now" style={{ background: 'rgba(21,13,36,0.92)', border: '1px solid #f59e0b55', borderRadius: 6, padding: '3px 7px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>⏭ SETTLE</button>
+    </div>
+  ) : null
+
+  if (phase === 'setup' || phase === 'lobby') {
+  if (!mounted) return (
+    <div data-theme={theme} className="cv-shell cv-shell-lobby">
+      <div className="cv-boot">
+        <div className="cv-boot-mark">🎰</div>
+        <div className="cv-boot-title">CARNIVAL</div>
+        <div className="cv-boot-sub">LOADING RAFFLE FLOOR…</div>
       </div>
     </div>
   )
+  return (
+    <div data-theme={theme} className="cv-shell cv-shell-lobby">
+      <CarnivalHeader
+        wallet={wallet}
+        chain={chain}
+        walletSlot={walletSlotNode}
+        connectSlot={connectSlotNode}
+        countdown={lobbyCountdown}
+        vaultTotal={vaultUsd}
+        devMode={DEV_MODE}
+        theme={theme}
+        onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+        onOpenVault={() => setVaultOpen(true)}
+        onToggleMenu={() => setMobileMenuOpen(open => !open)}
+        menuOpen={mobileMenuOpen}
+      />
 
-  // ── LOBBY ─────────────────────────────────────────────────────────────────
-  if (phase === 'lobby') return (
-    <div data-theme={theme} style={{ minHeight: '100vh', background: '#0e0819', color: '#f8fafc', overflow: 'hidden', position: 'relative' }}>
-      <div className="skin-aurora" />
-      <div className="lobby-topbar" style={{ position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 50, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px', background: 'transparent', borderBottom: '1px solid rgba(178,107,255,0.1)', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <button className="mobile-menu-button" onClick={() => setMobileMenuOpen(open => !open)} aria-label={mobileMenuOpen ? 'Close lobby menu' : 'Open lobby menu'} aria-expanded={mobileMenuOpen} title={mobileMenuOpen ? 'Close menu' : 'Open menu'}>
-            <span />
-            <span />
-            <span />
-          </button>          <span className="lobby-logo" style={{ fontSize: 17, fontWeight: 800, color: '#b26bff', whiteSpace: 'nowrap' }}>ROBHIN HEIST</span>
-          <div className="lobby-online-badge" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '2px 8px', whiteSpace: 'nowrap' }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'ledBlink 2s infinite' }} />
-            <span style={{ fontSize: 9, color: '#22c55e', fontWeight: 700 }}>59M</span>
-          </div>
-          {DEV_MODE && <span style={{ fontSize: 9, color: '#f59e0b', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 4, padding: '2px 6px', marginLeft: 8 }}>⚠ DEV MODE</span>}
-        </div>
-        <div className="lobby-topbar-actions" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap' }}>
-          <div style={{ background: 'rgba(24,39,51,0.5)', padding: '4px 10px', border: '1px solid rgba(47,243,173,0.2)', fontSize: 12, color: '#b26bff', fontWeight: 700 }}>{fmtTime(lobbyCountdown)}</div>
-          <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Light / dark mode" style={{ background: '#150d24', border: '1px solid #241538', borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer' }}>{theme === 'dark' ? '☀️' : '🌙'}</button>
-          {/* Chain selector dropdown (replaces the old NOW/+30M/+59M dev boxes) */}
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => setChainMenuOpen(o => !o)} aria-expanded={chainMenuOpen} aria-label="Select chain" style={{ background: '#150d24', border: '1px solid #241538', borderRadius: 6, padding: '4px 8px', fontSize: 9, fontWeight: 700, color: robhinhoodSelected ? '#22c55e' : chain === 'evm' ? '#c084fc' : '#b26bff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              {robhinhoodSelected ? '◉ ROBHINHOOD' : chain === 'evm' ? '◈ EVM' : '◎ SOL'} ▾
-            </button>
-            {chainMenuOpen && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#0e0819', border: '1px solid rgba(178,107,255,0.35)', borderRadius: 6, zIndex: 70, minWidth: 140, boxShadow: '0 6px 18px rgba(0,0,0,0.6)' }}>
-                {([
-                  { id: 'robhinhood', label: '◉ ROBHINHOOD', color: '#22c55e', evmLike: true },
-                  { id: 'evm', label: '◈ EVM', color: '#c084fc', evmLike: true },
-                  { id: 'solana', label: '◎ SOL', color: '#b26bff', evmLike: false },
-                ] as const).map(opt => (
-                  <div
-                    key={opt.id}
-                    onClick={() => {
-                      if (opt.id === 'robhinhood') { setChain('evm'); setRobhinhoodSelected(true) }
-                      else { setRobhinhoodSelected(false); setChain(opt.id as 'solana' | 'evm') }
-                      setChainMenuOpen(false)
-                    }}
-                    style={{ padding: '5px 10px', fontSize: 9, cursor: 'pointer', color: opt.color, fontWeight: (chain === 'evm' && opt.id !== 'solana' ? (opt.id === 'robhinhood' ? robhinhoodSelected : !robhinhoodSelected) : chain === opt.id) ? 800 : 400, background: (chain === 'evm' && opt.id !== 'solana' ? (opt.id === 'robhinhood' ? robhinhoodSelected : !robhinhoodSelected) : chain === opt.id) ? 'rgba(178,107,255,0.12)' : 'transparent' }}
-                  >{opt.label}</div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div style={{ fontSize: 10, color: '#a99bc4', background: '#150d24', border: '1px solid #241538', borderRadius: 6, padding: '4px 8px' }}>👤 {nickname}</div>
-          {/* Governance button */}
-          <a href="/governance" style={{ textDecoration: 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: chain === 'evm' ? 'rgba(168,85,247,0.1)' : 'rgba(178,107,255,0.1)', border: `1px solid ${chain === 'evm' ? 'rgba(168,85,247,0.3)' : 'rgba(178,107,255,0.3)'}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
-              <span style={{ fontSize: 10 }}>🗳</span>
-              <span style={{ fontSize: 8, fontWeight: 700, color: chain === 'evm' ? '#a855f7' : '#b26bff' }}>GOVERN</span>
-              {mtrxDelegated && <span style={{ fontSize: 8, color: '#a78bfa', background: 'rgba(167,139,250,0.15)', borderRadius: 3, padding: '1px 4px' }}>MTRX</span>}
-            </div>
-          </a>
-          {/* Wallet connect (EVM by default — chain selector removed from header) */}
-          {wallet ? (<div style={{ display: 'flex', gap: 6 }}><div style={{ background: '#150d24', border: `1px solid ${chain === 'evm' ? '#c084fc40' : 'rgba(178,107,255,0.25)'}`, borderRadius: 6, padding: '4px 8px', fontSize: 9, color: chain === 'evm' ? '#c084fc' : '#b26bff' }}>{wallet.slice(0, 6)}…{wallet.slice(-4)}</div><button onClick={() => chain === 'evm' ? disconnectEvm() : disconnect()} style={{ background: 'rgba(255,92,138,0.08)', border: '1px solid rgba(255,92,138,0.25)', borderRadius: 6, padding: '4px 8px', fontSize: 9, color: '#ff5c8a', cursor: 'pointer' }}>✕</button></div>) : (
-            chain === 'evm' ? (
-              <div className="evm-connect-wrap" style={{ display: 'flex', gap: 4 }}>
-                <button onClick={connectEvm} className="evm-connect-btn" style={{ background: 'linear-gradient(135deg,#c084fc,#2563eb)', color: '#000', borderRadius: 5, fontSize: 9, fontWeight: 700, lineHeight: 1, height: 24, padding: '0 8px', cursor: 'pointer', border: 'none', whiteSpace: 'nowrap' }}>CONNECT EVM</button>
-                <button onClick={() => setWalletDebug(p => p.length > 0 ? [] : ['Click CONNECT EVM first, then check console (F12)'])} style={{ background: '#150d24', border: '1px solid #c084fc40', borderRadius: 6, padding: '4px 8px', fontSize: 9, color: '#c084fc', cursor: 'pointer', position: 'relative' }} title="Wallet debug">?
-                  {walletDebug.length > 0 && <div style={{ position: 'absolute', top: -4, right: -4, width: 8, height: 8, borderRadius: '50%', background: '#c084fc', fontSize: 8, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{walletDebug.length}</div>}
-                </button>
-              </div>
-            ) : (
-              <WalletMultiButton />
-            )
-          )}
-          {/* Network chip — shows active EVM chain, click to switch (Robinhood / Ethereum / Base / Arbitrum / OP) */}
-          {wallet && chain === 'evm' && (() => {
-            const activeChain = SUPPORTED_EVM_CHAINS[evmChainId ?? 1] || SUPPORTED_EVM_CHAINS[1]
-            return (
-              <div className="eth-chain-chip-wrap" style={{ position: 'relative' }}>
-                <button onClick={() => setEthMenuOpen(o => !o)} aria-expanded={ethMenuOpen} aria-label="Switch network" title="Switch network" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(192,132,252,0.12)', border: '1px solid rgba(192,132,252,0.35)', borderRadius: 6, padding: '4px 8px', fontSize: 9, fontWeight: 700, color: '#c084fc', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                  <span style={{ fontSize: 10 }}>⬡</span> {activeChain.shortName.toUpperCase()} ▾
-                </button>
-                {ethMenuOpen && (
-                  <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, background: '#0e0819', border: '1px solid rgba(178,107,255,0.35)', borderRadius: 6, zIndex: 70, minWidth: 170, boxShadow: '0 6px 18px rgba(0,0,0,0.6)', padding: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {Object.values(SUPPORTED_EVM_CHAINS).filter(c => !c.isTestnet).map(c => {
-                      const isActive = evmChainId === c.id
-                      return (
-                        <div key={c.id} onClick={() => { setEthMenuOpen(false); if (!isActive) switchEvmNetwork(c.id) }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 9, fontWeight: isActive ? 800 : 400, color: isActive ? '#c084fc' : '#a99bc4', background: isActive ? 'rgba(178,107,255,0.12)' : 'transparent' }}>
-                          <span>{c.name}</span>{isActive && <span style={{ color: '#22c55e', fontSize: 8 }}>●</span>}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })()}
-        </div>
-      </div>
       <div className="mobile-vault-status">
         <div className="mobile-vault-heading">
           <span>💎 DECENTRALIZED VAULT</span>
@@ -4312,32 +4347,32 @@ function Ransome() {
       </div>
       {/* Wallet debug panel */}
       {walletDebug.length > 0 && chain === 'evm' && !wallet && (
-        <div style={{ margin: '0 24px', padding: '8px 12px', background: '#0a0f1a', border: '1px solid #c084fc30', borderRadius: 8, maxHeight: 120, overflowY: 'auto' }}>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#c084fc', fontWeight: 700, marginBottom: 4 }}>🔍 WALLET DETECTION LOG</div>
+        <div style={{ margin: '0 24px', padding: '8px 12px', background: '#0a0f1a', border: '1px solid #22d3ee30', borderRadius: 8, maxHeight: 120, overflowY: 'auto' }}>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#22d3ee', fontWeight: 700, marginBottom: 4 }}>🔍 WALLET DETECTION LOG</div>
           {walletDebug.map((line, i) => (
-            <div key={i} style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: line.includes('error') || line.includes('Error') ? '#ff5c8a' : line.includes('CONNECTED') ? '#a78bfa' : '#a99bc4', lineHeight: 1.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div>
+            <div key={i} style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: line.includes('error') || line.includes('Error') ? '#ff5c8a' : line.includes('CONNECTED') ? '#67e8f9' : '#b9a7d6', lineHeight: 1.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div>
           ))}
         </div>
       )}
-      <div style={{ display: 'flex', paddingTop: 48 }}>
-        <div className={`lobby-sidebar${mobileMenuOpen ? ' mobile-open' : ''}`} style={{ width: 200, minHeight: 'calc(100vh - 48px)', background: '#150d24', borderRight: '1px solid rgba(178,107,255,0.08)', display: mobileMenuOpen ? 'block' : 'none', flexDirection: 'column', padding: '16px 0', flexShrink: 0 }}>
+      <div style={{ display: 'flex', paddingTop: 0 }}>
+        <div className={`lobby-sidebar${mobileMenuOpen ? ' mobile-open' : ''}`} style={{ width: 200, minHeight: 'calc(100vh - 48px)', background: '#150c22', borderRight: '1px solid rgba(245,158,11,0.08)', display: mobileMenuOpen ? 'block' : 'none', flexDirection: 'column', padding: '16px 0', flexShrink: 0 }}>
           <div className="lobby-operative" style={{ display: 'none' }}>
-            <div style={{ width: 32, height: 32, background: '#1f1330', border: '1px solid rgba(178,107,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎭</div>
-            <div><div style={{ color: '#b26bff', fontWeight: 700, fontSize: 10 }}>OPERATIVE</div><div style={{ color: '#7d6b99', fontSize: 9 }}>{nickname.slice(0, 10).toUpperCase()}</div></div>
+            <div style={{ width: 32, height: 32, background: '#1d1130', border: '1px solid rgba(245,158,11,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎭</div>
+            <div><div style={{ color: '#fbbf24', fontWeight: 700, fontSize: 10 }}>OPERATIVE</div><div style={{ color: '#9d8bbb', fontSize: 9 }}>{nickname.slice(0, 10).toUpperCase()}</div></div>
           </div>
           {/* Decentralized Vault — mobile only: listed under OPERATIVE (desktop shows the right-extreme vault panel) */}
-          <div className={`sidebar-vault-card${mobileMenuOpen ? '' : ' is-hidden'}`} onClick={() => { setVaultOpen(true); setMobileMenuOpen(false) }} style={{ margin: '0 12px 10px', padding: '8px 10px', cursor: 'pointer', background: '#241538', border: '1px solid rgba(178,107,255,0.14)', borderRadius: 6 }}>
+          <div className={`sidebar-vault-card${mobileMenuOpen ? '' : ' is-hidden'}`} onClick={() => { setVaultOpen(true); setMobileMenuOpen(false) }} style={{ margin: '0 12px 10px', padding: '8px 10px', cursor: 'pointer', background: '#3a2052', border: '1px solid rgba(245,158,11,0.14)', borderRadius: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 11 }}>💎</span>
-              <span style={{ fontSize: 8.5, fontWeight: 700, color: '#f8fafc' }}>DECENTRALIZED VAULT</span>
+              <span style={{ fontSize: 8.5, fontWeight: 700, color: '#fdf6e3' }}>DECENTRALIZED VAULT</span>
             </div>
-            <div style={{ position: 'relative', height: 54, background: '#0e0819', border: '1px solid rgba(36,21,56,0.2)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ position: 'relative', height: 54, background: '#09040e', border: '1px solid rgba(58,32,82,0.2)', borderRadius: 4, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#d3b0ff,#5b21b6)', opacity: 0.2, transition: 'height 1s linear' }} />
               <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill * 1000000)} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-              <span style={{ fontSize: 7, color: '#a99bc4' }}>OPERATIVES <strong style={{ color: '#b26bff' }}>2,104</strong></span>
-              <span style={{ fontSize: 7, color: '#a99bc4' }}>NEXT <strong style={{ color: '#fff' }}>{fmtTime(lobbyCountdown)}</strong></span>
+              <span style={{ fontSize: 7, color: '#b9a7d6' }}>OPERATIVES <strong style={{ color: '#fbbf24' }}>2,104</strong></span>
+              <span style={{ fontSize: 7, color: '#b9a7d6' }}>NEXT <strong style={{ color: '#fff' }}>{fmtTime(lobbyCountdown)}</strong></span>
             </div>
             <div style={{ marginTop: 6, borderTop: '1px solid rgba(255,209,102,0.15)', paddingTop: 5 }}>
               <VaultClaimPanel wallet={wallet} announce={announce} />
@@ -4346,7 +4381,7 @@ function Ransome() {
           {(['HOME', 'VAULT', 'MISSIONS'] as const).map((item, i) => {
             const tab = (['operative', 'vault', 'missions'] as const)[i]
             const active = navTab === tab
-            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { if (tab === 'vault') { setVaultOpen(true) } else { setNavTab(tab); setVaultOpen(false) } setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: (tab === 'vault' ? vaultOpen : navTab === tab) ? '#b26bff' : '#7d6b99', fontWeight: (tab === 'vault' ? vaultOpen : navTab === tab) ? 700 : 400, fontSize: 11, borderRight: (tab === 'vault' ? vaultOpen : navTab === tab) ? '2px solid #b26bff' : 'none', background: (tab === 'vault' ? vaultOpen : navTab === tab) ? 'rgba(178,107,255,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🏠 ', '💎 ', '📋 '][i]}{item}</div>)
+            return (<div className={`lobby-nav-item${mobileMenuOpen ? ' is-open' : ''}`} key={item} onClick={() => { if (tab === 'vault') { setVaultOpen(true) } else { setNavTab(tab); setVaultOpen(false) } setMobileMenuOpen(false) }} style={{ padding: '10px 16px', cursor: 'pointer', color: (tab === 'vault' ? vaultOpen : navTab === tab) ? '#fbbf24' : '#9d8bbb', fontWeight: (tab === 'vault' ? vaultOpen : navTab === tab) ? 700 : 400, fontSize: 11, borderRight: (tab === 'vault' ? vaultOpen : navTab === tab) ? '2px solid #fbbf24' : 'none', background: (tab === 'vault' ? vaultOpen : navTab === tab) ? 'rgba(245,158,11,0.06)' : 'transparent', transition: 'all 0.15s' }}>{['🏠 ', '💎 ', '📋 '][i]}{item}</div>)
           })}
           {/* Quick Mint Panel */}
           {navTab === 'quick-mint' && (
@@ -4355,7 +4390,7 @@ function Ransome() {
               background: 'rgba(17,24,39, 0.88)',
               backdropFilter: 'blur(10px)',
               WebkitBackdropFilter: 'blur(10px)',
-              border: '1px solid rgba(178,107,255,0.3)',
+              border: '1px solid rgba(245,158,11,0.3)',
               borderRadius: 8,
               boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
               zIndex: 20,
@@ -4365,13 +4400,13 @@ function Ransome() {
             }}>
               <div style={{
                 padding: '8px 10px',
-                background: 'linear-gradient(180deg, rgba(178,107,255,0.14), rgba(4,18,34,0.95))',
-                borderBottom: '1px solid rgba(178,107,255,0.25)',
+                background: 'linear-gradient(180deg, rgba(245,158,11,0.14), rgba(4,18,34,0.95))',
+                borderBottom: '1px solid rgba(245,158,11,0.25)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
               }}>
-                <span style={{ fontSize: 8, fontWeight: 700, color: '#b26bff', letterSpacing: '0.05em' }}>QUICK MINT</span>
+                <span style={{ fontSize: 8, fontWeight: 700, color: '#fbbf24', letterSpacing: '0.05em' }}>QUICK MINT</span>
                 <span style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 4px', borderRadius: 3 }}>
                   {mintToken || 'ETH'}
                 </span>
@@ -4394,7 +4429,7 @@ function Ransome() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 6,
-                    boxShadow: '0 4px 20px rgba(178,107,255,0.3)'
+                    boxShadow: '0 4px 20px rgba(245,158,11,0.3)'
                   }}
                 >
                   <span>MINT {mintCount}×</span>
@@ -4408,8 +4443,8 @@ function Ransome() {
                   }}
                   style={{
                     width: 46,
-                    background: '#150d24',
-                    border: '1px solid #b26bff40',
+                    background: '#150c22',
+                    border: '1px solid #fbbf2440',
                     borderRadius: 6,
                     display: 'flex',
                     flexDirection: 'column',
@@ -4430,11 +4465,11 @@ function Ransome() {
                       width: 28,
                       height: 24,
                       padding: 0,
-                      background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
-                      border: '1px solid #b26bff55',
-                      borderTop: '1px solid #b26bffaa',
+                      background: 'linear-gradient(180deg,#2a1a3d,#1d1130)',
+                      border: '1px solid #fbbf2455',
+                      borderTop: '1px solid #fbbf24aa',
                       borderRadius: 4,
-                      color: '#b26bff',
+                      color: '#fbbf24',
                       fontSize: 8,
                       fontWeight: 800,
                       lineHeight: 1,
@@ -4444,7 +4479,7 @@ function Ransome() {
                       justifyContent: 'center'
                     }}
                   >▲</button>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#b26bff', fontFamily: 'DM Mono,monospace', lineHeight: 1 }}>{mintCount}</div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#fbbf24', fontFamily: "'Share Tech Mono',monospace", lineHeight: 1 }}>{mintCount}</div>
                   <button
                     className="keyboard-key keyboard-key-sm"
                     aria-label="Decrease mint amount"
@@ -4454,11 +4489,11 @@ function Ransome() {
                       width: 28,
                       height: 24,
                       padding: 0,
-                      background: 'linear-gradient(180deg,#2d1f4a,#1f1330)',
-                      border: '1px solid #b26bff55',
-                      borderBottom: '1px solid #b26bffaa',
+                      background: 'linear-gradient(180deg,#2a1a3d,#1d1130)',
+                      border: '1px solid #fbbf2455',
+                      borderBottom: '1px solid #fbbf24aa',
                       borderRadius: 4,
-                      color: '#b26bff',
+                      color: '#fbbf24',
                       fontSize: 8,
                       fontWeight: 800,
                       lineHeight: 1,
@@ -4473,7 +4508,7 @@ function Ransome() {
             </div>
           )}
           <div style={{ marginTop: 'auto', padding: '0 12px 16px' }}>
-            <button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER MATRIX</button>
+            <button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '8px 0', fontSize: 10 }}>ENTER SLOT MACHINE</button>
           </div>
         </div>
         {navTab === 'operative' && <div className="lobby-operative-layout" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: 16, alignItems: 'start' }}>
@@ -4500,25 +4535,25 @@ function Ransome() {
             />
           </div>
           {/* Right-extreme Decentralized Vault panel (desktop) */}
-          <div className="lobby-vault-panel hide-on-mobile" style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 13 }}>💎</span><span style={{ fontSize: 11, fontWeight: 700, color: '#f8fafc' }}>DECENTRALIZED VAULT</span></div>
-            <div style={{ position: 'relative', background: '#0e0819', border: '1px solid rgba(36,21,56,0.15)', height: 120, overflow: 'hidden' }}>
+          <div className="lobby-vault-panel hide-on-mobile" style={{ background: '#150c22', border: '1px solid rgba(58,32,82,0.2)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 13 }}>💎</span><span style={{ fontSize: 11, fontWeight: 700, color: '#fdf6e3' }}>DECENTRALIZED VAULT</span></div>
+            <div style={{ position: 'relative', background: '#09040e', border: '1px solid rgba(58,32,82,0.15)', height: 120, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#d3b0ff,#5b21b6)', opacity: 0.2, transition: 'height 1s linear' }} />
               <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill * 1000000)} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#7d6b99' }}>Operatives</div><div style={{ fontSize: 16, fontWeight: 700, color: '#b26bff' }}>2,104</div></div>
-              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#7d6b99' }}>Success</div><div style={{ fontSize: 16, fontWeight: 700, color: '#c084fc' }}>92.4%</div></div>
+              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#9d8bbb' }}>Operatives</div><div style={{ fontSize: 16, fontWeight: 700, color: '#fbbf24' }}>2,104</div></div>
+              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#9d8bbb' }}>Success</div><div style={{ fontSize: 16, fontWeight: 700, color: '#22d3ee' }}>92.4%</div></div>
             </div>
-            {[{ l: 'LAST BREACH', v: '+450 SOL', c: '#b26bff' }, { l: 'THREAT', v: 'LOW', c: '#ff6daf' }].map(r => (<div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: '#1f1330', borderLeft: '2px solid ' + r.c }}><span style={{ fontSize: 8, color: '#a99bc4' }}>{r.l}</span><span style={{ fontSize: 9, color: r.c, fontWeight: 700 }}>{r.v}</span></div>))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'rgba(178,107,255,0.08)', border: '1px solid rgba(178,107,255,0.25)', borderRadius: 6, alignItems: 'center' }}>
-              <span style={{ fontSize: 8, color: '#a99bc4', fontWeight: 700 }}>VALUE ACQUIRED:</span>
-              <span style={{ fontSize: 9, color: '#b26bff', fontWeight: 800 }}>+${(devices.length * 0.50).toFixed(2)} USD</span>
+            {[{ l: 'LAST BREACH', v: '+450 SOL', c: '#fbbf24' }, { l: 'THREAT', v: 'LOW', c: '#ff6daf' }].map(r => (<div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: '#1d1130', borderLeft: '2px solid ' + r.c }}><span style={{ fontSize: 8, color: '#b9a7d6' }}>{r.l}</span><span style={{ fontSize: 9, color: r.c, fontWeight: 700 }}>{r.v}</span></div>))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6, alignItems: 'center' }}>
+              <span style={{ fontSize: 8, color: '#b9a7d6', fontWeight: 700 }}>VALUE ACQUIRED:</span>
+              <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 800 }}>+${(devices.length * 0.50).toFixed(2)} USD</span>
             </div>
             <div style={{ borderTop: '1px solid rgba(255,209,102,0.15)', paddingTop: 8 }}>
               <VaultClaimPanel wallet={wallet} announce={announce} />
             </div>
-            <div style={{ textAlign: 'center', padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + (lobbyCountdown <= 60 ? 'rgba(255,92,138,0.4)' : 'rgba(36,21,56,0.6)'), animation: lobbyCountdown <= 60 ? 'ledBlink 0.8s infinite' : 'none' }}>
+            <div style={{ textAlign: 'center', padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + (lobbyCountdown <= 60 ? 'rgba(255,92,138,0.4)' : 'rgba(58,32,82,0.6)'), animation: lobbyCountdown <= 60 ? 'ledBlink 0.8s infinite' : 'none' }}>
               <div style={{ fontSize: 7.5, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#453071', marginBottom: 2 }}>{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : '⏳ NEXT BATCH'}</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#fff' }}>{fmtTime(lobbyCountdown)}</div>
             </div>
@@ -4527,18 +4562,18 @@ function Ransome() {
         {navTab === 'missions' && <MissionsDemo />}
         {navTab === 'heist' && (
           <div style={{ flex: 1, padding: '20px 16px', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ background: '#150c22', border: '1px solid rgba(58,32,82,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{ fontSize: 14 }}>🕵️</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>OPERATIVES / HEIST LIST</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#fdf6e3' }}>OPERATIVES / TICKET HOLDERS</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {INITIAL_OPERATIVES.map(op => (
-                  <div key={op.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#1f1330', border: '1px solid rgba(178,107,255,0.1)', borderRadius: 4 }}>
+                  <div key={op.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#1d1130', border: '1px solid rgba(245,158,11,0.1)', borderRadius: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div>
                         <div style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>{op.name}</div>
-                        <span style={{ fontSize: 8, color: '#7d6b99' }}>{op.status.toUpperCase()} • LEVEL {op.level} • {op.devices} TICKETS</span>
+                        <span style={{ fontSize: 8, color: '#9d8bbb' }}>{op.status.toUpperCase()} • LEVEL {op.level} • {op.devices} TICKETS</span>
                       </div>
                     </div>
                   </div>
@@ -4549,33 +4584,33 @@ function Ransome() {
         )}
         {navTab === 'vault' && (
           <div style={{ flex: 1, padding: '20px 16px', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="lobby-vault-panel" style={{ background: '#150d24', border: '1px solid rgba(36,21,56,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 14 }}>💎</span><span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>DECENTRALIZED VAULT</span></div>
-              <div style={{ position: 'relative', background: '#0e0819', border: '1px solid rgba(36,21,56,0.15)', minHeight: 180 }}>
+            <div className="lobby-vault-panel" style={{ background: '#150c22', border: '1px solid rgba(58,32,82,0.2)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ fontSize: 14 }}>💎</span><span style={{ fontSize: 14, fontWeight: 700, color: '#fdf6e3' }}>DECENTRALIZED VAULT</span></div>
+              <div style={{ position: 'relative', background: '#09040e', border: '1px solid rgba(58,32,82,0.15)', minHeight: 180 }}>
                 <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#d3b0ff,#5b21b6)', opacity: 0.2, transition: 'height 1s linear' }} />
                 <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill * 1000000)} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#7d6b99' }}>Operatives</div><div style={{ fontSize: 18, fontWeight: 700, color: '#b26bff' }}>2,104</div></div>
-                <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#7d6b99' }}>Success</div><div style={{ fontSize: 18, fontWeight: 700, color: '#c084fc' }}>92.4%</div></div>
+                <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#9d8bbb' }}>Operatives</div><div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24' }}>2,104</div></div>
+                <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#9d8bbb' }}>Success</div><div style={{ fontSize: 18, fontWeight: 700, color: '#22d3ee' }}>92.4%</div></div>
               </div>
-              {[{ l: 'LAST BREACH', v: '+450 SOL', c: '#b26bff' }, { l: 'STABILITY', v: 'OPTIMAL', c: '#c084fc' }, { l: 'THREAT', v: 'LOW', c: '#ff6daf' }].map(r => (<div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: '#1f1330', borderLeft: '2px solid ' + r.c }}><span style={{ fontSize: 8, color: '#a99bc4' }}>{r.l}</span><span style={{ fontSize: 9, color: r.c, fontWeight: 700 }}>{r.v}</span></div>))}
+              {[{ l: 'LAST BREACH', v: '+450 SOL', c: '#fbbf24' }, { l: 'STABILITY', v: 'OPTIMAL', c: '#22d3ee' }, { l: 'THREAT', v: 'LOW', c: '#ff6daf' }].map(r => (<div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: '#1d1130', borderLeft: '2px solid ' + r.c }}><span style={{ fontSize: 8, color: '#b9a7d6' }}>{r.l}</span><span style={{ fontSize: 9, color: r.c, fontWeight: 700 }}>{r.v}</span></div>))}
               {/* Small display reflecting mints acquired value */}
-              <div style={{ padding: '6px 8px', background: 'rgba(178,107,255,0.08)', border: '1px solid rgba(178,107,255,0.25)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 8, color: '#a99bc4', fontWeight: 700 }}>VALUE ACQUIRED:</span>
-                <span style={{ fontSize: 9, color: '#b26bff', fontWeight: 800 }}>+${(devices.length * 0.50).toFixed(2)} USD</span>
+              <div style={{ padding: '6px 8px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 8, color: '#b9a7d6', fontWeight: 700 }}>VALUE ACQUIRED:</span>
+                <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 800 }}>+${(devices.length * 0.50).toFixed(2)} USD</span>
               </div>
               <div style={{ borderTop: '1px solid rgba(255,209,102,0.15)', paddingTop: 8, marginTop: 4 }}>
                 <VaultClaimPanel wallet={wallet} announce={announce} />
               </div>
-              <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + (lobbyCountdown <= 60 ? 'rgba(255,92,138,0.4)' : 'rgba(36,21,56,0.6)'), animation: lobbyCountdown <= 60 ? 'ledBlink 0.8s infinite' : 'none' }}>
+              <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + (lobbyCountdown <= 60 ? 'rgba(255,92,138,0.4)' : 'rgba(58,32,82,0.6)'), animation: lobbyCountdown <= 60 ? 'ledBlink 0.8s infinite' : 'none' }}>
                 <div style={{ fontSize: 8, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#453071', marginBottom: 2 }}>{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : '⏳ NEXT BATCH'}</div>
                 <div style={{ fontSize: 26, fontWeight: 800, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#fff' }}>{fmtTime(lobbyCountdown)}</div>
               </div>
-              <div style={{ textAlign: 'center', fontSize: 8, color: '#2d1f4a' }}>{devices.length > 0 ? (<span style={{ color: '#b26bff' }}>◈ {devices.length} TICKET{devices.length > 1 ? 'S' : ''} READY</span>) : (<span>MINT TO JOIN</span>)}</div>
-              {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>🚀 ENTER HACK MATRIX</button>)}
-              {DEV_MODE && !devices.length && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10 }}>🚀 ENTER HACK MATRIX (DEV)</button>)}
-              {lobbyCountdown > 60 && devices.length > 0 && (<div style={{ textAlign: 'center', fontSize: 8, color: '#2d1f4a' }}>Entry in {fmtTime(lobbyCountdown - 60)}</div>)}
+              <div style={{ textAlign: 'center', fontSize: 8, color: '#2a1a3d' }}>{devices.length > 0 ? (<span style={{ color: '#fbbf24' }}>◈ {devices.length} TICKET{devices.length > 1 ? 'S' : ''} READY</span>) : (<span>MINT TO JOIN</span>)}</div>
+              {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>🚀 ENTER SLOT MACHINE</button>)}
+              {DEV_MODE && !devices.length && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10 }}>🚀 ENTER SLOT MACHINE (DEV)</button>)}
+              {lobbyCountdown > 60 && devices.length > 0 && (<div style={{ textAlign: 'center', fontSize: 8, color: '#2a1a3d' }}>Entry in {fmtTime(lobbyCountdown - 60)}</div>)}
             </div>
           </div>
         )}
@@ -4587,84 +4622,84 @@ function Ransome() {
         className={`vault-slideover${vaultOpen ? ' vault-open' : ''}`}
         style={{
           position: 'fixed', top: 0, right: 0, height: '100vh', width: 'min(380px, 100vw)',
-          background: '#0e0819', borderLeft: '1px solid rgba(178,107,255,0.35)',
+          background: '#09040e', borderLeft: '1px solid rgba(245,158,11,0.35)',
           boxShadow: '-12px 0 40px rgba(0,0,0,0.7)',
           zIndex: 120, display: 'flex', flexDirection: 'column',
           transform: vaultOpen ? 'translateX(0)' : 'translateX(105%)',
           transition: 'transform 0.3s ease',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid rgba(178,107,255,0.15)', flexShrink: 0 }}>
-          <span style={{ fontSize: 12, fontWeight: 800, color: '#b26bff' }}>💎 DECENTRALIZED VAULT</span>
-          <button onClick={() => setVaultOpen(false)} aria-label="Close vault" style={{ background: '#150d24', border: '1px solid #241538', borderRadius: 5, padding: '3px 8px', fontSize: 10, color: '#a99bc4', cursor: 'pointer' }}>✕</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid rgba(245,158,11,0.15)', flexShrink: 0 }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#fbbf24' }}>💎 DECENTRALIZED VAULT</span>
+          <button onClick={() => setVaultOpen(false)} aria-label="Close vault" style={{ background: '#150c22', border: '1px solid #3a2052', borderRadius: 5, padding: '3px 8px', fontSize: 10, color: '#b9a7d6', cursor: 'pointer' }}>✕</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ position: 'relative', background: '#0e0819', border: '1px solid rgba(36,21,56,0.15)', minHeight: 150, overflow: 'hidden' }}>
+          <div style={{ position: 'relative', background: '#09040e', border: '1px solid rgba(58,32,82,0.15)', minHeight: 150, overflow: 'hidden' }}>
             <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: (lobbyFill * 100) + '%', background: 'linear-gradient(180deg,#d3b0ff,#5b21b6)', opacity: 0.2, transition: 'height 1s linear' }} />
             <VaultSketch pct={lobbyFill} paid={Math.round(lobbyFill * 1000000)} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#7d6b99' }}>Operatives</div><div style={{ fontSize: 16, fontWeight: 700, color: '#b26bff' }}>2,104</div></div>
-            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#7d6b99' }}>Success</div><div style={{ fontSize: 16, fontWeight: 700, color: '#c084fc' }}>92.4%</div></div>
+            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#9d8bbb' }}>Operatives</div><div style={{ fontSize: 16, fontWeight: 700, color: '#fbbf24' }}>2,104</div></div>
+            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 8, color: '#9d8bbb' }}>Success</div><div style={{ fontSize: 16, fontWeight: 700, color: '#22d3ee' }}>92.4%</div></div>
           </div>
-          {[{ l: 'LAST BREACH', v: '+450 SOL', c: '#b26bff' }, { l: 'STABILITY', v: 'OPTIMAL', c: '#c084fc' }, { l: 'THREAT', v: 'LOW', c: '#ff6daf' }].map(r => (<div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: '#1f1330', borderLeft: '2px solid ' + r.c }}><span style={{ fontSize: 8, color: '#a99bc4' }}>{r.l}</span><span style={{ fontSize: 9, color: r.c, fontWeight: 700 }}>{r.v}</span></div>))}
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'rgba(178,107,255,0.08)', border: '1px solid rgba(178,107,255,0.25)', borderRadius: 6, alignItems: 'center' }}>
-            <span style={{ fontSize: 8, color: '#a99bc4', fontWeight: 700 }}>VALUE ACQUIRED:</span>
-            <span style={{ fontSize: 9, color: '#b26bff', fontWeight: 800 }}>+${(devices.length * 0.50).toFixed(2)} USD</span>
+          {[{ l: 'LAST BREACH', v: '+450 SOL', c: '#fbbf24' }, { l: 'STABILITY', v: 'OPTIMAL', c: '#22d3ee' }, { l: 'THREAT', v: 'LOW', c: '#ff6daf' }].map(r => (<div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: '#1d1130', borderLeft: '2px solid ' + r.c }}><span style={{ fontSize: 8, color: '#b9a7d6' }}>{r.l}</span><span style={{ fontSize: 9, color: r.c, fontWeight: 700 }}>{r.v}</span></div>))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 8, color: '#b9a7d6', fontWeight: 700 }}>VALUE ACQUIRED:</span>
+            <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 800 }}>+${(devices.length * 0.50).toFixed(2)} USD</span>
           </div>
           <div style={{ borderTop: '1px solid rgba(255,209,102,0.15)', paddingTop: 8 }}>
             <VaultClaimPanel wallet={wallet} announce={announce} />
           </div>
-          <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + (lobbyCountdown <= 60 ? 'rgba(255,92,138,0.4)' : 'rgba(36,21,56,0.6)'), animation: lobbyCountdown <= 60 ? 'ledBlink 0.8s infinite' : 'none' }}>
+          <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + (lobbyCountdown <= 60 ? 'rgba(255,92,138,0.4)' : 'rgba(58,32,82,0.6)'), animation: lobbyCountdown <= 60 ? 'ledBlink 0.8s infinite' : 'none' }}>
             <div style={{ fontSize: 7.5, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#453071', marginBottom: 2 }}>{lobbyCountdown <= 60 ? '🚀 LAUNCHING' : '⏳ NEXT BATCH'}</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: lobbyCountdown <= 60 ? '#ff5c8a' : '#fff' }}>{fmtTime(lobbyCountdown)}</div>
           </div>
-          <div style={{ textAlign: 'center', fontSize: 8, color: '#2d1f4a' }}>{devices.length > 0 ? (<span style={{ color: '#b26bff' }}>◈ {devices.length} TICKET{devices.length > 1 ? 'S' : ''} READY</span>) : (<span>MINT TO JOIN</span>)}</div>
-          {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>🚀 ENTER HACK MATRIX</button>)}
-          {DEV_MODE && !devices.length && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10 }}>🚀 ENTER HACK MATRIX (DEV)</button>)}
+          <div style={{ textAlign: 'center', fontSize: 8, color: '#2a1a3d' }}>{devices.length > 0 ? (<span style={{ color: '#fbbf24' }}>◈ {devices.length} TICKET{devices.length > 1 ? 'S' : ''} READY</span>) : (<span>MINT TO JOIN</span>)}</div>
+          {(DEV_MODE || lobbyCountdown <= 60) && devices.length > 0 && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10, animation: DEV_MODE ? 'none' : 'ledBlink 0.6s infinite' }}>🚀 ENTER SLOT MACHINE</button>)}
+          {DEV_MODE && !devices.length && (<button onClick={enterGame} className="keyboard-key keyboard-key-danger" style={{ width: '100%', padding: '9px 0', fontSize: 10 }}>🚀 ENTER SLOT MACHINE (DEV)</button>)}
         </div>
       </div>
-      <div className="lobby-statusbar" style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', zIndex: 50, height: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', background: '#000', borderTop: '1px solid rgba(178,107,255,0.15)', boxSizing: 'border-box' }}>
-        <span style={{ fontSize: 9, color: 'rgba(178,107,255,0.6)' }}>SYSTEM_BREACH_LOGS v2.4.0 · ACCESSING_NODE_01...</span>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#b26bff', animation: 'ledBlink 2s infinite' }} /><span style={{ fontSize: 9, color: '#b26bff' }}>SECURE_TUNNEL_ACTIVE</span></div>
+      <div className="lobby-statusbar" style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', zIndex: 50, height: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', background: '#000', borderTop: '1px solid rgba(245,158,11,0.15)', boxSizing: 'border-box' }}>
+        <span style={{ fontSize: 9, color: 'rgba(245,158,11,0.6)' }}>SYSTEM_BREACH_LOGS v2.4.0 · ACCESSING_NODE_01...</span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fbbf24', animation: 'ledBlink 2s infinite' }} /><span style={{ fontSize: 9, color: '#fbbf24' }}>SECURE_TUNNEL_ACTIVE</span></div>
       </div>
       {showEndScreen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(1,8,16,0.96)', zIndex: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 20 }}>
-          <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 28, fontWeight: 800, color: '#b26bff', textShadow: '0 0 30px #b26bff80', textAlign: 'center' }}>
+          <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 28, fontWeight: 800, color: '#fbbf24', textShadow: '0 0 30px #fbbf2480', textAlign: 'center' }}>
             {bankruptCount >= 3 ? '🏆 ALL RANSOMS CLAIMED' : '🚨 DECENTRALIZED VAULT HIJACKED'}
           </div>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 9, color: '#453071', letterSpacing: '0.1em' }}>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 9, color: '#453071', letterSpacing: '0.1em' }}>
             SESSION SUMMARY — RETURNING TO LOBBY
           </div>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#ffd166', letterSpacing: '0.08em' }}>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#ffd166', letterSpacing: '0.08em' }}>
             ⚿ WINS HELD IN DECENTRALIZED VAULT — CLAIM BEFORE NEXT ROUND (⚿ key on RANSOM button)
           </div>
-          <div style={{ width: '100%', maxWidth: 480, background: '#0e0819', border: '1px solid #2e1065', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ width: '100%', maxWidth: 480, background: '#09040e', border: '1px solid #2e1065', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {winRecords.length > 0 ? (
               winRecords.map((r, i) => (
-                <div key={i} style={{ borderBottom: '1px solid #150d24', paddingBottom: 6, marginBottom: 2 }}>
-                  <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: LED_COLORS[r.wt], marginBottom: 3 }}>
+                <div key={i} style={{ borderBottom: '1px solid #150c22', paddingBottom: 6, marginBottom: 2 }}>
+                  <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: LED_COLORS[r.wt], marginBottom: 3 }}>
                     {WIN_LABELS[r.wt]} — Round {r.round}
                   </div>
                   {r.claimers.map((cl, j) => (
                     <div key={j} style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 8px' }}>
-                      <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a99bc4' }}>{cl}</span>
-                      <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f59e0b' }}>{r.heistEach} HEIST</span>
+                      <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#b9a7d6' }}>{cl}</span>
+                      <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#f59e0b' }}>{r.heistEach} HEIST</span>
                     </div>
                   ))}
                 </div>
               ))
             ) : (
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', textAlign: 'center', padding: 12 }}>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', textAlign: 'center', padding: 12 }}>
                 No ransoms claimed — vault transferred to treasury
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 4, borderTop: '1px solid #2e1065' }}>
-              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a' }}>TOTAL CLAIMED</span>
-              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', fontWeight: 700 }}>${(winRecords.reduce((s, r) => s + r.split * r.claimers.length, 0) / 1000).toFixed(0)}K</span>
+              <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>TOTAL CLAIMED</span>
+              <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#fbbf24', fontWeight: 700 }}>${(winRecords.reduce((s, r) => s + r.split * r.claimers.length, 0) / 1000).toFixed(0)}K</span>
             </div>
           </div>
-          <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', animation: 'ledBlink 1s infinite' }}>
+          <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d', animation: 'ledBlink 1s infinite' }}>
             ⬡ ALL DEVICES DEACTIVATED — WIPING SESSION DATA…
           </div>
         </div>
@@ -4675,315 +4710,47 @@ function Ransome() {
         <RoomChatTerminal key={room.id} room={room} nickname={nickname} fixed cascadeIndex={i} onClose={() => setChatRooms(p => p.filter(r => r.id !== room.id))} />
       ))}
       {announcement && (
-        <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: '#0e0819', border: '1px solid #b26bff40', borderRadius: 10, padding: '10px 18px', fontFamily: 'DM Mono,monospace', fontSize: 10, color: '#b26bff', zIndex: 999, whiteSpace: 'pre', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', maxWidth: '90vw' }}>
+        <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: '#09040e', border: '1px solid #fbbf2440', borderRadius: 10, padding: '10px 18px', fontFamily: "'Share Tech Mono',monospace", fontSize: 10, color: '#fbbf24', zIndex: 999, whiteSpace: 'pre', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', maxWidth: '90vw' }}>
           {announcement}
         </div>
       )}
+      {devBar}
     </div>
   )
+  }
 
-  // ── GAME SCREEN ──────────────────────────────────────────────────────────
-  const paidHeistTotal = winRecords.reduce((s, r) => s + r.split * r.claimers.length, 0) // total HEIST paid out (arena claim frame)
-  if (devicesExpanded) return (
-    <MaximizedDevices devices={devices} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
-      calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim} onActivate={handleActivate}
-      winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer}
-      liveBank={liveBank} onClose={() => setDevicesExpanded(false)} onOpenVault={() => setShowVaultClaim(true)} />
-  )
-
+  // ── CARNIVAL SLOT MACHINE ARENA (ticket holders only) ────────────────────
+  const prevNum = calledOrder.length > 1 ? calledOrder[calledOrder.length - 2] : null
   return (
-    <div data-theme={theme} style={{ background: 'linear-gradient(180deg,#0a0612,#0e0819)', color: '#f1f5f9', minHeight: '100vh', position: 'relative', paddingTop: 4 }}>
-      <div className="skin-aurora" />
-      {/* Matrix arena: header strip REMOVED (2026-10-12) — session identity now lives in
-          the live display's status rails; wallet controls remain in the lobby + vault modal.
-          Keep DEV jump controls + announcement anchor offsets unchanged. */}
-      {DEV_MODE && (
-        <div style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 900, display: 'flex', gap: 4 }}>
-          <button onClick={devDrawNext} title="Draw next on-chain number now" style={{ background: 'rgba(21,13,36,0.9)', border: '1px solid #c084fc55', borderRadius: 6, padding: '3px 7px', fontSize: 8, cursor: 'pointer', color: '#c084fc' }}>⏩ DRAW</button>
-          <button onClick={devSettleNow} title="Settle pending claims now (check wallet split)" style={{ background: 'rgba(21,13,36,0.9)', border: '1px solid #f59e0b55', borderRadius: 6, padding: '3px 7px', fontSize: 8, cursor: 'pointer', color: '#f59e0b' }}>⏭ SETTLE</button>
-        </div>
-      )}
-
-      {/* ════ MATRIX ARENA — PNG-free glass console deck (2026-10-12) ────
-          Old: /new_matrix.png chassis + pixel-mapped overlays + app-header.
-          New: large live NUMBER display + 60s countdown chip + keypad deck +
-          CLAIM frame. No header strip — status lives in the display. */}
-      <div style={{ margin: '10px 12px 0', display: 'flex', justifyContent: 'center' }}>
-        <div className="md-claim-frame" style={{
-          position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(0,255,65,0.30)',
-          boxShadow: '0 0 22px rgba(0,255,65,0.18),0 0 60px rgba(0,120,30,0.10),inset 0 0 60px rgba(0,0,0,0.55)',
-          background: 'linear-gradient(180deg,rgba(3,10,6,0.94),rgba(1,4,2,0.97))',
-          backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
-          maxWidth: 1180, width: '100%', padding: 10, display: 'flex', flexDirection: 'column',
-          gap: 8, containerType: 'inline-size'
-        }}>
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.10) 2px,rgba(0,0,0,0.10) 4px)', pointerEvents: 'none', zIndex: 1, borderRadius: 20 }} />
-          {/* corner sweep LEDs */}
-          {(['tl', 'tr', 'bl', 'br'] as const).map(corner => (
-            <div key={corner} className={`corner-led corner-led-${corner}`} style={{ position: 'absolute', zIndex: 1, width: 9, height: 9, borderRadius: '50%', border: '1px solid rgba(168,85,247,0.35)' }} />
-          ))}
-          {/* ════ CARNIVAL SLOT MACHINE — dual rollers wired to the live draw ════ */}
-          <div style={{ position: 'relative', zIndex: 2 }}>
-            <SlotMachine
-              currentNum={currentNum}
-              prev5={Array.from(calledNums).slice(-6, -1).reverse()}
-              drawn={calledNums.size}
-              timer={timer}
-              preGameSecs={preGameSecs}
-              clickWindowOpen={clickWindowOpen}
-              liveBank={liveBank}
-              bankName={BANKS[liveBank]?.name ?? 'Carnival'}
-              winStates={winStates}
-              claimedWins={winRecords.length}
-            />
-          </div>
-          {/* RACK PAGINATION — 10 consoles per page (5 rows × 2 side-by-side) */}
-          <div style={{ position: 'relative', zIndex: 3, display: 'flex', gap: 6, alignItems: 'center', padding: '2px 2px 0' }}>
-            <button onClick={() => setRackPage(p => Math.max(0, p - 1))} disabled={rackPageSafe === 0} className="keyboard-key keyboard-key-sm" style={{ borderRadius: 6, padding: '2px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, opacity: rackPageSafe === 0 ? 0.4 : 1, cursor: rackPageSafe === 0 ? 'default' : 'pointer' }}>
-              ◀ PREV
-            </button>
-            {[...Array(rackPageCount)].map((_, i) => (
-              <button key={`pg-${i}`} onClick={() => setRackPage(i)} title={`Console matrix page ${i + 1}`} style={{
-                width: 18, height: 12, borderRadius: 3, cursor: 'pointer', padding: 0,
-                background: i === rackPageSafe ? 'linear-gradient(90deg,rgba(0,255,65,0.55),rgba(255,51,51,0.35))' : 'rgba(6,14,8,0.85)',
-                border: `1px solid ${i === rackPageSafe ? 'rgba(0,255,65,0.85)' : 'rgba(18,52,28,0.9)'}`,
-                boxShadow: i === rackPageSafe ? '0 0 7px rgba(0,255,65,0.6)' : 'none'
-              }} />
-            ))}
-            <button onClick={() => setRackPage(p => Math.min(rackPageCount - 1, p + 1))} disabled={rackPageSafe >= rackPageCount - 1} className="keyboard-key keyboard-key-sm" style={{ borderRadius: 6, padding: '2px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700, opacity: rackPageSafe >= rackPageCount - 1 ? 0.4 : 1, cursor: rackPageSafe >= rackPageCount - 1 ? 'default' : 'pointer' }}>
-              NEXT ▶
-            </button>
-            <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 7, fontWeight: 700, color: '#66ff8a', textShadow: '0 0 5px rgba(0,255,65,0.55)', letterSpacing: '0.14em' }}>
-              PAGE {rackPageSafe + 1}/{rackPageCount} · {rackPageSafe * RACK_PAGE_SIZE + 1}–{Math.min(devices.length, (rackPageSafe + 1) * RACK_PAGE_SIZE)} OF {devices.length}
-            </span>
-          </div>
-          {/* ════ RACK CONTROL BAR — sits ABOVE the console rack (2026-10-12) ════
-              ACTIVATE ALL (kept from the old legacy toolbar) + AUTO MATRIX golden
-              master key. Auto mode is server-authoritative via /api/auto-play:
-              the client never claims wins on its own hook — the backend sequence
-              mirrors the normal per-cell click validation (window open, number
-              match, not-yet-clicked) and the same claim debounce still runs. */}
-          <div style={{ position: 'relative', zIndex: 3, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '2px 2px 0' }}>
-            <button onClick={handleActivateAll} className="keyboard-key keyboard-key-sm" style={{ borderRadius: 6, padding: '4px 10px', fontFamily: 'DM Mono,monospace', fontSize: 8, fontWeight: 700 }}>
-              ◈ ACTIVATE ALL
-            </button>
-            <button
-              onClick={handleToggleAutoPlay}
-              title={autoPlay ? 'AUTO MATRIX engaged — consoles match the live draw every window' : 'Engage AUTO MATRIX — consoles click matching numbers automatically (server-verified)'}
-              aria-pressed={autoPlay}
-              style={{
-                fontFamily: 'Syne,sans-serif', fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', cursor: 'pointer', borderRadius: 8, padding: '5px 12px', whiteSpace: 'nowrap',
-                background: autoPlay ? 'linear-gradient(180deg,#ffd166,#b45309)' : 'linear-gradient(180deg,rgba(120,88,32,0.5),rgba(66,44,14,0.72))',
-                color: autoPlay ? '#1a0e00' : '#ffd166',
-                border: `1px solid ${autoPlay ? '#ffe9a8' : 'rgba(255,209,102,0.55)'}`,
-                boxShadow: autoPlay ? '0 0 18px rgba(255,209,102,0.65),0 0 42px rgba(255,209,102,0.28),inset 0 1px 0 rgba(255,255,255,0.5)' : '0 0 10px rgba(255,209,102,0.18),inset 0 1px 0 rgba(255,255,255,0.14)',
-                textShadow: autoPlay ? 'none' : '0 0 8px rgba(255,209,102,0.65)',
-                animation: autoPlay ? 'goldPulse 1.1s ease-in-out infinite' : 'none'
-              }}>{autoPlay ? '◆ AUTO MATRIX ON' : '◇ AUTO MATRIX'}</button>
-            <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 7, color: '#2e7d43', letterSpacing: '0.16em', marginLeft: 'auto' }}>
-              RACK {devices.length}/20 · {devices.filter(d => d.active).length} ONLINE
-            </span>
-          </div>
-          {/* ════ CONSOLE RACK — PAGINATED: 5 rows × 2 consoles SIDE-BY-SIDE per
-              page (10/page). Row-major grid + device slice; PREV/NEXT + page
-              dots live in the pagination bar above. ════ */}
-          <div style={{
-            position: 'relative', zIndex: 2, display: 'grid', gap: 8, alignItems: 'start',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-            gridAutoFlow: 'row',
-            maxHeight: 800, overflowY: 'auto', overscrollBehavior: 'contain',
-            padding: 4, borderRadius: 12,background: 'rgba(1,6,4,0.5)', border: '1px solid rgba(0,255,65,0.16)', boxShadow: 'inset 0 0 18px rgba(0,0,0,0.5)'
-          }} className="device-rack">
-            {devices.length === 0 ? (
-              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '12px 8px', color: '#2e7d43', fontFamily: 'DM Mono,monospace', fontSize: 9 }}>
-                NO TICKETS — MINT TICKETS FROM THE LOBBY TO SPIN THE CARNIVAL
-              </div>
-            /* 5 rows × 2 side-by-side consoles per page — slice for current page */
-            ) : devices.slice(rackPageSafe * RACK_PAGE_SIZE, (rackPageSafe + 1) * RACK_PAGE_SIZE).map(d => (
-              <HackingDevice key={d.id} device={d} currentNum={currentNum} clickWindowOpen={clickWindowOpen}
-                calledNums={calledNums} onCellClick={handleCellClick} onClaim={handleClaim} onActivate={handleActivate}
-                winStates={winStates} bankruptCount={bankruptCount} timer={timer} totalTimer={totalTimer} liveBank={liveBank} />
-            ))}
-          </div>
-          {/* ════ CLAIM FRAME + VAULT CAPSULES (STEP 6) — vault stats + 7 win-tier capsules */}
-          <div style={{
-            position: 'relative', zIndex: 10, borderRadius: 18, padding: 6,
-            background: 'linear-gradient(180deg,rgba(30,16,52,0.92),rgba(16,9,30,0.96))',
-            border: winStates['FULL_HOUSE_3']?.claimable && !winStates['FULL_HOUSE_3']?.claimed ? '2px solid #ec4899' : Object.values(winStates).some(ws => ws.claimed) ? '2px solid #34d399' : '2px solid #a855f7',
-            boxShadow: winStates['FULL_HOUSE_3']?.claimable && !winStates['FULL_HOUSE_3']?.claimed ? '0 0 18px rgba(236,72,153,0.5),0 0 50px rgba(236,72,153,0.2),inset 0 0 24px rgba(236,72,153,0.12)' : Object.values(winStates).some(ws => ws.claimed) ? '0 0 18px rgba(52,211,153,0.4),0 0 50px rgba(52,211,153,0.15),inset 0 0 24px rgba(52,211,153,0.08)' : '0 0 18px rgba(168,85,247,0.35),0 0 50px rgba(168,85,247,0.15),inset 0 0 24px rgba(168,85,247,0.10)'
-          }}>
-            <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-              {CAPSULES.map(cap => {
-                const ws = winStates[cap.wt]
-                const prog = capsuleProgress(cap.wt, devices)
-                const claimed = ws.claimed, claimable = ws.claimable && !ws.claimed, expired = ws.expired
-                const locked = cap.fbTier != null && bankruptCount + 1 < cap.fbTier
-                const barColor = claimed ? '#34d399' : claimable ? '#ec4899' : expired ? '#50081f' : '#a855f7'
-                return (
-                  <div key={cap.code} className="vault-cap" title={`${cap.label} — ${Math.round(WIN_BPS[cap.wt] / 100)}% of vault`} style={{
-                    flex: 1, minWidth: 0, position: 'relative', borderRadius: 8, padding: '4px 6px', overflow: 'hidden',
-                    background: 'rgba(10,6,20,0.75)', border: `1px solid ${claimed ? 'rgba(52,211,153,0.55)' : claimable ? 'rgba(236,72,153,0.65)' : locked ? 'rgba(36,26,56,0.9)' : 'rgba(168,85,247,0.3)'}`,
-                    opacity: locked ? 0.45 : 1,
-                    animation: claimable ? 'capHunt 0.14s infinite' : 'none'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
-                      <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 7, fontWeight: 700, color: claimed ? '#34d399' : claimable ? '#ec4899' : '#a78bfa', whiteSpace: 'nowrap' }}>{cap.code}</span>
-                      <span className="num-tab" style={{ fontFamily: 'DM Mono,monospace', fontSize: 6, color: '#4a3a68' }}>{Math.round(WIN_BPS[cap.wt] / 100)}%</span>
-                    </div>
-                    <div style={{ height: 3, background: '#120d20', borderRadius: 2, margin: '3px 0 2px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${claimed ? 100 : Math.round(prog * 100)}%`, borderRadius: 2, background: barColor, boxShadow: claimable ? `0 0 6px ${barColor}` : 'none', transition: 'width 0.4s ease,background 0.3s' }} />
-                    </div>
-                    <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 6, color: claimed ? '#34d399' : claimable ? '#ec4899' : expired ? '#50081f' : '#4a3a68', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {locked ? 'LOCKED' : claimed ? '✓ HACKED — PAID' : claimable ? '◈ HIT RANSOM!' : expired ? '✕ BREACHED' : cap.label}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <div style={{ borderRadius: 13, border: '1px solid rgba(168,85,247,0.45)', background: 'rgba(10,6,20,0.6)', padding: '6px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 15, fontWeight: 800, letterSpacing: '0.18em', color: '#ff4fa3', textShadow: '0 0 14px rgba(255,79,163,0.85),0 0 34px rgba(255,79,163,0.4)' }}>CLAIM</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#b26bff', boxShadow: '0 0 6px #b26bff' }} />
-                <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.05em' }}>VAULT</span>
-                <span className="num-tab" style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#b26bff', fontWeight: 700 }}>{Math.max(0, Math.floor((onChainSession?.vaultTotal ?? VAULT_ESTIMATE) / 1e9) - paidHeistTotal).toLocaleString()} HEIST</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7', boxShadow: '0 0 6px #a855f7' }} />
-                <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.05em' }}>DEVICES</span>
-                <span className="num-tab" style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a855f7', fontWeight: 700 }}>{devices.filter(d => d.active).length}/20</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ec4899', boxShadow: '0 0 6px #ec4899' }} />
-                <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.05em' }}>CLAIMED</span>
-                <span className="num-tab" style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#ec4899', fontWeight: 700 }}>{winRecords.length}/7 wins</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b' }} />
-                <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#2d1f4a', letterSpacing: '0.05em' }}>VALUE</span>
-                <span className="num-tab" style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#f59e0b', fontWeight: 700 }}>${onChainSession?.rates?.HEIST != null ? (Math.max(0, Math.floor((onChainSession?.vaultTotal ?? VAULT_ESTIMATE) / 1e9) - paidHeistTotal) * Number(onChainSession.rates.HEIST)).toFixed(2) : '—'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Win strip */}
-      <div style={{ margin: '8px 12px 0', padding: '4px 8px', display: 'flex', gap: 4, overflowX: 'auto', borderRadius: 10, background: 'rgba(1,8,5,0.78)', border: '1px solid rgba(0,255,65,0.16)' }}>
-        {(Object.entries(WIN_LABELS) as [WinType, string][]).map(([type, label]) => {
-          const st = winStates[type]
-          return (
-            <div key={type} style={{
-              display: 'flex', gap: 3, alignItems: 'center', padding: '3px 6px', borderRadius: 6, flexShrink: 0,
-              background: st.claimed ? 'rgba(167,139,250,0.08)' : st.claimable ? 'rgba(236,72,153,0.08)' : 'transparent',
-              border: st.claimed ? '1px solid rgba(167,139,250,0.25)' : st.expired ? '1px solid rgba(127,0,0,0.3)' : st.claimable ? '1px solid rgba(236,72,153,0.35)' : '1px solid transparent'
-            }}>
-              <div style={{
-                width: 7, height: 5, borderRadius: 1, background: st.expired ? '#50081f' : LED_COLORS[type], opacity: st.claimed ? 0.3 : st.expired ? 0.4 : 1,
-                animation: st.broken ? 'none' : st.expired ? 'ledExpire 0.4s ease forwards' : st.flickering ? 'rapidFlicker 0.08s infinite' : st.claimable && !st.claimed ? 'ledBlink 0.6s infinite' : 'none',
-                boxShadow: st.claimable && !st.claimed && !st.expired ? `0 0 4px ${LED_COLORS[type]}` : 'none'
-              }} />
-              <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: st.claimed ? '#a78bfa' : st.claimable ? '#ec4899' : '#2d1f4a', whiteSpace: 'nowrap' }}>
-                {st.claimed ? '✓ ' : st.claimable ? '◈ ' : '○ '}{label}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Legacy console list (MAXIMIZE shows the full-screen view) */}
-      <div className="devices-section" style={{ padding: '0 12px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 5, marginBottom: 8 }}>
-          <button onClick={handleActivateAll} style={{ background: '#150d24', border: '1px solid #b26bff30', color: '#b26bff', borderRadius: 7, padding: '4px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
-            ◈ ACTIVATE ALL
-          </button>
-          <button onClick={() => setDevicesExpanded(true)} style={{ background: '#150d24', border: '1px solid #241538', color: '#453071', borderRadius: 7, padding: '4px 10px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer' }}>
-            ⊞ MAXIMIZE
-          </button>
-          <button onClick={() => setShowTerminate(true)} style={{ background: 'rgba(127,0,0,0.25)', border: '1px solid #4a0d26', color: '#ff5c8a', borderRadius: 7, padding: '4px 9px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer', letterSpacing: '0.05em' }}>
-            ⏻ TERMINATE
-          </button>
-        </div>
-      </div>
-
-      {/* Private room windows remain through the matrix until the game ends (docked low — arena stays on top) */}
-      {chatRooms.map((room, i) => (
-        <RoomChatTerminal key={room.id} room={room} nickname={nickname} fixed dock cascadeIndex={i} onClose={() => setChatRooms(p => p.filter(r => r.id !== room.id))} />
-      ))}
-      {announcement && (
-        <div style={{ position: 'fixed', top: 52, left: '50%', transform: 'translateX(-50%)', background: '#0e0819', border: '1px solid #b26bff40', borderRadius: 10, padding: '9px 16px', fontFamily: 'DM Mono,monospace', fontSize: 10, color: '#b26bff', zIndex: 999, whiteSpace: 'pre', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', animation: 'slideDown 0.3s ease', maxWidth: '90vw' }}>
-          {announcement}
-        </div>
-      )}
-
-      {/* ── VAULT CLAIM MODAL (from RANSOM corner key) ── */}
+    <div data-theme={theme}>
+      <CarnivalSlotMachine
+        round={roundNum}
+        currentNum={currentNum}
+        prevNum={prevNum}
+        countdown={timer}
+        sessionSecs={sessionSecs}
+        preGameSecs={preGameSecs}
+        tickets={machineTickets}
+        onClaim={handleTicketClaim}
+        vaultTotal={vaultUsd}
+        claimableCount={claimableCount}
+        claimableTotal={claimableTotal}
+        lastWin={lastWinAmount}
+        credits={claimedUsd}
+        onOpenVault={() => setShowVaultClaim(true)}
+        announcement={announcement}
+        onTerminate={terminateGame}
+      />
+      {devBar}
       {showVaultClaim && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(1,8,16,0.92)', zIndex: 2100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setShowVaultClaim(false) }}>
-          <div style={{ background: '#0e0819', border: '1px solid rgba(255,209,102,0.35)', borderRadius: 14, padding: 16, maxWidth: 380, width: '100%', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 13, fontWeight: 800, color: '#ffd166' }}>⚿ DECENTRALIZED VAULT CLAIM</span>
-              <button onClick={() => setShowVaultClaim(false)} style={{ background: '#150d24', border: '1px solid #241538', color: '#a99bc4', borderRadius: 5, padding: '3px 8px', fontSize: 8, cursor: 'pointer' }}>✕</button>
+        <div className="cv-modal" onClick={() => setShowVaultClaim(false)}>
+          <div className="cv-modal-card" onClick={e => e.stopPropagation()}>
+            <div className="cv-modal-head">
+              <span>⚿ DECENTRALIZED VAULT — {wallet ? `${wallet.slice(0, 6)}…${wallet.slice(-4)}` : 'NO WALLET'}</span>
+              <button className="cv-icon-btn" onClick={() => setShowVaultClaim(false)}>✕</button>
             </div>
-            <div style={{ fontSize: 8, color: '#a99bc4', marginBottom: 10 }}>Wins stay in the vault — claim any time before the next round, even after this console is trashed.</div>
-            <VaultClaimPanel wallet={wallet} announce={announce} />
-          </div>
-        </div>
-      )}
-
-      {/* ── TERMINATE WARNING MODAL ── */}
-      {showTerminate && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-          onClick={e => { if (e.target === e.currentTarget) setShowTerminate(false) }}>
-          <div style={{
-            background: '#0a0505', border: '2px solid #4a0d26', borderRadius: 16, padding: 28, maxWidth: 360, width: '100%',
-            boxShadow: '0 0 60px rgba(255,92,138,0.2),inset 0 0 40px rgba(127,0,0,0.08)'
-          }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,92,138,0.12)', border: '2px solid #ff5c8a',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0
-              }}>⚠</div>
-              <div>
-                <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 16, fontWeight: 800, color: '#ff5c8a', letterSpacing: '0.05em' }}>TERMINATE SESSION</div>
-                <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#4a0d26', marginTop: 2 }}>WALLET · {wallet || nickname}</div>
-              </div>
-            </div>
-            {/* Warning body */}
-            <div style={{ background: 'rgba(127,0,0,0.12)', border: '1px solid rgba(255,92,138,0.2)', borderRadius: 8, padding: '12px 14px', marginBottom: 18 }}>
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#ff5c8a', marginBottom: 8, letterSpacing: '0.1em' }}>⚠ WARNING — IRREVERSIBLE ACTION</div>
-              {[
-                'All minted NFT devices will be deactivated',
-                'Current game session & progress will be wiped',
-                'Unclaimed prizes for this wallet are forfeited',
-                'Saved state will be cleared from this browser',
-                'You will return to the lobby screen',
-              ].map((line, i) => (
-                <div key={i} style={{ display: 'flex', gap: 7, alignItems: 'flex-start', marginBottom: 4 }}>
-                  <span style={{ color: '#4a0d26', flexShrink: 0, marginTop: 1 }}>›</span>
-                  <span style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#a05050', lineHeight: 1.5 }}>{line}</span>
-                </div>
-              ))}
-            </div>
-            {/* Buttons */}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setShowTerminate(false)}
-                style={{
-                  flex: 1, background: '#150d24', border: '1px solid #241538', color: '#a99bc4', borderRadius: 8,
-                  padding: '10px', fontFamily: 'DM Mono,monospace', fontSize: 8, cursor: 'pointer', letterSpacing: '0.05em'
-                }}>
-                ABORT
-              </button>
-              <button onClick={terminateGame}
-                style={{
-                  flex: 1, background: 'linear-gradient(135deg,#3f0000,#200000)', border: '2px solid #ff5c8a', color: '#ff5c8a',
-                  borderRadius: 8, padding: '10px', fontFamily: 'Syne,sans-serif', fontSize: 11, fontWeight: 800, cursor: 'pointer',
-                  letterSpacing: '0.1em', boxShadow: '0 0 16px rgba(255,92,138,0.25)', animation: 'ransomPulse 2s infinite'
-                }}>
-                ⏻ CONFIRM TERMINATE
-              </button>
-            </div>
-            <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 8, color: '#50081f', textAlign: 'center', marginTop: 10 }}>
-              click outside to dismiss · this action cannot be undone
+            <div className="cv-modal-body">
+              <VaultClaimPanel wallet={wallet} announce={announce} />
             </div>
           </div>
         </div>
@@ -4991,8 +4758,3 @@ function Ransome() {
     </div>
   )
 }
-
-// tiny clamp helper (returns px string)
-function clamp(min: number, val: number, unit: string) { return `clamp(${min}px,${val}${unit},${min + 8}px)` }
-// HEIST tokens allocated per win type (split equally among winning devices for that round)
-const HEIST_ALLOC: Record<WinType, number> = { EARLY_FIVE: 500, TOP_LINE: 1000, MIDDLE_LINE: 1000, BOTTOM_LINE: 1000, FULL_HOUSE_1: 2500, FULL_HOUSE_2: 2500, FULL_HOUSE_3: 1500 }

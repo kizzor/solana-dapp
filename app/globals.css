@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500;700&display=swap');
+@import './carnival.css';
 
 *,
 *::before,
@@ -1561,11 +1562,14 @@ button:disabled {
   .md-claim-frame {
     padding: 4px;
   }
-  .md-claim-frame>div {
+  /* Scoped to the CLAIM bar itself — the blanket `.md-claim-frame>div`
+     selector used to pad EVERY deck row on phones, stealing width from the
+     console rack and the slot display. */
+  .md-claim-frame>.claim-frame-inner {
     gap: 8px !important;
     padding: 4px 8px !important;
   }
-  .md-claim-frame>div>span:first-child {
+  .md-claim-frame>.claim-frame-inner>span:first-child {
     font-size: 12px !important;
   }
 }
@@ -1935,10 +1939,10 @@ html[data-theme='light'] .skin-aurora { opacity: 0.25; }
    narrower columns and keeps the same vertical scroll behavior. */
 .device-rack .device-console {
   min-width: 0;
-  /* kwys_bright refs: compact 3:2 console body — cap width so 2 consoles
-     per column fit the viewport instead of stretching to full column width */
-  max-width: 560px;
-  justify-self: center;
+  /* 2 consoles per row at every width — the card stretches to its column
+     (compact-phone columns included) instead of being capped at 560px. */
+  max-width: none;
+  justify-self: stretch;
   width: 100%;
 }
 
@@ -1954,9 +1958,12 @@ html[data-theme='light'] .skin-aurora { opacity: 0.25; }
 .corner-led[style*="rapidFlicker"],
 .corner-led[style*="ledBlink"] { animation-delay: 0s !important; }
 
-/* Console chassis: donor glass face — bezel already has inline glass blur */
+/* Console chassis: inline-size container so the whole deck (type, keycaps,
+   actuator) scales from the card's own width — 2-up phone cards and wide
+   rack cards render the same device at different scales. */
 .device-console {
-  container: none;
+  container-type: inline-size;
+  container-name: deck;
 }
 
 /* Scanline helper for the big display (kept CSS side — reused by arena display) */
@@ -2013,19 +2020,19 @@ html[data-theme='light'] .skin-aurora { opacity: 0.25; }
   transition: border-color 0.35s ease;
 }
 
-/* Rack + win-strip scrollbars adopt the MK-II palette */
-.device-rack::-webkit-scrollbar-track { background: rgba(1, 6, 4, 0.55); }
+/* Rack + win-strip scrollbars adopt the cyberdeck palette */
+.device-rack::-webkit-scrollbar-track { background: rgba(13, 11, 20, 0.55); }
 .device-rack::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(0, 255, 65, 0.35), rgba(0, 120, 30, 0.55));
+  background: linear-gradient(180deg, rgba(216, 180, 254, 0.4), rgba(124, 58, 237, 0.55));
 }
 .device-rack::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, rgba(0, 255, 65, 0.6), rgba(0, 150, 40, 0.7));
+  background: linear-gradient(180deg, rgba(232, 121, 249, 0.6), rgba(168, 85, 247, 0.7));
 }
 
-/* Arena-scoped focus ring (MK-II green) — deck buttons only, keeps
+/* Arena-scoped focus ring — deck buttons only, keeps
    the global violet ring everywhere else */
 .md-claim-frame button:focus-visible {
-  outline: 3px solid rgba(0, 255, 65, 0.85);
+  outline: 3px solid rgba(232, 121, 249, 0.85);
   outline-offset: 2px;
 }
 
@@ -2375,17 +2382,1834 @@ html[data-theme='light'] .skin-aurora { opacity: 0.25; }
   .red-ring-pulse, .hit-flash, .shake-effect { animation: none !important; }
 }
 
-/* ── Cyberdeck rack density fine-tuning (.deck-sm layer) ──────────────────
-   Keeps 2 consoles PER ROW readable on phones: shrink socket padding,
-   keycap height and grid gap as the viewport narrows. Layout structure
-   (2-deep column flow) is unchanged. */
-@media (max-width: 700px) {
-  .keycap-btn { height: 26px; }
-  .keycap-btn span { font-size: 9.5px; }
+/* ── CYBERDECK CONSOLE — reference device skin (device-width responsive) ──
+   Every rack console is the alyama/design CyberdeckInterface device: chassis
+   + screw bolts, ROBHIN//HEIST header, MATRIX chip + threat ring, quick bar,
+   plexiglass module board (BUS//PWR · SIGNAL · TRACE · sector rail · FAST FIVE),
+   recessed 9×3 keybed + terminal log, and the neon-tube RANSOM actuator
+   (sensor · embossed key · tactile switches · hex readout · hinge).
+
+   Sizing is container-query driven (cqw): the same markup renders compact at
+   2-up phone width and full size in the wide rack / MAXIMIZE view. Only scale
+   and paint live here — bindings and handlers stay in page.tsx. */
+
+/* 2 consoles per row — phones, tablets, desktop and MAXIMIZE alike. */
+.device-rack {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-@media (max-width: 460px) {
-  .keycap-socket { padding: 2px; }
-  .keycap-btn { height: 20px; border-radius: 4px; }
-  .keycap-btn span { font-size: 8px; }
-  :root { --deck-keygap: 2px; }
+
+.device-console {
+  --d-pad: clamp(4px, 1.6cqw, 10px);
+  --d-gap: clamp(3px, 1.2cqw, 8px);
+  --d-fs: clamp(5px, 1.62cqw, 9px);
+  --d-fs-b: clamp(6px, 1.9cqw, 10px);
+  --d-brand: clamp(8px, 2.9cqw, 15px);
+  --d-num: clamp(10px, 3.4cqw, 18px);
+  --d-key-h: clamp(17px, 5.3cqw, 30px);
+  --d-key-fs: clamp(7px, 2.4cqw, 13px);
+  --d-keygap: clamp(1.5px, 0.7cqw, 5px);
+  --d-socket-pad: clamp(1px, 0.55cqw, 3px);
+  --d-ring: clamp(15px, 4.4cqw, 30px);
+  --d-act: clamp(19px, 6.6cqw, 40px);
+  --d-ransom: clamp(8px, 2.2cqw, 16px);
+  --d-screw: clamp(4px, 1.5cqw, 10px);
 }
+
+/* chassis hardware scales with the card instead of staying full size */
+.device-console .screw-bolt {
+  width: var(--d-screw);
+  height: var(--d-screw);
+}
+.device-console .screw-bolt::before {
+  width: calc(var(--d-screw) * 0.6);
+  height: max(1px, calc(var(--d-screw) * 0.15));
+}
+
+.deck-face {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: var(--d-gap);
+  flex: 1;
+  min-width: 0;
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+/* brushed-metal scanline plate over the chassis face */
+.deck-plate {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 9px;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.14) 2px, rgba(0, 0, 0, 0.14) 3px),
+    repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(255, 255, 255, 0.012) 3px, rgba(255, 255, 255, 0.012) 4px);
+}
+
+/* ══ HEADER ══ */
+.deck-head {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--d-gap) * 0.9);
+  padding: 2px 1px var(--d-gap);
+  border-bottom: 1px solid rgba(92, 74, 126, 0.5);
+  min-width: 0;
+}
+.deck-brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.86;
+  flex-shrink: 0;
+}
+.deck-brand-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: var(--d-brand);
+  letter-spacing: 0.04em;
+  color: #f0abfc;
+  text-shadow: 0 0 9px rgba(217, 70, 239, 0.7);
+}
+.deck-brand-sub {
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: calc(var(--d-fs) * 0.82);
+  letter-spacing: 0.26em;
+  color: #c4b5fd;
+}
+.deck-ticket {
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: 'DM Mono', monospace;
+  font-size: var(--d-fs);
+  font-weight: 700;
+  color: rgba(196, 181, 253, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.deck-target {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 2px;
+  border-radius: 5px;
+  background: #12111b;
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
+}
+.deck-target-lbl {
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: calc(var(--d-fs) * 0.82);
+  letter-spacing: 0.02em;
+  color: #0b0b12;
+  background: #22d3ee;
+  border-radius: 3px;
+  padding: 1px 3px;
+}
+.deck-target-num {
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: var(--d-num);
+  line-height: 1;
+  color: #a5f3fc;
+  text-shadow: 0 0 7px #67e8f9, 0 0 14px #22d3ee, 0 0 22px #06b6d4;
+  min-width: calc(var(--d-num) * 1.1);
+  text-align: center;
+}
+.deck-threat {
+  flex-shrink: 0;
+  width: var(--d-ring);
+  height: var(--d-ring);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #0c0a14;
+  border: 2px solid #ff2a4b;
+  box-shadow: 0 0 12px rgba(255, 42, 75, 0.75), inset 0 0 8px rgba(255, 42, 75, 0.5);
+  animation: redGlowPulse 1.2s infinite ease-in-out;
+}
+.deck-threat span {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: calc(var(--d-fs-b) * 1.1);
+  color: #fff;
+  line-height: 1;
+  text-shadow: 0 0 7px #fff, 0 0 13px #ff2a4b;
+}
+
+/* ══ QUICK BAR (reference quick-cycle bank) ══ */
+.deck-quick {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.deck-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #14121d;
+  border: 1px solid rgba(126, 58, 222, 0.45);
+  font-family: 'DM Mono', monospace;
+  font-size: var(--d-fs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #c4b5fd;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.deck-pill-live {
+  background: linear-gradient(180deg, #7c3aed, #312e81);
+  border-color: rgba(196, 181, 253, 0.5);
+  color: #fff;
+  box-shadow: 0 0 9px rgba(168, 85, 247, 0.4);
+}
+.deck-pill-live[data-on='0'] {
+  background: #211d30;
+  color: #a78bfa;
+  box-shadow: none;
+}
+.deck-pill-live i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #e879f9;
+  box-shadow: 0 0 5px #e879f9;
+  flex-shrink: 0;
+}
+.deck-pill-on {
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.35);
+}
+.deck-pill-hits {
+  color: #a5f3fc;
+}
+.deck-pill-paid {
+  margin-left: auto;
+  color: #f0abfc;
+}
+.deck-pill-btn {
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(180deg, rgba(217, 70, 239, 0.5), rgba(124, 58, 237, 0.45));
+  border-color: rgba(240, 171, 252, 0.55);
+}
+.deck-pill-btn.is-accent {
+  animation: capHunt 1.3s ease-in-out infinite;
+}
+.deck-pill-btn:active {
+  transform: translateY(1px);
+}
+
+/* ══ PLEXIGLASS MODULE BOARD ══ */
+.deck-board {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--d-gap) * 0.8);
+  padding: calc(var(--d-pad) * 0.75);
+  border-radius: 8px;
+  background: #100e1a;
+  border: 1px solid rgba(126, 58, 222, 0.42);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.75);
+}
+.deck-board-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(var(--d-gap) * 0.7);
+  min-width: 0;
+}
+.deck-eq {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #090810;
+  border: 1px solid rgba(126, 58, 222, 0.45);
+}
+.deck-eq-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: calc(var(--d-ring) * 0.6);
+}
+.deck-eq-bars i {
+  display: block;
+  width: 2.5px;
+  border-radius: 1px;
+}
+.deck-eq > span {
+  font-family: 'DM Mono', monospace;
+  font-size: calc(var(--d-fs) * 0.82);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #c4b5fd;
+  white-space: nowrap;
+}
+.deck-meter {
+  flex: 1 1 46px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.deck-meter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-family: 'DM Mono', monospace;
+  font-size: calc(var(--d-fs) * 0.82);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #67e8f9;
+}
+.deck-meter-row b {
+  color: #a5f3fc;
+}
+.deck-meter-segs {
+  display: flex;
+  gap: 1.5px;
+  height: 6px;
+  padding: 1px;
+  border-radius: 3px;
+  background: #050508;
+  border: 1px solid rgba(126, 58, 222, 0.5);
+}
+.deck-meter-segs i {
+  flex: 1;
+  border-radius: 1px;
+  background: rgba(126, 58, 222, 0.25);
+}
+.deck-meter-segs i[data-lit='1'] {
+  background: #22d3ee;
+  box-shadow: 0 0 5px rgba(34, 211, 238, 0.6);
+}
+.deck-meter-segs i[data-lit='1'][data-hot='1'] {
+  background: #34d399;
+  box-shadow: 0 0 5px rgba(52, 211, 153, 0.7);
+}
+.deck-trace {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-left: auto;
+  font-family: 'DM Mono', monospace;
+  font-size: calc(var(--d-fs) * 0.82);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #c4b5fd;
+}
+.deck-trace b {
+  color: #a5f3fc;
+}
+.deck-trace i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 6px #34d399;
+  animation: dot 1.2s infinite;
+}
+.deck-trace i[data-hot='1'] {
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+}
+
+.deck-rail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #090810;
+  border: 1px solid rgba(126, 58, 222, 0.3);
+  min-width: 0;
+}
+.deck-rail-track {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(126, 58, 222, 0.16);
+  overflow: hidden;
+}
+.deck-rail-track i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #22d3ee, #d946ef, #f59e0b);
+  box-shadow: 0 0 7px rgba(217, 70, 239, 0.7);
+  transition: width 0.4s ease;
+}
+.deck-rail-name {
+  font-family: 'DM Mono', monospace;
+  font-size: calc(var(--d-fs) * 0.78);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #f0abfc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 48%;
+}
+
+.deck-ff {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--d-gap) * 0.7);
+  padding: calc(var(--d-pad) * 0.45) calc(var(--d-pad) * 0.7);
+  border-radius: 7px;
+  background: #191526;
+  border: 1px solid rgba(217, 70, 239, 0.45);
+  box-shadow: 0 0 12px rgba(217, 70, 239, 0.2);
+  min-width: 0;
+}
+.deck-ff-ico {
+  flex-shrink: 0;
+  width: calc(var(--d-act) * 0.55);
+  height: calc(var(--d-act) * 0.55);
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: #0b0a14;
+  border: 1px solid rgba(240, 171, 252, 0.5);
+  box-shadow: 0 0 7px rgba(217, 70, 239, 0.35);
+  font-size: calc(var(--d-fs-b) * 0.85);
+}
+.deck-ff-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.deck-ff-copy b {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: var(--d-fs-b);
+  letter-spacing: 0.06em;
+  color: #fce7f3;
+  text-shadow: 0 0 8px rgba(240, 171, 252, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.deck-ff-copy span {
+  font-family: 'DM Mono', monospace;
+  font-size: calc(var(--d-fs) * 0.8);
+  color: #c4b5fd;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.deck-ff-btn {
+  flex-shrink: 0;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: calc(var(--d-fs) * 0.92);
+  letter-spacing: 0.08em;
+  background: #1e192c;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: rgba(196, 181, 253, 0.5);
+  cursor: not-allowed;
+}
+.deck-ff-btn[data-on='1'] {
+  background: linear-gradient(90deg, #c026d3, #db2777);
+  border-color: #f5d0fe;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 14px rgba(217, 70, 239, 0.75);
+  animation: capHunt 1.4s ease-in-out infinite;
+}
+
+/* ══ PHYSICAL KEYPAD ══ */
+.deck-keybed {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  padding: calc(var(--d-pad) * 0.8);
+  border-radius: 8px;
+  background: #12111c;
+  border: 1px solid rgba(92, 63, 140, 0.5);
+  box-shadow: inset 0 3px 14px rgba(0, 0, 0, 0.85);
+}
+.deck-keys {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: var(--d-keygap);
+  min-width: 0;
+}
+.deck-keybed .keycap-socket {
+  min-width: 0;
+  padding: var(--d-socket-pad);
+  border-radius: 4px;
+}
+.deck-keybed .keycap-btn {
+  height: var(--d-key-h);
+  border-radius: 3px;
+}
+.deck-keybed .keycap-btn::after {
+  inset: 1px;
+  border-radius: 2px;
+}
+.deck-keybed .keycap-btn span {
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: var(--d-key-fs);
+  line-height: 1;
+  white-space: nowrap;
+}
+.deck-log {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: calc(var(--d-gap) * 0.8);
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #0a0812;
+  border: 1px solid rgba(92, 63, 140, 0.45);
+  min-width: 0;
+}
+.deck-log-caret {
+  flex-shrink: 0;
+  font-family: 'DM Mono', monospace;
+  font-size: var(--d-fs);
+  font-weight: 700;
+  color: #22d3ee;
+}
+.deck-log-text {
+  flex: 1;
+  min-width: 0;
+  font-family: 'DM Mono', monospace;
+  font-size: var(--d-fs);
+  color: rgba(196, 181, 253, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.deck-log-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-family: 'DM Mono', monospace;
+  font-size: var(--d-fs);
+  font-weight: 700;
+}
+.deck-log-meta b {
+  color: rgba(158, 175, 192, 0.6);
+}
+.deck-log-meta b[data-on='1'] {
+  color: #4ade80;
+  text-shadow: 0 0 6px rgba(74, 222, 128, 0.7);
+}
+.deck-log-meta i {
+  font-style: normal;
+  color: #a5f3fc;
+}
+
+/* ══ NEON-TUBE RANSOM ACTUATOR ══ */
+.deck-actuator {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  margin: calc(var(--d-gap) * 0.5) 0 2px;
+}
+.deck-act-outer {
+  position: relative;
+  padding: 3px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #1c142c 0%, #100d1c 55%, #0c0a14 100%);
+  border: 1.5px solid #e879f9;
+  box-shadow: 0 0 11px rgba(217, 70, 239, 0.4), inset 0 0 11px rgba(217, 70, 239, 0.3);
+}
+.deck-actuator[data-hot='1'] .deck-act-outer {
+  box-shadow: 0 0 20px rgba(217, 70, 239, 0.75), 0 0 40px rgba(168, 85, 247, 0.42), inset 0 0 12px rgba(217, 70, 239, 0.5);
+  animation: capHunt 1.4s ease-in-out infinite;
+}
+.deck-act-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--d-gap) * 0.6);
+  padding: 2px;
+  border-radius: 6px;
+  min-width: 0;
+  box-shadow: 0 0 6px rgba(244, 63, 94, 0.35), inset 0 0 6px rgba(244, 63, 94, 0.35);
+}
+.deck-sensor {
+  flex-shrink: 0;
+  width: var(--d-act);
+  height: var(--d-act);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 5px;
+  background: #0b0a12;
+  border: 1px solid rgba(168, 85, 247, 0.6);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.9), 0 0 8px rgba(217, 70, 239, 0.25);
+}
+.deck-sensor > div {
+  display: flex;
+  gap: 2px;
+}
+.deck-sensor i {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+}
+.deck-sensor i:first-child {
+  background: #22d3ee;
+  box-shadow: 0 0 5px #22d3ee;
+}
+.deck-sensor i:last-child {
+  background: #e879f9;
+  box-shadow: 0 0 5px #e879f9;
+  animation: dot 1s ease-in-out infinite alternate;
+}
+.deck-sensor span {
+  font-family: 'DM Mono', monospace;
+  font-size: calc(var(--d-fs) * 0.72);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #c4b5fd;
+}
+.deck-ransom {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  min-height: calc(var(--d-act) * 0.95);
+  border-radius: 6px;
+  border: 1px solid rgba(240, 171, 252, 0.6);
+  background: linear-gradient(180deg, #2a223e 0%, #151221 100%);
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: var(--d-ransom);
+  letter-spacing: 0.02em;
+  color: #f5d0fe;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-shadow: 0 0 10px #f0abfc, 0 0 20px #c026d3;
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.28), inset 0 -2px 4px rgba(0, 0, 0, 0.8), 0 3px 8px rgba(0, 0, 0, 0.65);
+  cursor: pointer;
+}
+.deck-ransom:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.deck-ransom:disabled {
+  cursor: default;
+  color: rgba(240, 171, 252, 0.4);
+  border-color: rgba(168, 85, 247, 0.28);
+}
+.deck-ransom[data-settled='1']:disabled {
+  color: #8ecfa8;
+  text-shadow: 0 0 8px rgba(52, 211, 153, 0.55);
+}
+.deck-switches {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.deck-micro {
+  width: calc(var(--d-act) * 0.42);
+  height: calc(var(--d-act) * 0.42);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 3px;
+  background: #251e33;
+  border: 1px solid rgba(196, 181, 253, 0.5);
+  box-shadow: 0 0 6px rgba(168, 85, 247, 0.3);
+}
+button.deck-micro {
+  cursor: pointer;
+}
+.deck-micro i {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 1px;
+}
+.deck-micro i[data-c='cyan'] {
+  background: #67e8f9;
+  box-shadow: 0 0 4px #67e8f9;
+}
+.deck-micro i[data-c='violet'] {
+  background: #c4b5fd;
+  box-shadow: 0 0 4px #c4b5fd;
+}
+.deck-readout {
+  width: calc(var(--d-act) * 0.95);
+  height: calc(var(--d-act) * 0.95);
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: #08070d;
+  border: 1px solid rgba(217, 70, 239, 0.8);
+  box-shadow: inset 0 0 10px rgba(217, 70, 239, 0.4), 0 0 10px rgba(217, 70, 239, 0.35);
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: calc(var(--d-fs-b) * 1.15);
+  color: #f5d0fe;
+  text-shadow: 0 0 8px #d946ef;
+}
+.deck-hinge {
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  transform: translateX(-50%);
+  width: calc(var(--d-act) * 0.85);
+  height: 3px;
+  display: grid;
+  place-items: center;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, #2a243d, #120e1e);
+  border: 1px solid rgba(126, 58, 222, 0.4);
+  border-top: 0;
+}
+.deck-hinge i {
+  width: 45%;
+  height: 1px;
+  background: rgba(192, 38, 211, 0.7);
+  box-shadow: 0 0 4px #c026d3;
+}
+
+/* Compact cards: stack the SIGNAL meter under the EQ + TRACE bank so the
+   three telemetry blocks never collide (2-up phone columns). */
+@container deck (max-width: 190px) {
+  .deck-meter {
+    flex: 1 0 100%;
+    order: 3;
+  }
+}
+
+/* Ultra-narrow cards (2-up on a 320px phone): drop only secondary chips so
+   nothing is allowed to overflow the chassis. */
+@container deck (max-width: 145px) {
+  .deck-ticket,
+  .deck-pill-hits {
+    display: none;
+  }
+  .deck-target-lbl {
+    padding: 1px 2px;
+  }
+  .deck-ransom {
+    font-size: 7px;
+  }
+}
+
+/* Smallest 2-up cards (≤ 132px): the actuator wraps its tactile switch bank
+   under the sensor + RANSOM key so no label is clipped. */
+@container deck (max-width: 132px) {
+  .deck-ff-ico,
+  .deck-ff-copy span {
+    display: none;
+  }
+  .deck-ff-copy b {
+    letter-spacing: 0;
+  }
+  .deck-act-inner {
+    flex-wrap: wrap;
+  }
+  .deck-switches {
+    flex: 1 0 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-threat,
+  .deck-trace i,
+  .deck-sensor i,
+  .deck-pill-btn.is-accent,
+  .deck-ff-btn[data-on='1'],
+  .deck-actuator[data-hot='1'] .deck-act-outer {
+    animation: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MATRIX TERMINAL + SHINE PASS — 2026-10-23
+   Numbers inside every rack console now read as green phosphor on black
+   glass (terminal tone), and the chassis / keycaps / board / actuator get a
+   real specular coat: top-edge gloss, glass reflection, slow desktop sheen.
+   Paint-only — every binding and handler is untouched.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. MATRIX RAIN BACKDROP ─────────────────────────────────────────────
+   Fixed canvas behind the arena (drawn by <MatrixRain /> in page.tsx).
+   Content that must sit above it carries .arena-layer. */
+.matrix-rain {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  -webkit-mask-image: radial-gradient(125% 95% at 50% 0%, #000 30%, rgba(0, 0, 0, 0.5) 70%, transparent 100%);
+  mask-image: radial-gradient(125% 95% at 50% 0%, #000 30%, rgba(0, 0, 0, 0.5) 70%, transparent 100%);
+}
+.matrix-rain-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(85% 55% at 50% -5%, rgba(0, 255, 120, 0.10), transparent 65%),
+    radial-gradient(60% 40% at 50% 105%, rgba(168, 85, 247, 0.10), transparent 70%);
+}
+.arena-layer {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── 2. TERMINAL NUMBERS — green phosphor on black glass ───────────────── */
+.device-console {
+  --term: #46ff9c;
+  --term-hi: #d8ffe8;
+  --term-mid: #7dffbc;
+  --term-glow: rgba(0, 255, 120, 0.55);
+}
+
+/* screen housings read as black glass with a green inner bloom */
+.device-console .deck-target {
+  background: radial-gradient(120% 140% at 50% 0%, #06130c 0%, #030806 70%);
+  border-color: rgba(70, 255, 156, 0.55);
+  box-shadow: 0 0 12px rgba(0, 255, 120, 0.3), inset 0 0 12px rgba(0, 255, 120, 0.1), inset 0 0 26px rgba(0, 0, 0, 0.9);
+}
+.device-console .deck-target-lbl {
+  background: var(--term);
+  color: #04140b;
+  box-shadow: 0 0 8px rgba(0, 255, 120, 0.5);
+}
+.device-console .deck-target-num {
+  color: var(--term-mid);
+  text-shadow: 0 0 7px #00ff78, 0 0 16px rgba(0, 255, 120, 0.75), 0 0 30px rgba(0, 180, 90, 0.6);
+}
+
+/* keybed: black plate, green bloom, recessed sockets */
+.device-console .deck-keybed {
+  background: radial-gradient(125% 95% at 50% 0%, #07130d 0%, #050a08 55%, #030605 100%);
+  border-color: rgba(70, 255, 156, 0.2);
+  box-shadow: inset 0 3px 14px rgba(0, 0, 0, 0.9), inset 0 0 24px rgba(0, 255, 120, 0.06);
+}
+.device-console .keycap-socket {
+  background: #040806;
+  box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.95), inset -1px -1px 1px rgba(70, 255, 156, 0.06);
+}
+
+/* keycaps: black caps, phosphor digits, gloss on the top third */
+.device-console .keycap-btn {
+  background: linear-gradient(180deg, #0f1a14 0%, #081009 46%, #040806 100%);
+  border: 1px solid rgba(120, 255, 184, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(216, 255, 232, 0.38),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.9),
+    0 2px 0 #030604,
+    0 0 7px rgba(0, 255, 120, 0.10);
+}
+.device-console .keycap-btn span {
+  color: var(--term);
+  text-shadow: 0 0 5px var(--term-glow), 0 0 12px rgba(0, 255, 120, 0.35);
+  filter: none;
+}
+.device-console .keycap-btn::after {
+  inset: 1px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.05) 28%, transparent 54%),
+    radial-gradient(ellipse at 50% 130%, rgba(0, 255, 120, 0.26) 0%, transparent 72%);
+}
+
+/* blank socket — ghost glyph, no phosphor */
+.device-console .keycap-btn.is-blank {
+  background: linear-gradient(180deg, #0a0f0c 0%, #050806 100%);
+  border-color: rgba(120, 255, 184, 0.10);
+  box-shadow: inset 0 1px 0 rgba(216, 255, 232, 0.12), 0 2px 0 #030604;
+}
+.device-console .keycap-btn.is-blank span {
+  color: rgba(70, 255, 156, 0.16);
+  text-shadow: none;
+}
+
+/* missed ball — dead red cap */
+.device-console .keycap-btn.is-missed {
+  background: linear-gradient(180deg, #2a0a10 0%, #12050a 100%);
+  border-color: rgba(255, 82, 82, 0.34);
+}
+.device-console .keycap-btn.is-missed span {
+  color: rgba(255, 140, 140, 0.6);
+  text-shadow: none;
+}
+
+/* clicked — inverted phosphor: lit cap, black digit (strongest "shine") */
+.device-console .keycap-btn.is-active {
+  background: linear-gradient(180deg, #8dffc4 0%, #2ee27a 45%, #0f9d58 100%) !important;
+  border: 1px solid var(--term-hi) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -3px 8px rgba(0, 60, 25, 0.45),
+    0 0 16px rgba(0, 255, 120, 0.7),
+    0 2px 0 #052a13 !important;
+}
+.device-console .keycap-btn.is-active span {
+  color: #02150a !important;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+  filter: none !important;
+}
+.device-console .keycap-btn.is-active::after {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.12) 32%, transparent 62%) !important;
+}
+
+/* live draw match — pulsing phosphor target */
+.device-console .keycap-btn.is-target-exact {
+  background: linear-gradient(180deg, #0a2b1a 0%, #061710 55%, #030b07 100%) !important;
+  border: 1px solid var(--term) !important;
+  animation: termHit 0.9s ease-in-out infinite;
+}
+.device-console .keycap-btn.is-target-exact span {
+  color: #eafff2 !important;
+  text-shadow: 0 0 7px #00ff78, 0 0 16px #00c46a !important;
+  filter: none !important;
+}
+.device-console .keycap-btn.is-target-exact::after {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 120%, rgba(0, 255, 120, 0.45) 0%, transparent 72%) !important;
+}
+@keyframes termHit {
+  0%, 100% {
+    box-shadow: inset 0 0 10px rgba(70, 255, 156, 0.32), 0 0 10px rgba(0, 255, 120, 0.45), 0 2px 0 #052015;
+  }
+  50% {
+    box-shadow: inset 0 0 16px rgba(70, 255, 156, 0.7), 0 0 22px rgba(0, 255, 120, 0.95), 0 2px 0 #052015;
+  }
+}
+
+/* terminal log + counters */
+.device-console .deck-log {
+  background: #030806;
+  border-color: rgba(70, 255, 156, 0.24);
+  box-shadow: inset 0 0 12px rgba(0, 255, 120, 0.06);
+}
+.device-console .deck-log-caret {
+  color: var(--term);
+  text-shadow: 0 0 6px rgba(0, 255, 120, 0.8);
+}
+.device-console .deck-log-text {
+  color: rgba(125, 255, 188, 0.72);
+}
+.device-console .deck-log-meta b {
+  color: rgba(125, 255, 188, 0.45);
+}
+.device-console .deck-log-meta b[data-on='1'] {
+  color: var(--term);
+  text-shadow: 0 0 7px rgba(0, 255, 120, 0.8);
+}
+.device-console .deck-log-meta i {
+  color: var(--term-mid);
+}
+
+/* telemetry readouts */
+.device-console .deck-eq > span,
+.device-console .deck-sensor span {
+  color: #9dffc9;
+}
+.device-console .deck-meter-row {
+  color: rgba(125, 255, 188, 0.6);
+}
+.device-console .deck-meter-row b {
+  color: var(--term-mid);
+  text-shadow: 0 0 7px rgba(0, 255, 120, 0.6);
+}
+.device-console .deck-meter-segs {
+  background: #030806;
+  border-color: rgba(70, 255, 156, 0.24);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.9);
+}
+.device-console .deck-meter-segs i {
+  background: rgba(70, 255, 156, 0.12);
+}
+.device-console .deck-meter-segs i[data-lit='1'] {
+  background: #2eff8a;
+  box-shadow: 0 0 6px rgba(0, 255, 120, 0.9);
+}
+.device-console .deck-meter-segs i[data-lit='1'][data-hot='1'] {
+  background: var(--term-hi);
+  box-shadow: 0 0 8px rgba(180, 255, 210, 1);
+}
+.device-console .deck-trace {
+  color: rgba(125, 255, 188, 0.6);
+}
+.device-console .deck-trace b {
+  color: var(--term-mid);
+  text-shadow: 0 0 7px rgba(0, 255, 120, 0.6);
+}
+.device-console .deck-rail {
+  background: #030806;
+  border-color: rgba(70, 255, 156, 0.2);
+}
+.device-console .deck-rail-track {
+  background: rgba(70, 255, 156, 0.14);
+}
+.device-console .deck-rail-track i {
+  background: linear-gradient(90deg, #0f9d58, #2eff8a, var(--term-hi));
+  box-shadow: 0 0 8px rgba(0, 255, 120, 0.8);
+}
+.device-console .deck-rail-name {
+  color: #9dffc9;
+}
+.device-console .deck-ff-copy span {
+  color: rgba(125, 255, 188, 0.7);
+}
+
+/* hex readout under the actuator */
+.device-console .deck-readout {
+  background: radial-gradient(120% 140% at 50% 0%, #06130c 0%, #030806 75%);
+  border-color: rgba(70, 255, 156, 0.6);
+  color: var(--term-mid);
+  text-shadow: 0 0 8px rgba(0, 255, 120, 0.9);
+  box-shadow: inset 0 0 10px rgba(0, 255, 120, 0.18), 0 0 10px rgba(0, 255, 120, 0.28);
+}
+
+/* ── 3. SHINE / SPECULAR COAT ──────────────────────────────────────────── */
+/* brushed chassis + overlaid specular wedge */
+.device-console.titanium-panel {
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 18%, transparent 34%, transparent 66%, rgba(255, 255, 255, 0.05) 86%, transparent 100%),
+    radial-gradient(125% 85% at 50% -10%, #3a3352 0%, #211d30 46%, #0f0d17 100%);
+}
+
+/* slow glass reflection sweeping the whole chassis (decorative, cheap) */
+.device-console::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 36%, rgba(255, 255, 255, 0.11) 46%, rgba(255, 255, 255, 0.03) 54%, transparent 64%);
+  background-size: 300% 300%;
+  animation: deckSheen 8.5s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+@keyframes deckSheen {
+  0%, 100% { background-position: 130% 0; }
+  50% { background-position: -30% 0; }
+}
+
+/* plexiglass module board: glass reflection over the circuitry */
+.device-console .deck-board {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.075) 0%, rgba(255, 255, 255, 0.015) 26%, transparent 55%),
+    #0b0912;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.device-console .deck-board::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 8px;
+  pointer-events: none;
+  background:
+    radial-gradient(150% 55% at 50% -18%, rgba(255, 255, 255, 0.12), transparent 62%),
+    linear-gradient(115deg, transparent 60%, rgba(255, 255, 255, 0.05) 78%, transparent 92%);
+}
+
+/* actuator key: machined metal with a wet highlight */
+.device-console .deck-ransom {
+  background: linear-gradient(180deg, #4a4166 0%, #2a2340 38%, #151121 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -3px 8px rgba(0, 0, 0, 0.85),
+    0 3px 8px rgba(0, 0, 0, 0.7),
+    0 0 14px rgba(217, 70, 239, 0.3);
+}
+.device-console .deck-act-outer {
+  background: linear-gradient(180deg, #241a38 0%, #130f21 55%, #0c0a14 100%);
+  box-shadow: 0 0 12px rgba(217, 70, 239, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 11px rgba(217, 70, 239, 0.3);
+}
+
+/* screws catch the light */
+.device-console .screw-bolt {
+  background:
+    radial-gradient(circle at 32% 28%, #8f88a8 0%, #5b5670 28%, #1c1b26 78%);
+  box-shadow: inset 0.5px 0.5px 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* ── 4. SPACING / RACK VISIBILITY ──────────────────────────────────────── */
+/* Rack scrolls inside its own frame on desktop only. On phones the page
+   scrolls instead, so a 5-console rack is never trapped behind a nested
+   scroll viewport (that was what "only 2 consoles visible" looked like). */
+.device-rack {
+  max-height: 820px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 900px) {
+  .device-rack {
+    max-height: none;
+    overflow-y: visible;
+    gap: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .matrix-rain { display: none; }
+  .device-console::after { animation: none; background-position: 30% 0; }
+  .device-console .keycap-btn.is-target-exact { animation: none; }
+}
+/* Panel-mounted matrix rain — sits inside the arena chassis, under every
+   module (z0), so the wall of glyphs is actually visible between the decks
+   instead of hiding behind an opaque frame. */
+.md-claim-frame > .matrix-rain-inframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.42;
+  border-radius: inherit;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* Compact 2-up console cards (phones): the FAST FIVE strip duplicates the
+   RANSOM actuator claim and TRACE duplicates the FULL-HOUSE percentage, so
+   both drop out at card widths under 200px. Each card loses ~40px, which is
+   what lets two full rows sit under the slot machine on a 390px phone. */
+@container deck (max-width: 200px) {
+  .deck-ff { display: none; }
+  .deck-trace { display: none; }
+  .deck-eq > span { display: none; }
+  .deck-meter { flex: 1 1 0; order: 0; }
+  .deck-board { gap: 2px; padding: 3px; }
+  .deck-keybed { padding: 3px; }
+  .deck-log { margin-top: 3px; }
+  .deck-quick { gap: 2px; }
+}
+/* ── 5. SHINE PASS II — hotter specular on caps + chassis rim ───────────── */
+/* keycaps: mirror streak across the top third + a diagonal glass glint */
+.device-console .keycap-btn::after {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.10) 30%, transparent 57%),
+    linear-gradient(115deg, transparent 26%, rgba(255, 255, 255, 0.14) 41%, transparent 56%),
+    radial-gradient(ellipse at 50% 132%, rgba(0, 255, 120, 0.30) 0%, transparent 72%);
+}
+/* chassis: lit top rim (the machined lip of the deck) */
+.device-console .deck-face::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 2px;
+  right: 2px;
+  height: 1px;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55) 22%, rgba(255, 255, 255, 0.55) 78%, transparent);
+}
+/* glass reflection on the recessed keybed (under the caps) */
+.device-console .deck-keybed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0%, transparent 28%, transparent 78%, rgba(255, 255, 255, 0.04) 100%);
+}
+/* slot-machine glass: the whole arena catches a slow specular sweep too */
+.md-claim-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.05) 48%, transparent 56%);
+  background-size: 300% 300%;
+  animation: deckSheen 11s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+/* ═══════════════════════════════════════════════════════════════════════
+   NEON CYBERDECK CONSOLE — reference art direction (2026-10-23)
+   Octagonal chassis with a magenta/violet neon rim and cyan hairline,
+   marbled navy faceplates, green LED rails flanking a cyan neon matrix,
+   ACTIVATE pill in the crest plate, and the RANSOM actuator on the
+   bottom plate. Paint only — every handler stays in page.tsx.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.device-console.cd-deck {
+  --cd-pad: clamp(5px, 2.4cqw, 16px);
+  --cd-gap: clamp(3px, 1.3cqw, 9px);
+  --cd-rail: clamp(7px, 3cqw, 20px);
+  --cd-cell-h: clamp(15px, 5.2cqw, 34px);
+  --cd-num: clamp(7px, 3.1cqw, 19px);
+  --cd-micro: clamp(3.8px, 1.15cqw, 7px);
+  --cd-cham: clamp(7px, 5.4cqw, 30px);
+  --cd-cyan: #6ff5ff;
+  --cd-green: #7bff5e;
+
+  position: relative;
+  isolation: isolate;
+  display: block;
+  width: 100%;
+  padding: 5px;
+  border: 2px solid transparent;
+  border-radius: 0;
+  background-image:
+    linear-gradient(168deg, #0a1031 0%, #070b20 52%, #04061a 100%),
+    linear-gradient(148deg, #ff4fe0 0%, #a855f7 32%, #6a5cff 58%, #ff3fd4 100%);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  clip-path: polygon(
+    var(--cd-cham) 0, calc(100% - var(--cd-cham)) 0, 100% var(--cd-cham),
+    100% calc(100% - var(--cd-cham)), calc(100% - var(--cd-cham)) 100%,
+    var(--cd-cham) 100%, 0 calc(100% - var(--cd-cham)), 0 var(--cd-cham)
+  );
+  filter: drop-shadow(0 0 4px rgba(255, 79, 224, 0.5)) drop-shadow(0 0 16px rgba(130, 80, 255, 0.4));
+  transition: filter 0.35s ease;
+  user-select: none;
+}
+.device-console.cd-deck.is-claimable {
+  animation: cdClaimGlow 1.5s ease-in-out infinite;
+}
+
+/* cyan hairline inset behind the marble faceplate (follows the octagon) */
+.cd-edge {
+  position: absolute;
+  inset: 3px;
+  z-index: 0;
+  pointer-events: none;
+  clip-path: polygon(
+    var(--cd-cham) 0, calc(100% - var(--cd-cham)) 0, 100% var(--cd-cham),
+    100% calc(100% - var(--cd-cham)), calc(100% - var(--cd-cham)) 100%,
+    var(--cd-cham) 100%, 0 calc(100% - var(--cd-cham)), 0 var(--cd-cham)
+  );
+  background: linear-gradient(145deg, rgba(190, 245, 255, 0.75), rgba(110, 150, 255, 0.35) 45%, rgba(255, 90, 235, 0.4));
+}
+
+/* marbled navy faceplate */
+.cd-marble {
+  position: absolute;
+  inset: 4px;
+  z-index: 1;
+  pointer-events: none;
+  clip-path: polygon(
+    var(--cd-cham) 0, calc(100% - var(--cd-cham)) 0, 100% var(--cd-cham),
+    100% calc(100% - var(--cd-cham)), calc(100% - var(--cd-cham)) 100%,
+    var(--cd-cham) 100%, 0 calc(100% - var(--cd-cham)), 0 var(--cd-cham)
+  );
+  background:
+    radial-gradient(85% 60% at 14% 2%, rgba(64, 108, 255, 0.22), transparent 62%),
+    radial-gradient(75% 55% at 92% 98%, rgba(178, 74, 255, 0.20), transparent 66%),
+    conic-gradient(from 214deg at 26% 32%, rgba(255, 255, 255, 0.055), transparent 11%, rgba(255, 255, 255, 0.03) 19%, transparent 30%),
+    conic-gradient(from 42deg at 78% 74%, rgba(255, 255, 255, 0.05), transparent 13%, rgba(120, 170, 255, 0.03) 24%, transparent 36%),
+    linear-gradient(168deg, #0a1030 0%, #080c26 46%, #05081b 100%);
+}
+
+.cd-face {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cd-gap);
+  min-width: 0;
+}
+
+/* ══ TOP EMBLEM PLATE ══ */
+.cd-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--cd-gap) * 0.8);
+  min-width: 0;
+  padding: calc(var(--cd-pad) * 0.5) calc(var(--cd-pad) * 0.7);
+  border-radius: clamp(3px, 1.2cqw, 7px);
+  background:
+    radial-gradient(120% 140% at 20% 0%, rgba(96, 138, 255, 0.22), transparent 62%),
+    linear-gradient(180deg, rgba(31, 42, 96, 0.85) 0%, rgba(10, 15, 42, 0.94) 100%);
+  border: 1px solid rgba(128, 158, 255, 0.30);
+  box-shadow: inset 0 1px 0 rgba(174, 204, 255, 0.22), 0 0 14px rgba(90, 120, 255, 0.12);
+}
+.cd-emblem {
+  display: flex;
+  align-items: center;
+  gap: clamp(2px, 0.9cqw, 6px);
+  min-width: 0;
+}
+.cd-crest {
+  flex-shrink: 0;
+  width: clamp(9px, 3.4cqw, 22px);
+  height: auto;
+  fill: none;
+  stroke: #a9eeff;
+  stroke-width: 1.1;
+  filter: drop-shadow(0 0 4px rgba(120, 240, 255, 0.85));
+}
+.cd-id {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.92;
+  min-width: 0;
+}
+.cd-brand {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(5px, 1.85cqw, 11px);
+  letter-spacing: 0.06em;
+  color: #d9c6ff;
+  text-shadow: 0 0 7px rgba(180, 140, 255, 0.7);
+  white-space: nowrap;
+}
+.cd-sub {
+  font-family: 'DM Mono', monospace;
+  font-style: normal;
+  font-weight: 700;
+  font-size: var(--cd-micro);
+  letter-spacing: 0.28em;
+  color: rgba(150, 200, 255, 0.62);
+  white-space: nowrap;
+}
+.cd-target {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: radial-gradient(120% 150% at 50% 0%, #06222a 0%, #02080e 78%);
+  border: 1px solid rgba(96, 236, 255, 0.55);
+  box-shadow: 0 0 10px rgba(40, 220, 255, 0.30), inset 0 0 12px rgba(0, 220, 255, 0.14);
+}
+.cd-target-lbl {
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: calc(var(--cd-micro) * 0.95);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #02161c;
+  background: #5eeaff;
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+.cd-target-num {
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: clamp(8px, 2.9cqw, 17px);
+  line-height: 1;
+  color: #b6fcff;
+  text-shadow: 0 0 6px #4ff0ff, 0 0 14px rgba(40, 220, 255, 0.85), 0 0 26px rgba(0, 170, 255, 0.5);
+  min-width: 1.15em;
+  text-align: center;
+}
+.cd-activate {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(2px, 0.8cqw, 5px);
+  padding: clamp(2px, 0.8cqw, 5px) clamp(3px, 1.3cqw, 9px);
+  border-radius: clamp(3px, 1.1cqw, 7px);
+  background: linear-gradient(180deg, rgba(12, 40, 32, 0.92) 0%, rgba(4, 15, 13, 0.96) 100%);
+  border: 1px solid rgba(123, 255, 94, 0.55);
+  box-shadow: 0 0 10px rgba(70, 255, 120, 0.28), inset 0 0 9px rgba(70, 255, 120, 0.14);
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(4.6px, 1.65cqw, 10px);
+  letter-spacing: 0.07em;
+  color: #ccffdd;
+  text-shadow: 0 0 7px rgba(120, 255, 160, 0.8);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cd-activate svg {
+  width: clamp(7px, 2.3cqw, 14px);
+  height: auto;
+  fill: none;
+  stroke: var(--cd-green);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 4px rgba(90, 255, 120, 0.95));
+}
+.cd-activate:active { transform: translateY(1px); }
+.cd-live {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: clamp(2px, 0.8cqw, 5px) clamp(3px, 1.3cqw, 9px);
+  border-radius: clamp(3px, 1.1cqw, 7px);
+  background: linear-gradient(180deg, rgba(10, 34, 28, 0.9), rgba(4, 12, 11, 0.95));
+  border: 1px solid rgba(123, 255, 94, 0.35);
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: clamp(4.6px, 1.5cqw, 9px);
+  letter-spacing: 0.08em;
+  color: rgba(140, 255, 175, 0.85);
+  white-space: nowrap;
+}
+.cd-live i {
+  width: clamp(3px, 0.9cqw, 6px);
+  height: clamp(3px, 0.9cqw, 6px);
+  border-radius: 50%;
+  background: var(--cd-green);
+  box-shadow: 0 0 6px var(--cd-green);
+}
+.cd-live[data-live='1'] i { animation: cdLive 1s ease-in-out infinite; }
+.cd-live[data-live='0'] { color: rgba(150, 175, 255, 0.7); border-color: rgba(130, 140, 255, 0.3); }
+.cd-live[data-live='0'] i { background: #8f9dff; box-shadow: 0 0 6px #8f9dff; }
+/* ══ CORE: LED rails + neon matrix ══ */
+.cd-core {
+  display: flex;
+  align-items: stretch;
+  gap: calc(var(--cd-gap) * 0.7);
+  min-width: 0;
+}
+.cd-rail {
+  flex: 0 0 var(--cd-rail);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--cd-gap) * 0.5);
+  padding: 2px;
+  border-radius: clamp(3px, 1.1cqw, 6px);
+  background: linear-gradient(180deg, rgba(24, 32, 68, 0.9), rgba(6, 10, 24, 0.95));
+  border: 1px solid rgba(120, 150, 255, 0.18);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+}
+.cd-rail i {
+  display: block;
+  flex: 1;
+  min-height: 5px;
+  background: linear-gradient(180deg, #16342a 0%, #0a1a14 100%);
+  border: 1px solid rgba(123, 255, 94, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+.cd-rail-l i { clip-path: polygon(0 0, 62% 0, 100% 50%, 62% 100%, 0 100%); }
+.cd-rail-r i { clip-path: polygon(38% 0, 100% 0, 100% 100%, 38% 100%, 0 50%); }
+.cd-rail i[data-lit='1'] {
+  background: linear-gradient(180deg, #d2ffbe 0%, var(--cd-green) 42%, #2cbb17 100%);
+  border-color: rgba(210, 255, 190, 0.9);
+  box-shadow:
+    0 0 7px rgba(123, 255, 94, 0.9),
+    0 0 16px rgba(70, 255, 100, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.cd-screen {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 2px;
+  border-radius: clamp(3px, 1.2cqw, 7px);
+  background: radial-gradient(125% 105% at 50% 0%, #071c2e 0%, #040b17 58%, #02060e 100%);
+  border: 1px solid rgba(96, 236, 255, 0.45);
+  box-shadow: 0 0 12px rgba(30, 200, 255, 0.20), inset 0 0 18px rgba(0, 200, 255, 0.10);
+  overflow: hidden;
+}
+.cd-grid {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 1px;
+  background: rgba(70, 220, 255, 0.22);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.cd-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: var(--cd-cell-h);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: linear-gradient(180deg, #061426 0%, #040c1a 55%, #02060f 100%);
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: var(--cd-num);
+  line-height: 1;
+  color: var(--cd-cyan);
+  cursor: default;
+  overflow: hidden;
+}
+.cd-cell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(130, 240, 255, 0.18) 0%, rgba(130, 240, 255, 0.03) 34%, transparent 58%);
+}
+.cd-cell-num {
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 0 6px rgba(90, 240, 255, 0.9), 0 0 14px rgba(30, 200, 255, 0.55);
+}
+.cd-cell-tag {
+  display: none;
+  position: absolute;
+  z-index: 1;
+  font-size: var(--cd-micro);
+  line-height: 1;
+  letter-spacing: 0;
+  color: rgba(120, 245, 255, 0.45);
+  pointer-events: none;
+}
+.cd-cell-tag-t { top: 1px; right: 2px; }
+.cd-cell-tag-b { bottom: 1px; left: 2px; }
+
+/* clickable / live-draw state */
+.cd-cell:not(:disabled) { cursor: pointer; }
+.cd-cell:not(:disabled):hover {
+  background: linear-gradient(180deg, #0b2c40 0%, #06182a 100%);
+  box-shadow: inset 0 0 0 1px rgba(130, 245, 255, 0.9);
+}
+.cd-cell.is-target-exact {
+  background: linear-gradient(180deg, #0a3a4c 0%, #06202f 55%, #03101c 100%);
+  color: #ecfeff;
+  animation: cdHit 0.9s ease-in-out infinite;
+}
+.cd-cell.is-target-exact .cd-cell-num { text-shadow: 0 0 8px #7dfaff, 0 0 20px #22d3ee; }
+
+/* cracked cell — lit green glass, black digit (matches the LED rails) */
+.cd-cell.is-active {
+  background: linear-gradient(180deg, #b8ffa2 0%, #68ff4f 45%, #1f9c14 100%);
+  color: #02160a;
+}
+.cd-cell.is-active .cd-cell-num { text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45); }
+.cd-cell.is-active .cd-cell-tag { color: rgba(4, 40, 16, 0.45); }
+
+/* missed draw */
+.cd-cell.is-missed {
+  background: linear-gradient(180deg, #300b13 0%, #16040a 100%);
+  color: rgba(255, 130, 140, 0.75);
+}
+.cd-cell.is-missed .cd-cell-num { text-shadow: none; }
+.cd-cell.is-missed .cd-cell-tag { color: rgba(255, 130, 140, 0.3); }
+
+/* blank ticket slot */
+.cd-cell.is-blank {
+  background: linear-gradient(180deg, #050d18 0%, #02060c 100%);
+  color: rgba(120, 245, 255, 0.20);
+}
+.cd-cell.is-blank .cd-cell-num { text-shadow: none; }
+
+.cd-glass {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    linear-gradient(112deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 18%, transparent 34%, transparent 72%, rgba(255, 255, 255, 0.045) 100%),
+    radial-gradient(120% 40% at 50% -12%, rgba(180, 240, 255, 0.14), transparent 70%);
+}
+
+/* ══ TERMINAL STRIP ══ */
+.cd-status {
+  display: flex;
+  align-items: center;
+  gap: clamp(3px, 1.1cqw, 7px);
+  min-width: 0;
+  padding: 2px clamp(3px, 1.1cqw, 6px);
+  border-radius: 4px;
+  background: rgba(3, 10, 20, 0.9);
+  border: 1px solid rgba(70, 220, 255, 0.18);
+  font-family: 'DM Mono', monospace;
+  font-size: var(--cd-micro);
+  letter-spacing: 0.03em;
+}
+.cd-caret {
+  flex-shrink: 0;
+  color: #46ff9c;
+  text-shadow: 0 0 6px rgba(70, 255, 156, 0.8);
+}
+.cd-status-text {
+  flex: 1 1 0;
+  min-width: 0;
+  color: rgba(140, 255, 200, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cd-status-sig {
+  flex-shrink: 0;
+  color: rgba(110, 245, 255, 0.8);
+}
+.cd-status-count {
+  flex-shrink: 0;
+  color: #9dffc9;
+}
+.cd-vault {
+  flex-shrink: 0;
+  width: calc(var(--cd-micro) * 2.1);
+  height: calc(var(--cd-micro) * 2.1);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 3px;
+  background: #0d1a2c;
+  border: 1px solid rgba(96, 236, 255, 0.45);
+  color: #8ff4ff;
+  font-size: var(--cd-micro);
+  line-height: 1;
+  cursor: pointer;
+}
+.cd-vault:active { transform: translateY(1px); }
+/* ══ BOTTOM PLATE / ACTUATOR ══ */
+.cd-foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--cd-gap) * 0.8);
+  min-width: 0;
+  padding: calc(var(--cd-pad) * 0.55) calc(var(--cd-pad) * 0.65);
+  border-radius: clamp(3px, 1.2cqw, 7px);
+  background:
+    radial-gradient(110% 140% at 78% 100%, rgba(168, 74, 255, 0.22), transparent 62%),
+    linear-gradient(180deg, rgba(34, 44, 100, 0.72) 0%, rgba(9, 13, 36, 0.94) 100%);
+  border: 1px solid rgba(150, 120, 255, 0.32);
+  box-shadow: inset 0 1px 0 rgba(180, 190, 255, 0.18), 0 0 14px rgba(120, 60, 255, 0.14);
+  overflow: hidden;
+}
+.cd-crest-ghost {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: auto;
+  height: 92%;
+  max-height: 42px;
+  stroke: #bfe9ff;
+  opacity: 0.10;
+  filter: none;
+  z-index: 0;
+  pointer-events: none;
+}
+.cd-threat {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: clamp(11px, 3.4cqw, 22px);
+  height: clamp(11px, 3.4cqw, 22px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #0b0714;
+  border: 1.5px solid #ff2a4b;
+  box-shadow: 0 0 10px rgba(255, 42, 75, 0.7), inset 0 0 8px rgba(255, 42, 75, 0.45);
+  animation: redGlowPulse 1.2s infinite ease-in-out;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(5px, 1.5cqw, 9px);
+  color: #fff;
+  text-shadow: 0 0 7px #fff, 0 0 12px #ff2a4b;
+}
+.cd-ransom {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: clamp(2px, 0.9cqw, 6px) 2px;
+  border-radius: clamp(3px, 1.1cqw, 7px);
+  border: 1px solid rgba(240, 171, 252, 0.55);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, transparent 34%),
+    linear-gradient(180deg, #4b2350 0%, #25132f 55%, #120a1c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.8),
+    0 2px 5px rgba(0, 0, 0, 0.65),
+    0 0 10px rgba(217, 70, 239, 0.22);
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(6px, 2.1cqw, 13px);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #ffd9ff;
+  text-shadow: 0 0 8px #f0abfc, 0 0 18px #c026d3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.cd-ransom:not(:disabled) {
+  border-color: #f5d0fe;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, transparent 36%),
+    linear-gradient(180deg, #7a2a7f 0%, #3d1650 55%, #1a0b27 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.8),
+    0 0 16px rgba(232, 121, 249, 0.8),
+    0 0 34px rgba(168, 85, 247, 0.5);
+  animation: capHunt 1.4s ease-in-out infinite;
+}
+.cd-ransom:active:not(:disabled) { transform: translateY(1px); }
+.cd-ransom:disabled { cursor: default; color: rgba(240, 171, 252, 0.42); text-shadow: none; }
+.cd-ransom[data-settled='1']:disabled {
+  color: #a8f5c4;
+  border-color: rgba(123, 255, 94, 0.35);
+  text-shadow: 0 0 8px rgba(70, 255, 140, 0.55);
+}
+.cd-ff {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(3, 12, 22, 0.9);
+  border: 1px solid rgba(70, 220, 255, 0.28);
+  font-family: 'DM Mono', monospace;
+  font-style: normal;
+}
+.cd-ff b {
+  font-size: var(--cd-micro);
+  color: rgba(140, 255, 200, 0.8);
+}
+.cd-ff i {
+  font-style: normal;
+  font-size: calc(var(--cd-micro) * 0.85);
+  letter-spacing: 0.08em;
+  color: rgba(110, 245, 255, 0.55);
+}
+.cd-ff[data-on='1'] {
+  border-color: rgba(200, 255, 180, 0.6);
+  box-shadow: 0 0 10px rgba(123, 255, 94, 0.5);
+}
+.cd-ff[data-on='1'] b { color: #ccffdd; text-shadow: 0 0 6px rgba(123, 255, 94, 0.8); }
+.cd-count {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  min-width: clamp(13px, 4cqw, 26px);
+  padding: 1px 2px;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  background: radial-gradient(120% 150% at 50% 0%, #06222a 0%, #02080e 80%);
+  border: 1px solid rgba(96, 236, 255, 0.55);
+  box-shadow: inset 0 0 8px rgba(0, 220, 255, 0.14), 0 0 8px rgba(40, 220, 255, 0.22);
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: clamp(6px, 2.1cqw, 12px);
+  line-height: 1;
+  color: #b6fcff;
+  text-shadow: 0 0 6px rgba(80, 240, 255, 0.9);
+}
+
+/* etched micro-decals appear once a card is wide enough to resolve them */
+@container deck (min-width: 260px) {
+  .cd-cell-tag { display: block; }
+}
+
+/* very narrow 2-up cards: keep the crest, matrix and ACTIVATE; shed the
+   wordmark and the FF buffer chip so nothing is clipped. */
+@container deck (max-width: 158px) {
+  .cd-brand, .cd-ff { display: none; }
+  .cd-top { gap: 2px; }
+}
+
+@keyframes cdClaimGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px rgba(255, 79, 224, 0.65)) drop-shadow(0 0 18px rgba(150, 70, 255, 0.45));
+  }
+  50% {
+    filter: drop-shadow(0 0 11px rgba(255, 130, 240, 1)) drop-shadow(0 0 30px rgba(190, 90, 255, 0.8));
+  }
+}
+@keyframes cdNumIn {
+  0% { transform: translateY(2px) scale(0.82); opacity: 0.2; }
+  60% { transform: translateY(-1px) scale(1.08); }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes cdHit {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(125, 250, 255, 0.55), inset 0 0 12px rgba(40, 220, 255, 0.35); }
+  50% { box-shadow: inset 0 0 0 1.5px #a9fbff, inset 0 0 18px rgba(40, 220, 255, 0.75), 0 0 14px rgba(40, 220, 255, 0.7); }
+}
+@keyframes cdLive {
+  0%, 100% { opacity: 1; box-shadow: 0 0 7px var(--cd-green); }
+  50% { opacity: 0.35; box-shadow: 0 0 3px var(--cd-green); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-console.cd-deck.is-claimable,
+  .cd-ransom:not(:disabled),
+  .cd-cell.is-target-exact,
+  .cd-live[data-live='1'] i,
+  .cd-threat { animation: none !important; }
+}
+
+/* ── tuning pass: bigger neon digits, always-on green pods, readable idle key ── */
+.device-console.cd-deck { --cd-num: clamp(7px, 4.1cqw, 24px); }
+.cd-rail i {
+  background: linear-gradient(180deg, #1d4530 0%, #0c2118 100%);
+  border-color: rgba(123, 255, 94, 0.34);
+  box-shadow: inset 0 0 6px rgba(80, 255, 120, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.cd-ransom:disabled { color: rgba(240, 171, 252, 0.62); }
+.cd-cell-tag { color: rgba(120, 245, 255, 0.32); }
+@container deck (max-width: 220px) {
+  .cd-id { display: none; }
+}
+
+/* ── ticket etch + brighter matrix separators ── */
+.cd-ticket {
+  display: none;
+  min-width: 0;
+  max-width: 34%;
+  padding-left: clamp(3px, 1.1cqw, 7px);
+  border-left: 1px solid rgba(130, 160, 255, 0.3);
+  font-family: 'DM Mono', monospace;
+  font-size: var(--cd-micro);
+  letter-spacing: 0.06em;
+  color: rgba(160, 205, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container deck (min-width: 260px) {
+  .cd-ticket { display: block; }
+}
+.cd-grid { background: rgba(70, 220, 255, 0.34); }
+
+/* ── crest plaque: echo the reference's hexagonal emblem plate ── */
+.cd-emblem {
+  padding: clamp(2px, 0.7cqw, 5px) clamp(3px, 1.2cqw, 8px);
+  background:
+    radial-gradient(120% 130% at 50% 0%, rgba(96, 150, 255, 0.26), transparent 66%),
+    linear-gradient(180deg, rgba(13, 19, 49, 0.94), rgba(5, 8, 22, 0.96));
+  clip-path: polygon(12% 0, 88% 0, 100% 50%, 88% 100%, 12% 100%, 0 50%);
+  box-shadow: inset 0 1px 0 rgba(170, 210, 255, 0.2);
+}
+.cd-crest { width: clamp(12px, 3.4cqw, 22px); }
