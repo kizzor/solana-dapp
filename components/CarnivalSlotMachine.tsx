@@ -32,6 +32,8 @@ export type CarnivalSlotMachineProps = {
   vaultTotal: number
   claimableCount: number
   claimableTotal: number
+  /** USD value of each vault brick position, in banner-light order */
+  brickShares?: number[]
   lastWin: number
   credits: number
   bet?: number
@@ -48,6 +50,18 @@ function pad(n: number | null) {
   if (n === null || n === undefined) return '--'
   return n < 10 ? `0${n}` : String(n)
 }
+
+// compact money for the brick segments: $480K / $1.2M
+function usd(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return '$0'
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`
+  if (n >= 1e3) return `$${Math.round(n / 1e3)}K`
+  return `$${Math.round(n)}`
+}
+
+// pyramid widths: narrow at the top, the 40% jackpot forms the base
+const BRICK_WIDTH = (i: number) => `${34 + i * 11}%`
 
 const DEFAULT_LIGHTS: BannerLight[] = [
   { id: 'ff', label: 'FF' },
@@ -75,6 +89,7 @@ export default function CarnivalSlotMachine({
   round, currentNum, prevNum, countdown, sessionSecs, preGameSecs,
   tickets, onClaim, vaultTotal, claimableCount, claimableTotal, lastWin, credits, bet = 10,
   onOpenVault, announcement, onTerminate, onSpin, onMaxBet, onCoin,
+  brickShares = [],
   lights = DEFAULT_LIGHTS,
 }: CarnivalSlotMachineProps) {
   const [confirmKill, setConfirmKill] = React.useState(false)
@@ -194,7 +209,7 @@ export default function CarnivalSlotMachine({
           <span className="cv-arena-session">SESSION {fmtMMSS(sessionSecs)}</span>
         </div>
         <div className="cv-arena-stats">
-          <span>TIMER <strong className="cv-gold">{fmtMMSS(clock)}</strong></span>
+          <span>TIMER <strong className="cv-gold">{clock}</strong></span>
           <span>TICKETS <strong>{tickets.length}</strong></span>
           <span>CLAIMABLE <strong>{claimables.length}</strong></span>
           <button className="cv-head-vault" onClick={onOpenVault}>⚿ VAULT CLAIMS</button>
@@ -242,13 +257,17 @@ export default function CarnivalSlotMachine({
           {/* timer plate — the round counter is gone, the clock owns this space */}
           <div className="cv-slot cv-slot-round">
             <span className="cv-slot-k">TIMER</span>
-            <span className="cv-slot-v">{fmtMMSS(clock)}</span>
+            <span className="cv-slot-v">{clock}</span>
           </div>
 
           {/* vault plate: seven bricks in the light colours, funds underneath */}
           <div className="cv-slot cv-slot-vault">
-            <div className="cv-vault-bricks" aria-hidden="true">
-              {BRICK_TONE.map(c => <span key={c} className={`cv-brick cv-brick-${c}`} />)}
+            <div className="cv-vault-bricks">
+              {BRICK_TONE.map((c, i) => (
+                <span key={c} className={`cv-brick cv-brick-${c}`} style={{ width: BRICK_WIDTH(i) }}>
+                  <span className="cv-brick-usd">{usd(brickShares[i] ?? 0)}</span>
+                </span>
+              ))}
             </div>
             <div className="cv-vault-amount cv-vault-amount-sm">
               ${(vaultTotal / 1_000_000).toFixed(2)}M
@@ -342,9 +361,7 @@ export default function CarnivalSlotMachine({
             onClick={collect}
             disabled={!armed}
             title={armed ? `Collect ${claimables.length} winning ticket${claimables.length === 1 ? '' : 's'}` : collected ? 'Winnings banked this round' : 'No claimable ticket'}
-          >
-            <span className="cv-key-label">{collected ? '✓ BANKED' : 'COLLECT'}</span>
-          </button>
+          />
           <button className="cv-slot cv-key cv-key-coin" onClick={onCoin} title="Coin slot" />
           <button className="cv-slot cv-key cv-key-spin" onClick={onSpin} title="Spin" />
           <button className="cv-slot cv-key cv-key-max" onClick={onMaxBet} title="Max bet" />

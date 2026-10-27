@@ -4733,7 +4733,7 @@ function Ransome() {
         tickets={machineTickets}
         onClaim={handleTicketClaim}
         vaultTotal={vaultUsd}
-        claimableCount={claimableCount}
+        claimableCount={claimableCount} brickShares={(['EARLY_FIVE', 'TOP_LINE', 'MIDDLE_LINE', 'BOTTOM_LINE', 'FULL_HOUSE_1', 'FULL_HOUSE_2', 'FULL_HOUSE_3'] as WinType[]).map(w => Math.round(vaultUsd * WIN_BPS[w] / 10000))}
         claimableTotal={claimableTotal}
         lastWin={lastWinAmount}
         credits={claimedUsd}

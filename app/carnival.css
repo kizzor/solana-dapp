@@ -715,22 +715,36 @@
 .cv-slot-vault .cv-gold-bar-sm { height: max(5px, 0.6cqw); width: 88%; }
 .cv-slot-vault .cv-gold-bar span { font-size: max(4px, 0.45cqw); }
 
-/* seven vault bricks — the same colour run as the banner lights, funds below */
+/* seven vault bricks — the banner-light colour run, stacked as a pyramid with
+   each position's cut of the vault printed inside it */
 .cv-vault-bricks {
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: max(1px, 0.2cqw);
+  gap: max(1px, 0.16cqw);
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
 }
 .cv-brick {
-  display: block;
-  width: 100%;
-  height: max(5px, 0.8cqw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: max(8px, 1.05cqw);
   border-radius: 2px;
+  overflow: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.cv-brick-usd {
+  font-family: 'Share Tech Mono', monospace;
+  font-weight: 700;
+  font-size: max(4px, 0.5cqw);
+  line-height: 1;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  color: rgba(8, 6, 14, 0.78);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .cv-brick-red { background: linear-gradient(180deg, #f87171, #ef4444 45%, #991b1b); }
 .cv-brick-orange { background: linear-gradient(180deg, #fdba74, #f97316 45%, #9a3412); }
@@ -1005,36 +1019,52 @@
 .cv-key-spin { left: 68.5%; top: 85.2%; width: 8%; height: 8%; }
 .cv-key-max { left: 78.5%; top: 85.2%; width: 8%; height: 8%; }
 
-/* 3D COLLECT button — sits over the art's painted button and replaces it */
+/* 3D COLLECT — a bomb button sealed under a glass cover, seated on the art's
+   painted button (which it now covers completely) */
 .cv-key.cv-key-collect {
-  left: 12.1%; top: 88.4%; width: 9.4%; height: 10.2%;
+  /* seated exactly over the art's painted COLLECT oval (art x12.4-23.6%, y90.5-98.5%)
+     so no trace of the painted button or its label peeks out */
+  left: 11.7%; top: 88%; width: 12.4%; height: 11.6%;
   display: grid;
   place-items: center;
+  z-index: 22;
   border-radius: 50%;
-  border: 2px solid #521111;
-  background: radial-gradient(circle at 50% 30%, #6b1414 0%, #450a0a 52%, #1b0404 100%);
-  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.16), inset 0 -7px 11px rgba(0, 0, 0, 0.65), 0 5px 0 #340707, 0 9px 15px rgba(0, 0, 0, 0.8);
-  transition: filter 0.15s, box-shadow 0.15s;
+  perspective: 240px;
+  border: 2px solid #171a20;
+  background: radial-gradient(ellipse at 50% 32%, #333844 0%, #1a1d25 58%, #0a0b0f 100%);
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.14), inset 0 -8px 12px rgba(0, 0, 0, 0.75), 0 6px 14px rgba(0, 0, 0, 0.85);
+  transition: filter 0.15s, box-shadow 0.2s;
 }
-.cv-key.cv-key-collect:hover { filter: brightness(1.15); }
-/* bigger tap target on phones without moving off the art's painted button */
-.cv-key.cv-key-collect::after { content: ''; position: absolute; inset: -55% -8%; border-radius: 45%; }
-.cv-key.cv-key-collect:active { transform: translateY(3px); box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.16), inset 0 -4px 8px rgba(0, 0, 0, 0.6), 0 2px 0 #340707, 0 4px 8px rgba(0, 0, 0, 0.7); }
-.cv-key-label {
+.cv-key.cv-key-collect:hover { filter: brightness(1.18); }
+.cv-key.cv-key-collect:active { transform: translateY(2px); }
+/* idle/disabled must stay fully opaque: the art's painted COLLECT button sits
+   right underneath and must never bleed through the sealed housing
+   (globals.css dims every disabled button to 0.45) */
+.cv-key-collect:disabled { opacity: 1; }
+/* the red button inside the housing */
+.cv-key.cv-key-collect::before {
+  content: '';
+  position: absolute;
+  left: 17%; right: 17%; top: 16%; bottom: 15%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, #4a0f0f 0%, #2c0707 55%, #140303 100%);
+  box-shadow: inset 0 3px 4px rgba(255, 255, 255, 0.12), inset 0 -6px 10px rgba(0, 0, 0, 0.7), 0 4px 0 #120202;
+  transition: background 0.25s, box-shadow 0.25s;
+}
+/* the glass dome sealing it shut */
+.cv-key.cv-key-collect::after {
+  content: '';
+  position: absolute;
+  inset: 3%;
+  border-radius: 50%;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.45) 0%, rgba(186, 230, 253, 0.18) 40%, rgba(255, 255, 255, 0.05) 58%, rgba(125, 211, 252, 0.22) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: inset 0 0 14px rgba(255, 255, 255, 0.4), inset 0 -8px 14px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(1.2px);
+  transform-origin: 50% 4%;
+  transition: transform 0.5s cubic-bezier(0.32, 0.9, 0.35, 1), opacity 0.5s;
+  z-index: 2;
   pointer-events: none;
-  font-family: 'Orbitron', sans-serif;
-  font-weight: 900;
-  font-size: max(5px, 1.02cqw);
-  letter-spacing: 0.4px;
-  line-height: 1;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
-}
-/* armed: a win is waiting — flash red until the countdown runs out */
-.cv-collect-armed {
-  border-color: #ef4444 !important;
-  background: radial-gradient(circle at 50% 30%, #f87171 0%, #ef4444 48%, #7f1d1d 100%) !important;
-  animation: cvCollectArm 0.55s infinite steps(1, end);
 }
 @keyframes cvCollectArm {
   0%, 100% {
@@ -1046,18 +1076,24 @@
     filter: brightness(0.72);
   }
 }
+/* win engaged: the glass swings open and the bomb button flashes red */
+.cv-key.cv-key-collect.cv-collect-armed::after { transform: rotateX(-118deg); opacity: 0.38; }
+.cv-key.cv-key-collect.cv-collect-armed::before {
+  background: radial-gradient(circle at 50% 30%, #f87171 0%, #ef4444 48%, #7f1d1d 100%);
+  animation: cvCollectArm 0.55s infinite steps(1, end);
+}
 /* collected inside the window: the flash turns green */
-.cv-collect-done {
-  border-color: #22c55e !important;
-  background: radial-gradient(circle at 50% 30%, #86efac 0%, #22c55e 48%, #14532d 100%) !important;
-  animation: none !important;
-  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.5), inset 0 -7px 11px rgba(0, 0, 0, 0.4), 0 5px 0 #14532d, 0 0 26px rgba(34, 197, 94, 0.95);
-  filter: none;
+.cv-key.cv-key-collect.cv-collect-done::after { transform: rotateX(-118deg); opacity: 0.38; }
+.cv-key.cv-key-collect.cv-collect-done::before {
+  background: radial-gradient(circle at 50% 30%, #86efac 0%, #22c55e 48%, #14532d 100%);
+  animation: none;
+  box-shadow: inset 0 3px 4px rgba(255, 255, 255, 0.45), inset 0 -6px 10px rgba(0, 0, 0, 0.4), 0 4px 0 #0b2e17, 0 0 22px rgba(34, 197, 94, 0.85);
 }
 
 /* ── LCD ─────────────────────────────────────────────────────────────────── */
 .cv-slot.cv-lcd {
-  left: 33.2%; top: 85.8%; width: 33%; height: 7.2%;
+  /* matched to the artwork's painted display (art x340-720, y510-543) */
+  left: 33.6%; top: 92.4%; width: 36.2%; height: 5.4%;
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -1065,7 +1101,7 @@
   padding: 0 1%;
   border-radius: 4px;
   background: #090311;
-  border: 1px solid #3b0764;
+  border: 1px solid transparent;
   box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.95);
   font-family: 'Share Tech Mono', monospace;
   font-size: max(6px, 1.05cqw);
@@ -1147,11 +1183,15 @@
   .cv-arena-stats strong { font-size: 11px; }
   .cv-head-vault { flex: 1 1 100%; padding: 7px 10px; font-size: 9px; text-align: center; }
   .cv-cab { aspect-ratio: 1024 / 780; }
-  .cv-slot.cv-window { top: 65%; height: 19.5%; }
-  .cv-strip-page { padding: 0 6%; }
-  .cv-sticker .cv-tk-num { font-size: 8px; }
-  .cv-sticker-label { font-size: 7px; }
-  .cv-win-arrow { width: 6%; }
+  /* indicator bulbs: bigger on phones, grown upward only */
+  .cv-slot.cv-lights { top: 11.6%; height: 14.5%; }
+  .cv-light { width: 7.5cqw; height: 7.5cqw; max-width: none; max-height: none; min-width: 0; min-height: 0; }
+  /* ticket glass reaches out toward the vault; swipe replaces the arrows */
+  .cv-slot.cv-window { left: 26%; width: 57.6%; top: 64%; height: 20.5%; }
+  .cv-win-arrow { display: none; }
+  .cv-strip-page { padding: 0 4%; gap: 3%; }
+  .cv-sticker { padding: 3% 4%; }
+  .cv-sticker .cv-tk-num { font-size: 9.5px; }
   .cv-kill { width: 100%; max-width: 420px; }
 }
 
