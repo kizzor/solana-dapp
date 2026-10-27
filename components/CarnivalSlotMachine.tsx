@@ -49,24 +49,6 @@ function pad(n: number | null) {
   return n < 10 ? `0${n}` : String(n)
 }
 
-// Compute claimable status from matched numbers
-// Early Five: 5+ matches
-// Line: 3 matching numbers in a row
-function computeClaimable(matched: number[], numbers: number[]): boolean {
-  const matchedSet = new Set(matched)
-  // Check for 5+ matches (Early Five)
-  if (matchedSet.size >= 5) return true
-  // Check for a line: 3 numbers that could be in a row
-  // Tickets have 15 numbers in a 3x5 grid (3 rows of 5)
-  // Check if any 3 matched numbers are in the same row of 5
-  const sorted = [...matchedSet].sort((a, b) => a - b)
-  for (let i = 0; i < sorted.length - 2; i++) {
-    // If 3 consecutive-ish numbers within a span of 15, likely a row
-    if (sorted[i + 2] - sorted[i] <= 15) return true
-  }
-  return false
-}
-
 const DEFAULT_LIGHTS: BannerLight[] = [
   { id: 'ff', label: 'FF' },
   { id: 'r1', label: 'R1' },
@@ -77,6 +59,7 @@ const DEFAULT_LIGHTS: BannerLight[] = [
   { id: 'fh3', label: 'FH3' },
 ]
 
+// one colour per indicator — the same run is stacked as bricks in the vault plate
 const LIGHT_TONE: Record<string, string> = {
   ff: 'cv-light-red',
   r1: 'cv-light-orange',
@@ -86,6 +69,7 @@ const LIGHT_TONE: Record<string, string> = {
   fh2: 'cv-light-blue',
   fh3: 'cv-light-pink',
 }
+const BRICK_TONE = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'pink']
 
 export default function CarnivalSlotMachine({
   round, currentNum, prevNum, countdown, sessionSecs, preGameSecs,
@@ -100,32 +84,60 @@ export default function CarnivalSlotMachine({
     return () => clearTimeout(t)
   }, [confirmKill])
 
-  // Auto-mark the drawn number on every strip. The update is guarded so a draw
-  // that hits nothing leaves state untouched (no re-render loop).
-  const [updatedTickets, setUpdatedTickets] = useState(tickets)
+  // ── round bookkeeping: winners are remembered, missed ones get torn out ─────
+  const [tornIds, setTornIds] = useState<number[]>([])
+  const [tearingIds, setTearingIds] = useState<number[]>([])
+  const [roundWinners, setRoundWinners] = useState<number[]>([])
+  const [collected, setCollected] = useState(false)
+  const prevCountdown = useRef<number | null>(null)
+  const tearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (tearTimer.current) clearTimeout(tearTimer.current) }, [])
+
+  // Remember every winner as it happens: the parent expires a win on the very
+  // tick the clock rolls, so by tear time they no longer read as claimable.
   useEffect(() => {
-    if (currentNum === null || currentNum === undefined) return
-    setUpdatedTickets(prev => {
-      let changed = false
-      const next = prev.map(ticket => {
-        if (!ticket.numbers.includes(currentNum) || ticket.matched.includes(currentNum)) return ticket
-        changed = true
-        const matched = [...ticket.matched, currentNum]
-        const claimable = computeClaimable(matched, ticket.numbers)
-        return { ...ticket, matched, claimable, win: claimable ? true : ticket.win }
-      })
-      return changed ? next : prev
+    const ids = tickets.filter(t => t.claimable && !tornIds.includes(t.id)).map(t => t.id)
+    if (!ids.length) return
+    setRoundWinners(prev => {
+      const merged = [...new Set([...prev, ...ids])]
+      return merged.length === prev.length ? prev : merged
     })
-  }, [currentNum])
+  }, [tickets, tornIds])
+
+  // Clock rolled into a fresh round (or hit zero): a win nobody collected is
+  // torn out of the roll, and the button re-arms for the new round.
+  useEffect(() => {
+    const prev = prevCountdown.current
+    prevCountdown.current = countdown
+    if (prev === null) return
+    const rolled = countdown > prev || (prev > 0 && countdown === 0)
+    if (!rolled) return
+    const missed = collected ? [] : [...roundWinners]
+    setRoundWinners([])
+    setCollected(false)
+    if (!missed.length) return
+    setTearingIds(missed)
+    if (tearTimer.current) clearTimeout(tearTimer.current)
+    tearTimer.current = setTimeout(() => {
+      setTornIds(p => [...new Set([...p, ...missed])])
+      setTearingIds([])
+      tearTimer.current = null
+    }, 700)
+  }, [countdown, collected, roundWinners])
 
   // Ranked closest-to-a-win first — this is the order the strips page through.
   const ranked = useMemo(() => {
-    return [...updatedTickets].sort((a, b) => {
+    return [...tickets].sort((a, b) => {
       if (a.claimable !== b.claimable) return a.claimable ? -1 : 1
       if (a.win !== b.win) return a.win ? -1 : 1
       return b.matched.length - a.matched.length
     })
-  }, [updatedTickets])
+  }, [tickets])
+
+  const visible = useMemo(() => ranked.filter(t => !tornIds.includes(t.id)), [ranked, tornIds])
+  const claimables = useMemo(() => visible.filter(t => t.claimable), [visible])
+  // armed = a win is sitting there uncollected: lights flash, button flashes red
+  const armed = claimables.length > 0 && !collected
 
   // ── window pager: two closest tickets per window, swipe for the next pair ──
   const STRIPS_PER_PAGE = 2
@@ -142,13 +154,13 @@ export default function CarnivalSlotMachine({
     onScroll()
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
-  }, [ranked.length])
+  }, [visible.length])
 
   const pages = useMemo(() => {
     const out: MachineTicket[][] = []
-    for (let i = 0; i < ranked.length; i += STRIPS_PER_PAGE) out.push(ranked.slice(i, i + STRIPS_PER_PAGE))
+    for (let i = 0; i < visible.length; i += STRIPS_PER_PAGE) out.push(visible.slice(i, i + STRIPS_PER_PAGE))
     return out
-  }, [ranked])
+  }, [visible])
   const pageCount = Math.max(1, pages.length)
 
   useEffect(() => {
@@ -163,8 +175,16 @@ export default function CarnivalSlotMachine({
     el.scrollTo({ left: (p - 1) * w, behavior: 'smooth' })
   }
 
+  const collect = () => {
+    const t = claimables[0]
+    if (!t) return
+    onClaim(t.id)
+    setCollected(true)
+  }
+
   const warm = currentNum !== null && preGameSecs === 0
   const spinning = preGameSecs > 0 || !warm
+  const clock = preGameSecs > 0 ? preGameSecs : countdown
 
   return (
     <div className="cv-shell cv-shell-arena">
@@ -174,14 +194,14 @@ export default function CarnivalSlotMachine({
           <span className="cv-arena-session">SESSION {fmtMMSS(sessionSecs)}</span>
         </div>
         <div className="cv-arena-stats">
-          <span>ROUND <strong>{round}</strong></span>
-          <span>NEXT DRAW <strong className="cv-gold">{preGameSecs > 0 ? '--' : fmtMMSS(countdown)}</strong></span>
+          <span>TIMER <strong className="cv-gold">{fmtMMSS(clock)}</strong></span>
           <span>TICKETS <strong>{tickets.length}</strong></span>
+          <span>CLAIMABLE <strong>{claimables.length}</strong></span>
           <button className="cv-head-vault" onClick={onOpenVault}>⚿ VAULT CLAIMS</button>
         </div>
       </header>
 
-      {/* ═══ MACHINE — cabinet art + 300px ticket apron ═══ */}
+      {/* ═══ MACHINE ═══ */}
       <div className="cv-machine">
         <div className="cv-cab">
           <img className="cv-cab-art" src="/assets/aistudio/carnival-cabinet.jfif" alt="" aria-hidden="true" />
@@ -203,13 +223,13 @@ export default function CarnivalSlotMachine({
             ))}
           </div>
 
-          {/* 7 banner lights: FF / R1 / R2 / R3 / FH1 / FH2 / FH3 */}
+          {/* 7 banner lights: dead while there is no detection, all seven racing when there is */}
           <div className="cv-slot cv-lights">
             {lights.map(l => (
               <div
                 key={l.id}
-                className={`cv-light ${LIGHT_TONE[l.id] || ''} ${l.lit ? 'cv-light-on' : ''}`}
-                title={l.label}
+                className={`cv-light ${LIGHT_TONE[l.id] || ''} ${armed ? 'cv-light-on' : ''}`}
+                title={armed ? `${l.label} — WIN DETECTED` : l.label}
               >
                 <span className="cv-light-dome">
                   <span className="cv-light-glare" />
@@ -219,17 +239,17 @@ export default function CarnivalSlotMachine({
             ))}
           </div>
 
-          {/* round plate */}
+          {/* timer plate — the round counter is gone, the clock owns this space */}
           <div className="cv-slot cv-slot-round">
-            <span className="cv-slot-k">ROUND</span>
-            <span className="cv-slot-v">{round}</span>
+            <span className="cv-slot-k">TIMER</span>
+            <span className="cv-slot-v">{fmtMMSS(clock)}</span>
           </div>
 
-          {/* vault plate */}
+          {/* vault plate: seven bricks in the light colours, funds underneath */}
           <div className="cv-slot cv-slot-vault">
-            <div className="cv-gold-bar"><span>999.9</span></div>
-            <div className="cv-gold-bar cv-gold-bar-sm"><span>GOLD</span></div>
-            <div className="cv-gold-bar cv-gold-bar-sm"><span>VAULT</span></div>
+            <div className="cv-vault-bricks" aria-hidden="true">
+              {BRICK_TONE.map(c => <span key={c} className={`cv-brick cv-brick-${c}`} />)}
+            </div>
             <div className="cv-vault-amount cv-vault-amount-sm">
               ${(vaultTotal / 1_000_000).toFixed(2)}M
             </div>
@@ -268,19 +288,24 @@ export default function CarnivalSlotMachine({
             </div>
           </div>
 
-          {/* ticket window — two closest strips of numbers printed in the glass */}
-          <div className={`cv-slot cv-window ${claimableCount > 0 ? 'cv-window-hot' : ''}`}>
+          {/* ticket window — red strips, two closest to a win in the glass */}
+          <div className={`cv-slot cv-window ${claimables.length > 0 ? 'cv-window-hot' : ''}`}>
             <div className="cv-strips" ref={stripsRef} aria-label="Closest tickets">
-              {ranked.length === 0 ? (
-                <div className="cv-strips-empty">NO TICKETS — MINT IN LOBBY</div>
+              {visible.length === 0 ? (
+                <div className="cv-strips-empty">
+                  {ranked.length === 0 ? 'NO TICKETS — MINT IN LOBBY' : 'ALL STRIPS TORN — MINT ANOTHER'}
+                </div>
               ) : pages.map((page, pi) => (
                 <div className="cv-strip-page" key={pi}>
                   {page.map(t => (
-                    <article key={t.id} className={`cv-sticker ${t.claimable ? 'cv-sticker-win' : ''}`}>
-                      <div className="cv-sticker-label">
-                        <span className="cv-sticker-serial">{t.serial}</span>
-                        <span className="cv-sticker-hits">{t.matched.length}/15</span>
-                      </div>
+                    <article
+                      key={t.id}
+                      className={[
+                        'cv-sticker',
+                        (t.claimable || (roundWinners.includes(t.id) && !collected)) ? 'cv-sticker-win' : '',
+                        tearingIds.includes(t.id) ? 'cv-sticker-torn' : '',
+                      ].filter(Boolean).join(' ')}
+                    >
                       <TicketNumbers numbers={t.numbers} matched={t.matched} />
                     </article>
                   ))}
@@ -311,12 +336,15 @@ export default function CarnivalSlotMachine({
             )}
           </div>
 
-          {/* collect / coin / spin / max bet — the machine's own keys */}
+          {/* COLLECT — 3D key: red while a win waits, green once banked */}
           <button
-            className={`cv-slot cv-key cv-key-collect ${claimableCount > 0 ? 'cv-collect-live' : ''}`}
-            onClick={() => { const t = ranked.find(r => r.claimable); if (t) onClaim(t.id) }}
-            title={claimableCount > 0 ? 'Collect winnings' : 'No claimable ticket'}
-          />
+            className={`cv-slot cv-key cv-key-collect ${armed ? 'cv-collect-armed' : ''} ${collected ? 'cv-collect-done' : ''}`}
+            onClick={collect}
+            disabled={!armed}
+            title={armed ? `Collect ${claimables.length} winning ticket${claimables.length === 1 ? '' : 's'}` : collected ? 'Winnings banked this round' : 'No claimable ticket'}
+          >
+            <span className="cv-key-label">{collected ? '✓ BANKED' : 'COLLECT'}</span>
+          </button>
           <button className="cv-slot cv-key cv-key-coin" onClick={onCoin} title="Coin slot" />
           <button className="cv-slot cv-key cv-key-spin" onClick={onSpin} title="Spin" />
           <button className="cv-slot cv-key cv-key-max" onClick={onMaxBet} title="Max bet" />
@@ -329,7 +357,7 @@ export default function CarnivalSlotMachine({
             <span className="cv-lcd-sep" />
             <span><i>BET</i>{bet}</span>
             <span className="cv-lcd-sep" />
-            <span><i>CLAIM</i>{claimableCount}</span>
+            <span><i>CLAIM</i>{claimables.length}</span>
           </div>
 
           {/* lever */}
