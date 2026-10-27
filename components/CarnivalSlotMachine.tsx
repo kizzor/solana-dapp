@@ -60,8 +60,14 @@ function usd(n: number) {
   return `$${Math.round(n)}`
 }
 
-// pyramid widths: narrow at the top, the 40% jackpot forms the base
-const BRICK_WIDTH = (i: number) => `${34 + i * 11}%`
+// pyramid slice taper: a virtual apex 0.35 heights above the plate keeps every
+// slice wide enough to print its value (a needle point could not)
+const PYRAMID_APEX = 0.35
+const sliceClip = (i: number) => {
+  const f0 = (50 * (i / 7 + PYRAMID_APEX)) / (1 + PYRAMID_APEX)
+  const f1 = (50 * ((i + 1) / 7 + PYRAMID_APEX)) / (1 + PYRAMID_APEX)
+  return `polygon(${50 - f0}% 0, ${50 + f0}% 0, ${50 + f1}% 100%, ${50 - f1}% 100%)`
+}
 
 const DEFAULT_LIGHTS: BannerLight[] = [
   { id: 'ff', label: 'FF' },
@@ -151,8 +157,10 @@ export default function CarnivalSlotMachine({
 
   const visible = useMemo(() => ranked.filter(t => !tornIds.includes(t.id)), [ranked, tornIds])
   const claimables = useMemo(() => visible.filter(t => t.claimable), [visible])
-  // armed = a win is sitting there uncollected: lights flash, button flashes red
+  // armed = a win is sitting there uncollected: lights flicker, button flashes red
   const armed = claimables.length > 0 && !collected
+  // round finished with a win banked: the lights settle into a steady glow
+  const holdGlow = !armed && roundWinners.length > 0
 
   // ── window pager: two closest tickets per window, swipe for the next pair ──
   const STRIPS_PER_PAGE = 2
@@ -238,13 +246,14 @@ export default function CarnivalSlotMachine({
             ))}
           </div>
 
-          {/* 7 banner lights: dead while there is no detection, all seven racing when there is */}
+          {/* 7 banner lights: coloured glass at rest, a rapid flicker when a win
+              engages, a permanent glow once the round is finished */}
           <div className="cv-slot cv-lights">
             {lights.map(l => (
               <div
                 key={l.id}
-                className={`cv-light ${LIGHT_TONE[l.id] || ''} ${armed ? 'cv-light-on' : ''}`}
-                title={armed ? `${l.label} — WIN DETECTED` : l.label}
+                className={`cv-light ${LIGHT_TONE[l.id] || ''} ${armed ? 'cv-light-on cv-light-flicker' : holdGlow ? 'cv-light-on cv-light-hold' : ''}`}
+                title={armed ? `${l.label} — WIN DETECTED` : holdGlow ? `${l.label} — ROUND COMPLETE` : l.label}
               >
                 <span className="cv-light-dome">
                   <span className="cv-light-glare" />
@@ -260,22 +269,26 @@ export default function CarnivalSlotMachine({
             <span className="cv-slot-v">{clock}</span>
           </div>
 
-          {/* vault plate: seven bricks in the light colours, funds underneath */}
+          {/* vault plate: a transparent coloured-glass pyramid — seven slices,
+              each carrying that win's cut of the vault */}
           <div className="cv-slot cv-slot-vault">
             <div className="cv-vault-bricks">
               {BRICK_TONE.map((c, i) => (
-                <span key={c} className={`cv-brick cv-brick-${c}`} style={{ width: BRICK_WIDTH(i) }}>
+                <span key={c} className={`cv-brick cv-brick-${c}`} style={{ clipPath: sliceClip(i) }}>
                   <span className="cv-brick-usd">{usd(brickShares[i] ?? 0)}</span>
                 </span>
               ))}
-            </div>
-            <div className="cv-vault-amount cv-vault-amount-sm">
-              ${(vaultTotal / 1_000_000).toFixed(2)}M
             </div>
           </div>
 
           {/* bridges the vault plate to the window edge — masks the art's paytable */}
           <div className="cv-slot cv-vault-fill" aria-hidden="true" />
+
+          {/* the vault total owns the space above the COLLECT key */}
+          <div className="cv-slot cv-vault-total" aria-label="Vault total">
+            <span className="cv-vault-total-k">TOTAL</span>
+            <span className="cv-vault-total-v">${(vaultTotal / 1_000_000).toFixed(2)}M</span>
+          </div>
 
           {/* CRT screen — single roller (no heading: the number owns the glass) */}
           <div className={`cv-slot cv-screen ${spinning ? 'cv-screen-waiting' : ''}`}>

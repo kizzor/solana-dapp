@@ -673,7 +673,17 @@
   color: #fff;
   text-shadow: 0 0 0.4cqw rgba(255, 255, 255, 0.9), 0 0 0.9cqw currentColor;
 }
-/* seven colours, one per indicator — only painted while the bulb is lit */
+/* idle: coloured glass — the colour always sits in the bulb, but it does not
+   glow until a win engages (same cut-glass treatment as the pyramid) */
+.cv-light-red .cv-light-dome { background: radial-gradient(circle at 35% 30%, rgba(253, 164, 164, 0.97), rgba(239, 68, 68, 0.88) 48%, rgba(120, 18, 18, 0.92) 100%); color: #ef4444; }
+.cv-light-orange .cv-light-dome { background: radial-gradient(circle at 35% 30%, rgba(254, 203, 150, 0.97), rgba(249, 115, 22, 0.88) 48%, rgba(124, 45, 18, 0.92) 100%); color: #f97316; }
+.cv-light-yellow .cv-light-dome { background: radial-gradient(circle at 35% 30%, rgba(254, 245, 165, 0.97), rgba(234, 179, 8, 0.9) 48%, rgba(113, 63, 18, 0.92) 100%); color: #eab308; }
+.cv-light-green .cv-light-dome { background: radial-gradient(circle at 35% 30%, rgba(163, 244, 194, 0.95), rgba(34, 197, 94, 0.85) 48%, rgba(17, 76, 44, 0.92) 100%); color: #22c55e; }
+.cv-light-cyan .cv-light-dome { background: radial-gradient(circle at 35% 30%, rgba(186, 246, 254, 0.95), rgba(6, 182, 212, 0.85) 48%, rgba(19, 78, 94, 0.92) 100%); color: #06b6d4; }
+.cv-light-blue .cv-light-dome { background: radial-gradient(circle at 35% 30%, rgba(165, 205, 254, 0.97), rgba(59, 130, 246, 0.9) 48%, rgba(26, 50, 116, 0.92) 100%); color: #3b82f6; }
+.cv-light-pink .cv-light-dome { background: radial-gradient(circle at 35% 30%, rgba(251, 191, 224, 0.95), rgba(236, 72, 153, 0.87) 48%, rgba(126, 24, 72, 0.92) 100%); color: #ec4899; }
+
+/* seven colours, one per indicator — painted while the bulb is lit */
 .cv-light-on.cv-light-red .cv-light-dome { background: radial-gradient(circle at 35% 30%, #fca5a5, #ef4444 45%, #7f1d1d 100%); color: #ef4444; }
 .cv-light-on.cv-light-orange .cv-light-dome { background: radial-gradient(circle at 35% 30%, #fed7aa, #f97316 45%, #7c2d12 100%); color: #f97316; }
 .cv-light-on.cv-light-yellow .cv-light-dome { background: radial-gradient(circle at 35% 30%, #fef9c3, #eab308 45%, #713f12 100%); color: #eab308; }
@@ -688,6 +698,24 @@
   animation: cvLightFlash 0.28s infinite steps(1, end);
 }
 @keyframes cvLightFlash { 50% { filter: brightness(0.6) saturate(0.85); } }
+/* engaged: a rapid flickering glow */
+.cv-light-flicker .cv-light-dome { animation: cvLightRapid 0.13s infinite steps(1, end); }
+@keyframes cvLightRapid {
+  0%, 100% {
+    filter: brightness(1.55) saturate(1.3);
+    box-shadow: 0 0 1.5cqw currentColor, 0 0 3cqw currentColor, inset 0 1px 2px rgba(255, 255, 255, 0.9);
+  }
+  50% {
+    filter: brightness(0.5) saturate(0.75);
+    box-shadow: 0 0 0.25cqw currentColor, inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  }
+}
+/* round finished: the glow holds permanently until the next round */
+.cv-light-hold .cv-light-dome {
+  animation: none;
+  filter: brightness(1.4) saturate(1.25);
+  box-shadow: 0 0 1.4cqw currentColor, 0 0 2.8cqw currentColor, inset 0 1px 2px rgba(255, 255, 255, 0.9);
+}
 
 /* ── round + vault plates ────────────────────────────────────────────────── */
 .cv-slot-round {
@@ -715,44 +743,57 @@
 .cv-slot-vault .cv-gold-bar-sm { height: max(5px, 0.6cqw); width: 88%; }
 .cv-slot-vault .cv-gold-bar span { font-size: max(4px, 0.45cqw); }
 
-/* seven vault bricks — the banner-light colour run, stacked as a pyramid with
-   each position's cut of the vault printed inside it */
+/* seven glass slices — a transparent coloured-glass pyramid, each slice carrying
+   that win's cut of the vault (the per-slice clip-path arrives inline) */
 .cv-vault-bricks {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  gap: max(1px, 0.16cqw);
+  gap: max(1px, 0.14cqw);
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
 }
 .cv-brick {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: max(8px, 1.05cqw);
-  border-radius: 2px;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
   overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.14), 0 0 5px rgba(0, 0, 0, 0.5);
+}
+/* diagonal sheen — every slice reads as cut glass */
+.cv-brick::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(112deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.06) 34%, transparent 55%, rgba(255, 255, 255, 0.2) 100%);
+  pointer-events: none;
 }
 .cv-brick-usd {
+  position: relative;
+  z-index: 1;
   font-family: 'Share Tech Mono', monospace;
   font-weight: 700;
   font-size: max(4px, 0.5cqw);
   line-height: 1;
   letter-spacing: 0.2px;
   white-space: nowrap;
-  color: rgba(8, 6, 14, 0.78);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  text-shadow: 0 0 5px rgba(255, 255, 255, 0.85), 0 1px 1px rgba(0, 0, 0, 0.7);
 }
-.cv-brick-red { background: linear-gradient(180deg, #f87171, #ef4444 45%, #991b1b); }
-.cv-brick-orange { background: linear-gradient(180deg, #fdba74, #f97316 45%, #9a3412); }
-.cv-brick-yellow { background: linear-gradient(180deg, #fde047, #eab308 45%, #854d0e); }
-.cv-brick-green { background: linear-gradient(180deg, #86efac, #22c55e 45%, #166534); }
-.cv-brick-cyan { background: linear-gradient(180deg, #67e8f9, #06b6d4 45%, #155e75); }
-.cv-brick-blue { background: linear-gradient(180deg, #93c5fd, #3b82f6 45%, #1e3a8a); }
-.cv-brick-pink { background: linear-gradient(180deg, #f9a8d4, #ec4899 45%, #9d174d); }
+/* translucent tint per win colour — the dark plate reads through the glass */
+.cv-brick-red { background: linear-gradient(165deg, rgba(248, 113, 113, 0.55), rgba(239, 68, 68, 0.3) 55%, rgba(127, 29, 29, 0.52)); }
+.cv-brick-orange { background: linear-gradient(165deg, rgba(253, 186, 116, 0.55), rgba(249, 115, 22, 0.3) 55%, rgba(124, 45, 18, 0.52)); }
+.cv-brick-yellow { background: linear-gradient(165deg, rgba(253, 224, 71, 0.55), rgba(234, 179, 8, 0.3) 55%, rgba(113, 63, 18, 0.52)); }
+.cv-brick-green { background: linear-gradient(165deg, rgba(134, 239, 172, 0.5), rgba(34, 197, 94, 0.28) 55%, rgba(20, 101, 52, 0.52)); }
+.cv-brick-cyan { background: linear-gradient(165deg, rgba(103, 232, 249, 0.5), rgba(6, 182, 212, 0.28) 55%, rgba(21, 94, 117, 0.52)); }
+.cv-brick-blue { background: linear-gradient(165deg, rgba(147, 197, 253, 0.5), rgba(59, 130, 246, 0.28) 55%, rgba(30, 58, 138, 0.52)); }
+.cv-brick-pink { background: linear-gradient(165deg, rgba(249, 168, 212, 0.5), rgba(236, 72, 153, 0.28) 55%, rgba(157, 23, 77, 0.52)); }
 
 /* The artwork paints its own paytable ("3 GOLD 7's… / 2 CHERRIES…") into the gap
    between the vault plate and the ticket window. This bridges the plate out to
@@ -765,6 +806,36 @@
   border-radius: 0 6px 6px 0;
   box-shadow: inset 0 0 1.2cqw rgba(0, 0, 0, 0.95);
   pointer-events: none;
+}
+
+/* vault total — owns the dead space directly above the COLLECT key */
+.cv-vault-total {
+  left: 11.4%; top: 79.4%; width: 12.6%; height: 7.8%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 5px;
+  background: radial-gradient(circle at 50% 30%, #241338 0%, #150a22 65%, #0d0617 100%);
+  border: 1px solid #b45309;
+  box-shadow: inset 0 0 1cqw rgba(0, 0, 0, 0.95), 0 0 0.8cqw rgba(234, 179, 8, 0.28);
+  pointer-events: none;
+}
+.cv-vault-total-k {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: max(5px, 0.65cqw);
+  letter-spacing: 0.6px;
+  color: #a78bfa;
+}
+.cv-vault-total-v {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: max(8px, 1.25cqw);
+  line-height: 1;
+  color: #fcd34d;
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.9);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── CRT screen with the roller ──────────────────────────────────────────── */
@@ -1173,6 +1244,28 @@
 @media (max-width: 980px) {
   .cv-main { grid-template-columns: 1fr; }
   .cv-coll-list { max-height: none; }
+  /* raffle tickets: boxed monospace numbers, the strip runs edge to edge */
+  .cv-strip-page { padding: 0 1.4%; gap: 1.8%; }
+  .cv-sticker { padding: 2.2% 2.4%; outline: 1px dashed rgba(255, 255, 255, 0.42); outline-offset: -3px; }
+  .cv-sticker .cv-tk-nums { gap: 6% 2%; }
+  .cv-sticker .cv-tk-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    padding: 1px 0;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+    background: rgba(74, 6, 6, 0.22);
+    box-shadow: none;
+    letter-spacing: -0.3px;
+  }
+  .cv-sticker .cv-tk-num-hit {
+    background: linear-gradient(135deg, #fef08a, #f59e0b);
+    border-color: #fffbeb;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.9);
+    color: #450a0a;
+    text-shadow: none;
+    transform: none;
+  }
 }
 @media (max-width: 700px) {
   /* phone arena: two-row head, taller glass, two tickets per swipe */
@@ -1186,12 +1279,10 @@
   /* indicator bulbs: bigger on phones, grown upward only */
   .cv-slot.cv-lights { top: 11.6%; height: 14.5%; }
   .cv-light { width: 7.5cqw; height: 7.5cqw; max-width: none; max-height: none; min-width: 0; min-height: 0; }
-  /* ticket glass reaches out toward the vault; swipe replaces the arrows */
-  .cv-slot.cv-window { left: 26%; width: 57.6%; top: 64%; height: 20.5%; }
+  /* ticket glass: dragged down off the roller screen, swipe replaces the arrows */
+  .cv-slot.cv-window { left: 26%; width: 57.6%; top: 66.5%; height: 19%; }
   .cv-win-arrow { display: none; }
-  .cv-strip-page { padding: 0 4%; gap: 3%; }
-  .cv-sticker { padding: 3% 4%; }
-  .cv-sticker .cv-tk-num { font-size: 9.5px; }
+  .cv-sticker .cv-tk-num { font-size: 8px; }
   .cv-kill { width: 100%; max-width: 420px; }
 }
 
