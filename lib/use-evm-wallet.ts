@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { createWalletClient, custom, parseUnits, formatUnits, keccak256, encodePacked } from 'viem';
+import { createWalletClient, custom, parseUnits, formatUnits } from 'viem';
 import { evmPublicClient } from './evm-client';
 import {
   ROBINHOOD_CHAIN,
@@ -14,10 +14,22 @@ import {
   RANSOME_VAULT_ADDRESS,
   X_LOCK_VAULT_ADDRESS,
   REQUIRED_X_LOCK,
-  STANDARD_MINT_PRICE_X,
-  DISCOUNTED_MINT_PRICE_X,
 } from './robinhood-config';
 import { ERC20_ABI, XLOCK_VAULT_ABI, RANSOME_GAME_ABI, RANSOME_VAULT_ABI, TEST_X_TOKEN_ABI } from './game-abi';
+
+/** USD value of one ticket, 8 decimals — mirrors RansomeGame.TICKET_PRICE_USD. */
+const TICKET_USD_FULL = 50_000_000n;    // $0.50
+const TICKET_USD_DISCOUNT = 25_000_000n; // $0.25 with 1,000 tokens locked
+
+/**
+ * Tokens owed for ONE ticket at a given USD price, rounded UP.
+ * Mirrors RansomeGame.ticketTokens exactly — the contract is the source of truth.
+ */
+export function tokensPerTicket(price8: bigint, discounted: boolean): bigint {
+  if (price8 <= 0n) return 0n;
+  const usd = discounted ? TICKET_USD_DISCOUNT : TICKET_USD_FULL;
+  return (usd * 10n ** 18n + price8 - 1n) / price8;
+}
 
 export function useEvmWallet() {
   const [address, setAddress] = useState<`0x${string}` | null>(null);
@@ -31,7 +43,14 @@ export function useEvmWallet() {
   const [xBalance, setXBalance] = useState<string>('0');
   const [vaultXBalance, setVaultXBalance] = useState<string>('0');
   const [lockedXAmount, setLockedXAmount] = useState<string>('0');
+  // Tokens needed for the discount, read from the vault. USD-denominated on-chain
+  // when a price source is wired, so it is a number that moves — never hardcode it.
+  const [requiredLock, setRequiredLock] = useState<number>(REQUIRED_X_LOCK);
   const [isDiscountEligible, setIsDiscountEligible] = useState<boolean>(false);
+  const [yieldBalance, setYieldBalance] = useState<string>('0');
+  // Prize-token USD price (8 dp) read from the game contract. 0 = unset → the
+  // token rail refuses to mint rather than charging a wrong amount.
+  const [tokenPriceInUsd, setTokenPriceInUsd] = useState<bigint>(0n);
   const [isUnbonding, setIsUnbonding] = useState<boolean>(false);
   const [unlockTimestamp, setUnlockTimestamp] = useState<number>(0);
 
@@ -159,6 +178,16 @@ export function useEvmWallet() {
         setVaultXBalance(formatUnits(vBal, 18));
       }
 
+      // 3b. Ticket price in USD (8 dp) — converts $0.50 into a token amount
+      if (RANSOME_GAME_ADDRESS !== '0x0000000000000000000000000000000000000000') {
+        const priceRaw = await (evmPublicClient as any).readContract({
+          address: RANSOME_GAME_ADDRESS,
+          abi: RANSOME_GAME_ABI,
+          functionName: 'tokenPriceInUsd',
+        });
+        setTokenPriceInUsd(BigInt(priceRaw));
+      }
+
       // 4. Lock status
       if (X_LOCK_VAULT_ADDRESS !== '0x0000000000000000000000000000000000000000') {
         const eligible = await (evmPublicClient as any).readContract({
@@ -169,15 +198,41 @@ export function useEvmWallet() {
         });
         setIsDiscountEligible(eligible);
 
+        try {
+          const req = await (evmPublicClient as any).readContract({
+            address: X_LOCK_VAULT_ADDRESS,
+            abi: XLOCK_VAULT_ABI,
+            functionName: 'lockRequirement',
+          });
+          setRequiredLock(Number(formatUnits(req, 18)));
+        } catch {
+          setRequiredLock(REQUIRED_X_LOCK);
+        }
+
+        // `lockInfo` returns named fields: amount (retained), deposited (lifetime,
+        // drives eligibility), unlockTimestamp, isUnbonding. The 10% fuel slice is
+        // already gone from `amount`, so the UI shows the retained principal.
         const lockState = await (evmPublicClient as any).readContract({
           address: X_LOCK_VAULT_ADDRESS,
           abi: XLOCK_VAULT_ABI,
-          functionName: 'locks',
+          functionName: 'lockInfo',
           args: [address],
         });
         setLockedXAmount(formatUnits(lockState[0], 18));
-        setUnlockTimestamp(Number(lockState[1]));
-        setIsUnbonding(lockState[2]);
+        setUnlockTimestamp(Number(lockState[2]));
+        setIsUnbonding(lockState[3]);
+
+        try {
+          const earned = await (evmPublicClient as any).readContract({
+            address: X_LOCK_VAULT_ADDRESS,
+            abi: XLOCK_VAULT_ABI,
+            functionName: 'earned',
+            args: [address],
+          });
+          setYieldBalance(formatUnits(earned, 18));
+        } catch {
+          setYieldBalance('0');
+        }
       }
     } catch (e) {
       console.warn('Failed to refresh balances:', e);
@@ -234,7 +289,7 @@ export function useEvmWallet() {
   };
 
   // Lock 1,000 X
-  const lockXTokens = async (amount: number = REQUIRED_X_LOCK) => {
+  const lockXTokens = async (amount: number = requiredLock) => {
     if (!address || typeof window === 'undefined') throw new Error('Wallet not connected');
     const walletClient = createWalletClient({
       chain: ROBINHOOD_CHAIN as any,
@@ -303,29 +358,98 @@ export function useEvmWallet() {
     return tx;
   };
 
-  // Mint Consoles with any supported token (USDG, USDC, USDT, ETH, X)
+  const claimYield = async () => {
+    if (!address || typeof window === 'undefined') throw new Error('Wallet not connected');
+    const walletClient = createWalletClient({
+      chain: ROBINHOOD_CHAIN as any,
+      transport: custom((window as any).ethereum),
+    });
+
+    const tx = await (walletClient as any).writeContract({
+      account: address,
+      address: X_LOCK_VAULT_ADDRESS,
+      abi: XLOCK_VAULT_ABI,
+      functionName: 'claimReward',
+      chain: ROBINHOOD_CHAIN,
+    });
+    await (evmPublicClient as any).waitForTransactionReceipt({ hash: tx });
+    await refreshBalances();
+    return tx;
+  };
+
+  /**
+   * Which on-chain device ids did MY mint just produce?
+   * Ids are assigned in mint order per session, so I walk back from the newest
+   * id and keep the ones this wallet owns. Doing it by ownership (instead of
+   * `count - 1`) survives another wallet minting in the same block.
+   */
+  const resolveMintIds = async (count: number): Promise<{ sessionId: bigint; deviceIds: number[] } | null> => {
+    if (!address) return null;
+    try {
+      const sessionId = BigInt(await (evmPublicClient as any).readContract({
+        address: RANSOME_GAME_ADDRESS,
+        abi: RANSOME_GAME_ABI,
+        functionName: 'currentSessionId',
+      }));
+      const total = Number(await (evmPublicClient as any).readContract({
+        address: RANSOME_GAME_ADDRESS,
+        abi: RANSOME_GAME_ABI,
+        functionName: 'sessionDeviceCount',
+        args: [sessionId],
+      }));
+      const mine: number[] = [];
+      for (let id = total - 1; id >= 0 && mine.length < count; id--) {
+        const [owner] = (await (evmPublicClient as any).readContract({
+          address: RANSOME_GAME_ADDRESS,
+          abi: RANSOME_GAME_ABI,
+          functionName: 'devices',
+          args: [sessionId, BigInt(id)],
+        })) as [string, string, boolean];
+        if (String(owner).toLowerCase() === address.toLowerCase()) mine.unshift(id);
+      }
+      return { sessionId, deviceIds: mine };
+    } catch (e) {
+      console.warn('Could not resolve on-chain device ids:', e);
+      return null;
+    }
+  };
+
+  // Mint Consoles with a stablecoin or X.
+  //
+  // There is no ETH rail, by design: the contract has no `mintWithETH` (it
+  // reverted on every call), and a USD ticket paid in ETH is the only price in
+  // the economy that would have to come from an authority-set FX rate.
   const mintConsoles = async (
-    tokenSymbol: 'USDG' | 'USDC' | 'USDT' | 'ETH' | 'X',
+    tokenSymbol: 'USDG' | 'USDC' | 'USDT' | 'X',
     count: number,
     grids: number[][][]
   ) => {
     if (!address || typeof window === 'undefined') throw new Error('Wallet not connected');
     
-    const targetChain = chainId ? SUPPORTED_EVM_CHAINS[chainId] || ROBINHOOD_CHAIN : ROBINHOOD_CHAIN;
     const walletClient = createWalletClient({
-      chain: targetChain as any,
+      chain: ROBINHOOD_CHAIN as any,
       transport: custom((window as any).ethereum),
     });
 
-    const gridHashes = grids.map((grid) => {
-      const flattened = grid.flat();
-      return keccak256(encodePacked(['uint8[]'], [flattened]));
-    });
+    // The board goes on-chain IN THE CLEAR, not as a hash. The contract checks
+    // it (15 numbers, five per row), refuses a card holding a number that is
+    // already on the wall, and refuses a second copy of the same card in the
+    // round — which is what stops a revealed ticket from being cloned.
+    // 27 cells, row-major, 0 = empty: `uint8[27][]`, one board per ticket.
+    const boards = grids.map((grid) => grid.flat());
+    if (boards.length !== count) throw new Error('One board is required per ticket');
+    for (const board of boards) {
+      if (board.length !== 27) throw new Error('A board is 27 cells (3 rows × 9)');
+    }
 
     // 1. Direct X Token Minting (Robinhood Chain)
     if (tokenSymbol === 'X') {
-      const pricePerUnit = isDiscountEligible ? DISCOUNTED_MINT_PRICE_X : STANDARD_MINT_PRICE_X;
-      const totalX = parseUnits((pricePerUnit * count).toString(), 18);
+      // USD-denominated ticket: tokens owed = $0.50 (or $0.25) / tokenPriceInUsd.
+      const perTicket = tokensPerTicket(tokenPriceInUsd, isDiscountEligible);
+      if (perTicket === 0n) {
+        throw new Error('Ticket price not set on chain — authority must call setTokenPriceInUsd first');
+      }
+      const totalX = perTicket * BigInt(count);
 
       const approveTx = await (walletClient as any).writeContract({
         account: address,
@@ -342,53 +466,16 @@ export function useEvmWallet() {
         address: RANSOME_GAME_ADDRESS,
         abi: RANSOME_GAME_ABI,
         functionName: 'mintWithXToken',
-        args: [count, gridHashes],
+        args: [count, boards],
         chain: ROBINHOOD_CHAIN,
       });
       const receipt = await (evmPublicClient as any).waitForTransactionReceipt({ hash: mintTx });
+      const minted = await resolveMintIds(count);
       await refreshBalances();
-      return { receipt, mintTx, gridHashes };
+      return { receipt, mintTx, boards, ...(minted ?? {}) };
     }
 
-    // 2. Native ETH Minting (Supports All Major Chains)
-    if (tokenSymbol === 'ETH') {
-      const usdPrice = isDiscountEligible ? 0.25 : 0.50;
-      const totalUsd = usdPrice * count;
-      const estEth = (totalUsd / 2500) * 1.05;
-      const ethWei = parseUnits(estEth.toFixed(6), 18);
-
-      // On Robinhood Chain, call contract mintWithETH
-      if (chainId === ROBINHOOD_CHAIN_ID && RANSOME_GAME_ADDRESS !== '0x0000000000000000000000000000000000000000') {
-        const tx = await (walletClient as any).writeContract({
-          account: address,
-          address: RANSOME_GAME_ADDRESS,
-          abi: RANSOME_GAME_ABI,
-          functionName: 'mintWithETH',
-          args: [count, gridHashes, 1n],
-          value: ethWei,
-          chain: ROBINHOOD_CHAIN,
-        });
-        const receipt = await (evmPublicClient as any).waitForTransactionReceipt({ hash: tx });
-        await refreshBalances();
-        return { receipt, tx, gridHashes };
-      } else {
-        // Multi-chain ETH payment fallback
-        const targetVault = RANSOME_VAULT_ADDRESS !== '0x0000000000000000000000000000000000000000' 
-          ? RANSOME_VAULT_ADDRESS 
-          : address;
-        
-        const tx = await (walletClient as any).sendTransaction({
-          account: address,
-          to: targetVault,
-          value: ethWei,
-          chain: targetChain,
-        });
-        await refreshBalances();
-        return { tx, gridHashes };
-      }
-    } 
-    
-    // 3. Stablecoin Minting (USDG, USDC, USDT)
+    // 2. Stablecoin Minting (USDG, USDC, USDT)
     const tokenMap: Record<string, `0x${string}`> = {
       USDG: USDG_ADDRESS,
       USDC: USDC_ADDRESS,
@@ -413,12 +500,95 @@ export function useEvmWallet() {
       address: RANSOME_GAME_ADDRESS,
       abi: RANSOME_GAME_ABI,
       functionName: 'mintWithStablecoin',
-      args: [tokenAddress, count, gridHashes, 1n],
+      args: [tokenAddress, count, boards, 1n],
       chain: ROBINHOOD_CHAIN,
     });
     const receipt = await (evmPublicClient as any).waitForTransactionReceipt({ hash: mintTx });
+    const minted = await resolveMintIds(count);
     await refreshBalances();
-    return { receipt, mintTx, gridHashes };
+    return { receipt, mintTx, boards, ...(minted ?? {}) };
+  };
+
+  // ─── COLD-BOARD SUPPORT ──────────────────────────────────────────────────
+  // The mint refuses a board that holds a number already on the wall, so the
+  // cabinet must know the wall BEFORE it prints a card. One extra RPC read per
+  // mint batch; without it a late-round mint reverts on the first drawn number
+  // it happens to pick.
+  const readDrawnNumbers = async (): Promise<{ sessionId: bigint; drawn: number[] }> => {
+    if (RANSOME_GAME_ADDRESS === '0x0000000000000000000000000000000000000000') {
+      throw new Error('Game contract not configured');
+    }
+    const sessionId = BigInt(await (evmPublicClient as any).readContract({
+      address: RANSOME_GAME_ADDRESS,
+      abi: RANSOME_GAME_ABI,
+      functionName: 'currentSessionId',
+    }));
+    const s = (await (evmPublicClient as any).readContract({
+      address: RANSOME_GAME_ADDRESS,
+      abi: RANSOME_GAME_ABI,
+      functionName: 'getSession',
+      args: [sessionId],
+    })) as [bigint, number, boolean, bigint, readonly number[]];
+    return { sessionId, drawn: Array.from(s[4]).map(Number) };
+  };
+
+  // ─── CLAIM: the RANSOM actuator signs this with the PLAYER's wallet ──────
+  // `claimWin` is amount-free: the contract reserved the cut at the winning
+  // draw, so there is nothing for the client to state and nothing to trust it
+  // for. It also never needs the authority key — which is the whole point.
+  /**
+   * Press RANSOM. The board is revealed in the same call so the contract can
+   * recompute the tier itself — `claimWin` pays nothing on the authority's
+   * word, and the amount never leaves the chain.
+   *
+   * `grid` is the ticket's 27 cells, row-major, 0 for an empty cell — exactly
+   * the array that was hashed into `gridHash` at mint.
+   */
+  const claimConsoleWin = async (
+    deviceId: number | bigint,
+    winType: number,
+    grid: number[],
+    sessionIdArg?: bigint
+  ) => {
+    if (grid.length !== 27) throw new Error('A board is 27 cells (3 rows × 9)');
+    if (!address || typeof window === 'undefined') throw new Error('Wallet not connected');
+    if (RANSOME_GAME_ADDRESS === '0x0000000000000000000000000000000000000000') {
+      throw new Error('Game contract not configured');
+    }
+
+    const sessionId = sessionIdArg ?? BigInt(await (evmPublicClient as any).readContract({
+      address: RANSOME_GAME_ADDRESS,
+      abi: RANSOME_GAME_ABI,
+      functionName: 'currentSessionId',
+    }));
+
+    const [amount, claimed, expired] = (await (evmPublicClient as any).readContract({
+      address: RANSOME_GAME_ADDRESS,
+      abi: RANSOME_GAME_ABI,
+      functionName: 'claimableOf',
+      args: [sessionId, BigInt(deviceId), winType],
+    })) as [bigint, boolean, boolean];
+
+    if (claimed) throw new Error('This tier is already claimed');
+    if (expired || amount === 0n) {
+      throw new Error('No ransom reserved for this tier — it went to the treasury at the next draw');
+    }
+
+    const walletClient = createWalletClient({
+      chain: ROBINHOOD_CHAIN as any,
+      transport: custom((window as any).ethereum),
+    });
+    const tx = await (walletClient as any).writeContract({
+      account: address,
+      address: RANSOME_GAME_ADDRESS,
+      abi: RANSOME_GAME_ABI,
+      functionName: 'claimWin',
+      args: [sessionId, BigInt(deviceId), winType, grid],
+      chain: ROBINHOOD_CHAIN,
+    });
+    const receipt = await (evmPublicClient as any).waitForTransactionReceipt({ hash: tx });
+    await refreshBalances();
+    return { tx, receipt, amount, sessionId, deviceId: BigInt(deviceId), winType };
   };
 
   return {
@@ -435,7 +605,11 @@ export function useEvmWallet() {
     xBalance,
     vaultXBalance,
     lockedXAmount,
+    requiredLock,
     isDiscountEligible,
+    yieldBalance,
+    tokenPriceInUsd,
+    xTokensPerTicket: tokensPerTicket(tokenPriceInUsd, isDiscountEligible),
     isUnbonding,
     unlockTimestamp,
     claimTestXFaucet,
@@ -443,7 +617,18 @@ export function useEvmWallet() {
     lockXTokens,
     initiateUnlockX,
     withdrawX,
+    claimYield,
     mintConsoles,
+    readDrawnNumbers,
+    claimConsoleWin,
     refreshBalances,
   };
 }
+
+/**
+ * The hook's own return type, so the cabinet can receive the SAME instance the
+ * shell already connected. A second `useEvmWallet()` inside a modal would keep
+ * its own `address: null` and refuse to mint, which is exactly the kind of
+ * subtle disconnect bug that looks like a contract problem.
+ */
+export type EvmWallet = ReturnType<typeof useEvmWallet>;

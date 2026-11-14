@@ -17,5 +17,8 @@
     "paths": { "@/*": ["./*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  // `scripts/` and `test/` run under Hardhat, whose viem client types only exist
+  // inside its own program (contract.read / contract.write). They are exercised by
+  // `hardhat run` / `hardhat test`, not by the app's typecheck.
+  "exclude": ["node_modules", "test", "scripts", ".tmp-explore", "artifacts", "cache"]
 }

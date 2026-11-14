@@ -7,7 +7,45 @@ import { RANSOME_GAME_ABI } from '@/lib/game-abi';
 
 export const dynamic = 'force-dynamic';
 
+type Completion = { deviceId: bigint; winType: number };
+
+/**
+ * The draw reserves every tier it completes, so the tier list has to ride in
+ * the SAME transaction as the number — there is no separate "declare wins"
+ * call, and no window in which a completion can be added after the fact.
+ * `winType` 4 = full house; the contract derives FH1/2/3 itself.
+ *
+ * GET  — cron keeper: draws a number, declares nothing.
+ * POST — indexer: draws a number and declares the tier completions in it.
+ *        Body: { completions: [{ deviceId, winType }] }
+ *        Same Bearer CRON_SECRET as GET — this route signs with the authority
+ *        key, so it must never be callable without it.
+ */
 export async function GET(request: Request) {
+  return runDraw(request, []);
+}
+
+export async function POST(request: Request) {
+  let completions: Completion[] = [];
+  try {
+    const body = await request.json();
+    if (Array.isArray(body?.completions)) {
+      completions = body.completions.map((c: any) => {
+        const deviceId = BigInt(c?.deviceId);
+        const winType = Number(c?.winType);
+        if (deviceId < 0n || !Number.isInteger(winType) || winType < 0 || winType > 4) {
+          throw new Error('Invalid completion');
+        }
+        return { deviceId, winType };
+      });
+    }
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Invalid completions payload' }, { status: 400 });
+  }
+  return runDraw(request, completions);
+}
+
+async function runDraw(request: Request, completions: Completion[]) {
   try {
     // 1. Authenticate cron trigger
     const authHeader = request.headers.get('authorization') || '';
@@ -41,49 +79,48 @@ export async function GET(request: Request) {
 
     const drawCount = Number(sessionData[1]);
     const active = sessionData[2];
-    const drawnList = Array.from(sessionData[4]) as number[];
 
     if (!active || drawCount >= MAX_DRAWS) {
       return NextResponse.json({ ok: true, message: 'Session completed or inactive' });
     }
 
-    // 3. Pick a new random number from 1..90 not yet drawn
-    const drawnSet = new Set(drawnList);
-    const availableNumbers: number[] = [];
-    for (let i = 1; i <= 90; i++) {
-      if (!drawnSet.has(i)) {
-        availableNumbers.push(i);
-      }
-    }
-
-    if (availableNumbers.length === 0) {
-      return NextResponse.json({ ok: true, message: 'All numbers drawn' });
-    }
-
-    const randomIndex = Math.floor(Math.random() * availableNumbers.length);
-    const nextNumber = availableNumbers[randomIndex];
-
-    // 4. Send transaction via authority account
+    // 3. Send the draw. The ball is derived on-chain from block.prevrandao
+    //    inside the transaction, so this keeper sends the tier declarations
+    //    only — there is no number to pass and no off-chain pick to trust.
+    //    (It used to pick here and upload its choice, which let the drawer
+    //    decide the outcome.)
     const account = privateKeyToAccount((authorityKey.startsWith('0x') ? authorityKey : `0x${authorityKey}`) as `0x${string}`);
     const walletClient = createWalletClient({
       account,
       chain: ROBINHOOD_CHAIN as any,
-      transport: http(process.env.ROBINHOOD_RPC_URL || 'https://rpc.robinhood.com'),
+      transport: http(process.env.ROBINHOOD_RPC_URL || 'https://rpc.mainnet.chain.robinhood.com'),
     });
 
     const hash = await (walletClient as any).writeContract({
       address: RANSOME_GAME_ADDRESS,
       abi: RANSOME_GAME_ABI,
       functionName: 'drawNumber',
-      args: [nextNumber],
+      args: [completions],
       chain: ROBINHOOD_CHAIN,
     });
+
+    // 4. Report what the chain actually drew. The session we drew into keeps
+    //    its number list even after draw 59 rolls the round, so this read is
+    //    valid either way.
+    await (evmPublicClient as any).waitForTransactionReceipt({ hash });
+    const afterDraw = await (evmPublicClient as any).readContract({
+      address: RANSOME_GAME_ADDRESS,
+      abi: RANSOME_GAME_ABI,
+      functionName: 'getSession',
+      args: [currentSessionId],
+    });
+    const drawnNumbers = Array.from(afterDraw[4]) as number[];
 
     return NextResponse.json({
       ok: true,
       sessionId: Number(currentSessionId),
       drawIndex: drawCount + 1,
-      drawnNumber: nextNumber,
+      drawnNumber: drawnNumbers[drawnNumbers.length - 1],
       txHash: hash,
     });
   } catch (error: any) {

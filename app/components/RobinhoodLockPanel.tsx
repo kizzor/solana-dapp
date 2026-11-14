@@ -6,8 +6,6 @@ import {
   SUPPORTED_EVM_CHAINS,
   STANDARD_MINT_PRICE_USD,
   DISCOUNTED_MINT_PRICE_USD,
-  STANDARD_MINT_PRICE_X,
-  DISCOUNTED_MINT_PRICE_X,
 } from '@/lib/robinhood-config';
 
 export function RobinhoodLockPanel({
@@ -34,6 +32,7 @@ export function RobinhoodLockPanel({
     vaultXBalance,
     lockedXAmount,
     isDiscountEligible,
+    xTokensPerTicket,
     isUnbonding,
     unlockTimestamp,
     claimTestXFaucet,
@@ -42,10 +41,11 @@ export function RobinhoodLockPanel({
     initiateUnlockX,
     withdrawX,
     mintConsoles,
+    readDrawnNumbers,
   } = useEvmWallet();
 
   const [selectedChainId, setSelectedChainId] = useState<number>(ROBINHOOD_CHAIN_ID);
-  const [selectedToken, setSelectedToken] = useState<'ETH' | 'X' | 'USDG' | 'USDC' | 'USDT'>('ETH');
+  const [selectedToken, setSelectedToken] = useState<'X' | 'USDG' | 'USDC' | 'USDT'>('USDG');
   const [consoleCount, setConsoleCount] = useState<number>(1);
   const [lockInput, setLockInput] = useState('1000');
   const [testEthInput, setTestEthInput] = useState('0.005');
@@ -55,18 +55,15 @@ export function RobinhoodLockPanel({
   const currentChain = chainId ? SUPPORTED_EVM_CHAINS[chainId] : null;
   const isRobinhood = chainId === ROBINHOOD_CHAIN_ID;
 
-  // Generate random 5x5 bingo grid for minting
-  const generateRandomGrid = (): number[][] => {
-    const numbers: number[] = [];
-    while (numbers.length < 25) {
-      const n = Math.floor(Math.random() * 90) + 1;
-      if (!numbers.includes(n)) numbers.push(n);
-    }
-    const grid: number[][] = [];
-    for (let r = 0; r < 5; r++) {
-      grid.push(numbers.slice(r * 5, (r + 1) * 5));
-    }
-    return grid;
+  // A ticket is a 3×9 card holding fifteen numbers, five per row, and the
+  // contract refuses any number that is already on the wall — so a card can
+  // only be printed from the numbers that are still cold.
+  const generateRandomGrid = (drawn: Set<number>): number[][] => {
+    const pool: number[] = [];
+    for (let n = 1; n <= 90; n++) if (!drawn.has(n)) pool.push(n);
+    if (pool.length < 15) throw new Error('Not enough numbers left on the wall for a cold ticket');
+    const numbers = pool.sort(() => Math.random() - 0.5).slice(0, 15).sort((a, b) => a - b);
+    return [0, 1, 2].map((r) => [...numbers.slice(r * 5, r * 5 + 5), 0, 0, 0, 0]);
   };
 
   const handleNetworkChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -91,9 +88,11 @@ export function RobinhoodLockPanel({
       setLoading(true);
       setMsg(`◈ Minting ${consoleCount} console(s) via ${selectedToken}...`);
       
+      const { drawn } = await readDrawnNumbers();
+      const wall = new Set(drawn);
       const grids: number[][][] = [];
       for (let i = 0; i < consoleCount; i++) {
-        grids.push(generateRandomGrid());
+        grids.push(generateRandomGrid(wall));
       }
 
       await mintConsoles(selectedToken, consoleCount, grids);
@@ -178,7 +177,8 @@ export function RobinhoodLockPanel({
 
   // Price estimate calculation
   const unitUsd = isDiscountEligible ? DISCOUNTED_MINT_PRICE_USD : STANDARD_MINT_PRICE_USD;
-  const unitX = isDiscountEligible ? DISCOUNTED_MINT_PRICE_X : STANDARD_MINT_PRICE_X;
+  // Token amount is derived from the on-chain USD price, not a fixed count.
+  const unitX = Number(xTokensPerTicket);
 
   return (
     <div style={{
@@ -305,7 +305,7 @@ export function RobinhoodLockPanel({
           <div>
             <div style={{ fontSize: 9, color: '#6894b5', marginBottom: 4 }}>PAYMENT ASSET:</div>
             <div style={{ display: 'flex', gap: 4 }}>
-              {(['ETH', 'X', 'USDG', 'USDC', 'USDT'] as const).map((tok) => (
+              {(['X', 'USDG', 'USDC', 'USDT'] as const).map((tok) => (
                 <button
                   key={tok}
                   onClick={() => setSelectedToken(tok)}
@@ -357,7 +357,7 @@ export function RobinhoodLockPanel({
               <div style={{ fontSize: 9, color: '#6894b5' }}>ESTIMATED TOTAL:</div>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#00e5a0' }}>
                 {selectedToken === 'X'
-                  ? `${unitX * consoleCount} X`
+                  ? unitX > 0 ? `${unitX * consoleCount} RAFFLE` : 'TOKEN PRICE UNSET'
                   : `$${(unitUsd * consoleCount).toFixed(2)} USD (${selectedToken})`}
               </div>
             </div>

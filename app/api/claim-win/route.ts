@@ -1,85 +1,88 @@
 import { NextResponse } from 'next/server';
-import { createWalletClient, http, parseUnits } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
 import { evmPublicClient } from '@/lib/evm-client';
-import { ROBINHOOD_CHAIN, RANSOME_GAME_ADDRESS, RANSOME_VAULT_ADDRESS, USDG_ADDRESS } from '@/lib/robinhood-config';
-import { RANSOME_GAME_ABI, ERC20_ABI } from '@/lib/game-abi';
+import { ROBINHOOD_CHAIN, RANSOME_GAME_ADDRESS } from '@/lib/robinhood-config';
+import { RANSOME_GAME_ABI } from '@/lib/game-abi';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Quotes a reserved win so the cabinet can show "claim <amount>" and sign it.
+ *
+ * ⚠️ This route does NOT pay anyone and holds no key. Since 2026-11-04 the
+ * claim is player-callable and amount-free: the contract reserved the cut at
+ * the winning draw and `claimWin(sessionId, deviceId, winType, grid)` pays
+ * exactly that number to the allocation owner — after recomputing the tier
+ * from the revealed board, so this server's word is worth nothing.
+ *
+ * The board is the player's own ticket and this route does not know it. Pass
+ * it in the request body to get a complete transaction; without it the quote
+ * still returns (the amount is public) but `tx` is null and the wallet has to
+ * add the board at signing.
+ */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { sessionId, winner, winType, minXOut = '0' } = body;
+    const sessionId = BigInt(body?.sessionId);
+    const deviceId = BigInt(body?.deviceId);
+    const winType = Number(body?.winType);
 
-    if (!sessionId || !winner || !winType) {
-      return NextResponse.json({ ok: false, error: 'Missing required parameters' }, { status: 400 });
+    if (sessionId < 0n || deviceId < 0n || !Number.isInteger(winType) || winType < 0 || winType > 6) {
+      return NextResponse.json({ ok: false, error: 'Invalid sessionId / deviceId / winType' }, { status: 400 });
+    }
+
+    // Optional 27-cell board (row-major, 0 = empty). Echoed into the call so a
+    // wallet that has it does not have to rebuild the transaction.
+    let grid: number[] | null = null;
+    if (Array.isArray(body?.grid)) {
+      grid = body.grid.map((n: any) => Number(n));
+      if (grid.length !== 27 || grid.some(n => !Number.isInteger(n) || n < 0 || n > 90)) {
+        return NextResponse.json({ ok: false, error: 'Invalid grid (27 cells, 0-90)' }, { status: 400 });
+      }
     }
 
     if (!RANSOME_GAME_ADDRESS || RANSOME_GAME_ADDRESS === '0x0000000000000000000000000000000000000000') {
       return NextResponse.json({ ok: false, error: 'Contracts not configured' }, { status: 400 });
     }
 
-    const authorityKey = process.env.AUTHORITY_PRIVATE_KEY;
-    if (!authorityKey) {
-      return NextResponse.json({ ok: false, error: 'Authority key not set' }, { status: 500 });
-    }
-
-    // Read current vault USDG balance
-    const vaultBalance = await (evmPublicClient as any).readContract({
-      address: USDG_ADDRESS,
-      abi: ERC20_ABI,
-      functionName: 'balanceOf',
-      args: [RANSOME_VAULT_ADDRESS],
-    });
-
-    if (vaultBalance === 0n) {
-      return NextResponse.json({ ok: false, error: 'Vault is empty' }, { status: 400 });
-    }
-
-    // Calculate prize share: winType 1 = Line Win (15%), winType 2 = Full House (70%)
-    let prizeShare = 0n;
-    if (winType === 1) {
-      prizeShare = (vaultBalance * 15n) / 100n;
-    } else if (winType === 2) {
-      prizeShare = (vaultBalance * 70n) / 100n;
-    } else {
-      return NextResponse.json({ ok: false, error: 'Invalid winType (1: Line, 2: FH)' }, { status: 400 });
-    }
-
-    if (prizeShare === 0n) {
-      return NextResponse.json({ ok: false, error: 'Prize share calculated as 0' }, { status: 400 });
-    }
-
-    const minXOutBigInt = BigInt(minXOut);
-
-    const account = privateKeyToAccount((authorityKey.startsWith('0x') ? authorityKey : `0x${authorityKey}`) as `0x${string}`);
-    const walletClient = createWalletClient({
-      account,
-      chain: ROBINHOOD_CHAIN as any,
-      transport: http(process.env.ROBINHOOD_RPC_URL || 'https://rpc.robinhood.com'),
-    });
-
-    const txHash = await (walletClient as any).writeContract({
+    const [amount, claimed, expired] = (await (evmPublicClient as any).readContract({
       address: RANSOME_GAME_ADDRESS,
       abi: RANSOME_GAME_ABI,
-      functionName: 'claimWin',
-      args: [BigInt(sessionId), winner as `0x${string}`, Number(winType), prizeShare, minXOutBigInt],
-      chain: ROBINHOOD_CHAIN,
-    });
+      functionName: 'claimableOf',
+      args: [sessionId, deviceId, winType],
+    })) as [bigint, boolean, boolean];
+
+    if (amount === 0n) {
+      return NextResponse.json(
+        { ok: false, error: expired ? 'No win reserved for this tier' : 'Nothing to claim' },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      sessionId,
-      winner,
+      sessionId: sessionId.toString(),
+      deviceId: deviceId.toString(),
       winType,
-      prizeUsdgShare: prizeShare.toString(),
-      txHash,
+      amount: amount.toString(),
+      claimed,
+      expired,
+      claimable: !claimed && !expired,
+      // The wallet — not this server — signs this. It carries no amount, so a
+      // client cannot ask for more than the contract reserved, and the board is
+      // the player's own commitment, so this server cannot invent a win.
+      tx: grid
+        ? {
+            chainId: ROBINHOOD_CHAIN.id,
+            to: RANSOME_GAME_ADDRESS,
+            functionName: 'claimWin',
+            args: [sessionId.toString(), deviceId.toString(), winType, grid],
+          }
+        : null,
     });
   } catch (error: any) {
-    console.error('Claim Win API error:', error);
+    console.error('Claim Win quote error:', error);
     return NextResponse.json(
-      { ok: false, error: error?.message || 'Failed to settle claim' },
+      { ok: false, error: error?.message || 'Failed to read the reserved win' },
       { status: 500 }
     );
   }

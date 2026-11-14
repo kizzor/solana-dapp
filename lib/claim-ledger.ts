@@ -82,6 +82,17 @@ export function isValidGrid(grid: CellNum[][]): boolean {
 // Pure pattern check — FH tier ORDER is enforced separately by
 // canClaimFullHouse (the contract's bankrupt_count field is never advanced,
 // so the frontend's per-wallet bankruptCount model is mirrored server-side).
+// A full house is ONE pattern. FH1 / FH2 / FH3 are not different grids — they
+// are the wallet's 1st, 2nd and 3rd completed grid (a lifetime ladder). On the
+// EVM contract the rung is derived on-chain from `fullHouses[wallet]`, so these
+// three win types must never be treated as distinguishable by pattern.
+export function isFullHouse(grid: CellNum[][], drawn: number[]): boolean {
+  if (!isValidGrid(grid)) return false
+  const drawnSet = new Set(drawn)
+  const nums = grid.flat().filter((n): n is number => n !== null)
+  return nums.every((n) => drawnSet.has(n))
+}
+
 export function verifyWin(grid: CellNum[][], drawn: number[], winType: number): boolean {
   if (!isValidGrid(grid)) return false
   const drawnSet = new Set(drawn)
@@ -95,12 +106,18 @@ export function verifyWin(grid: CellNum[][], drawn: number[], winType: number): 
     case 1: return rowOk(0)                                                  // TOP_LINE
     case 2: return rowOk(1)                                                  // MIDDLE_LINE
     case 3: return rowOk(2)                                                  // BOTTOM_LINE
-    case 4: case 5: case 6: return nums.every((n) => drawnSet.has(n))        // FULL_HOUSE_1/2/3
+    case 4: case 5: case 6: return isFullHouse(grid, drawn)                  // the ladder rung
     default: return false
   }
 }
 
-// ─── FULL HOUSE progression helpers ─────────────────────────────────────────
+// ─── FULL HOUSE progression helpers — SUI LEGACY ONLY ──────────────────
+// ⚠️ The EVM game no longer uses these. `RansomeGame.fullHouses` is the
+// lifetime ladder and the rung is derived on-chain, so a player cannot choose
+// FH1/2/3 and a first full house cannot be redeemed as FH3. What remains below
+// is the SUI session's ordering gate (`wins_claimed` on `heist.move`), kept
+// because /api/claim-sui and /api/claims still read it. Do not extend it and do
+// not port it to the EVM path. ─────────────────────────────────────────
 // The contract initializes bankrupt_count to 0 and NEVER increments it, so FH
 // tiers must be gated server-side. Two complementary rules:
 //

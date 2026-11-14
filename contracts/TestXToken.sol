@@ -17,8 +17,8 @@ contract TestXToken is IERC20 {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
+    // Transfer/Approval events are inherited from IERC20 — redeclaring them is a
+    // compile error (DeclarationError: defined twice).
 
     constructor() {
         // Initial supply: 1 Billion X tokens to deployer (matching Pons supply)

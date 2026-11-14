@@ -29,17 +29,52 @@ SECRET_PATTERNS = [
     # SSH private keys
     (r'-----BEGIN (?:RSA |EC )?PRIVATE KEY-----', "SSH_PRIVATE_KEY"),
     
-    # Environment variable assignments with sensitive values
-    (r'(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL)\s*=\s*["\']?[^\s"\']+["\']?', "ENV_SECRET"),
+    # Environment-file style assignment: UPPER_SNAKE name ending in a sensitive
+    # word, at the start of a line. Deliberately narrow: the old loose pattern
+    # matched JSX props (`key={id}`) and produced ~250 unreadable false positives.
+    (
+        r'(?m)^\s*(?:export\s+)?[A-Z][A-Z0-9_]*(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL)[A-Z0-9_]*\s*=\s*["\']?[A-Za-z0-9_\-./:+=]{8,}',
+        "ENV_SECRET",
+    ),
 ]
 
-# Files to exclude
+# Files/dirs to exclude. `.env*` and the local harness are excluded on purpose:
+# this script is run inside LLM sessions, and printing anything from those files
+# (even a "preview") is exactly the leak this project forbids.
 EXCLUDE_FILES = [
     "package-lock.json",
     ".gitignore",
     "node_modules",
     ".git",
+    ".tmp-explore",
+    ".next",
+    "artifacts",
+    "cache",
+    "out",
+    "dist",
+    "build",
+    "__pycache__",
 ]
+
+# Generated files: never secrets, and they produce false positives that bury
+# the real findings (a .tsbuildinfo is one long line of numbers).
+SKIP_SUFFIXES = (".tsbuildinfo", ".map", ".log", ".min.js", ".csv", ".png", ".jpg", ".pdf")
+
+# A value that is code, not a literal: `KEY=process.env.X`, `TOKEN=${x}`,
+# `SECRET=<redacted>`, documentation placeholders, env lookups, etc.
+NOT_A_LITERAL = (
+    "process.env", "import.meta.env", "os.environ", "getenv", "${{", "${", "%s",
+    "<", ">", "...", "\u2026", "redacted", "placeholder", "xxx", "your_", "example",
+)
+
+
+def is_excluded(file):
+    return (
+        file in EXCLUDE_FILES
+        or file == ".env"
+        or file.startswith(".env.")
+        or file.endswith(SKIP_SUFFIXES)
+    )
 
 def scan_file(filepath):
     """Scan a file for potential secrets"""
@@ -50,15 +85,27 @@ def scan_file(filepath):
             content = f.read()
         
         for pattern, secret_type in SECRET_PATTERNS:
-            matches = re.finditer(pattern, content, re.IGNORECASE)
+            # ENV_SECRET is case-sensitive on purpose: IGNORECASE made camelCase
+            # fields (`virtualTokenReserve = ...`) look like env assignments.
+            flags = 0 if secret_type == "ENV_SECRET" else re.IGNORECASE
+            matches = re.finditer(pattern, content, flags)
             for match in matches:
-                # Get line number
+                if secret_type == "ENV_SECRET":
+                    if any(tok in match.group().lower() for tok in NOT_A_LITERAL):
+                        continue
+                    # ALL_CAPS_WITH_UNDERSCORES is a placeholder name, not a
+                    # literal: real tokens carry digits / mixed case.
+                    value = re.split(r"\s*=\s*", match.group(), 1)[1].strip().strip("'\"")
+                    if value.isupper() and value.replace("_", "").isalpha():
+                        continue
+                # Get line number. NEVER store the matched text: a finding must be
+                # reportable to a human (and to a model) without carrying the value.
                 line_num = content[:match.start()].count('\n') + 1
                 findings.append({
                     "file": filepath,
                     "line": line_num,
                     "type": secret_type,
-                    "match": match.group()[:50] + "..." if len(match.group()) > 50 else match.group()
+                    "length": len(match.group()),
                 })
     except Exception as e:
         pass
@@ -81,7 +128,7 @@ def main():
         dirs[:] = [d for d in dirs if d not in EXCLUDE_FILES]
         
         for file in files:
-            if file in EXCLUDE_FILES:
+            if is_excluded(file):
                 continue
             
             filepath = os.path.join(root, file)
@@ -95,9 +142,9 @@ def main():
         
         for finding in all_findings:
             rel_path = os.path.relpath(finding['file'], PROJECT_DIR)
-            print(f"  [{finding['type']}] {rel_path}:{finding['line']}")
-            print(f"    Preview: {finding['match']}")
-            print()
+            # No preview, no value, not even masked characters: file:line + type
+            # + match length is enough to fix it and safe to paste anywhere.
+            print(f"  [{finding['type']}] {rel_path}:{finding['line']} ({finding['length']} chars)")
     else:
         print("[OK] No potential secrets found in codebase!")
     

@@ -19,6 +19,9 @@ import { ROBINHOOD_CHAIN_ID, ROBINHOOD_CHAIN, SUPPORTED_EVM_CHAINS } from '@/lib
 type Cell = { num: number | null; matched: boolean; clicked: boolean; missed: boolean }
 type Device = {
   walletAddr: string | null; id: number; nftId: string; grid: Cell[][]; claimed: Set<string>; active: boolean; corrupted: boolean
+  // RansomeGame device id in the current session — `null` until the mint tx is
+  // mined and the ids are confirmed by ownership. The claim needs exactly this.
+  onChainId?: number | null
 }
 type WinType = 'EARLY_FIVE' | 'TOP_LINE' | 'MIDDLE_LINE' | 'BOTTOM_LINE' | 'FULL_HOUSE_1' | 'FULL_HOUSE_2' | 'FULL_HOUSE_3'
 type WinState = { claimed: boolean; claimable: boolean; flickering: boolean; broken: boolean; claimers: string[]; expired: boolean; bursting: boolean }
@@ -43,16 +46,20 @@ const LED_COLORS: Record<WinType, string> = {
   EARLY_FIVE: '#f59e0b', TOP_LINE: '#22d3ee', MIDDLE_LINE: '#67e8f9', BOTTOM_LINE: '#a16207',
   FULL_HOUSE_1: '#f472b6', FULL_HOUSE_2: '#ec4899', FULL_HOUSE_3: '#db2777',
 }
-// Win type payouts in basis points — FULL_HOUSE_3 is the 40% jackpot
-// All other wins split their % equally among same-round claimers
+// Win type BUCKETS in basis points of the round pot — FULL_HOUSE_3 is the 40% rung.
+// A bucket is divided equally among every grid that lands on that tier at the
+// draw that completed it (RansomeGame.tierBucketBps); a rung with no completer
+// is simply unallocated. FH1/2/3 are the wallet's LIFETIME 1st/2nd/3rd full
+// house, derived on-chain — never a grid the player picks.
 const WIN_BPS: Record<WinType, number> = {
   EARLY_FIVE: 500, TOP_LINE: 500, MIDDLE_LINE: 500, BOTTOM_LINE: 500,   //  5% each = 20%
   FULL_HOUSE_1: 1950, FULL_HOUSE_2: 1950,                            // 19.5% each = 39%
   FULL_HOUSE_3: 4000,                                                // 40%     = 40%
 }                                                                   // Total:   99%
-// Treasury fee: 1% of vault (deducted upfront)
-// Remaining 99% = game vault — fully allocated to the 7 win positions above
-// Unclaimed positions at game end → treasury. No other distribution.
+// Treasury fee: 1% of the pot (deducted upfront)
+// The 99% is reserved per winning draw, not per round-end: an unclaimed cut is
+// forfeited to treasury when the next number is drawn, and whatever nobody wins
+// settles to treasury at draw 59. There is no roll-forward.
 
 // ─── Vault capsules (CLAIM frame) — one per win tier, fleet-progress fill ────
 const CAPSULES: { code: string; label: string; wt: WinType; fbTier?: number }[] = [
@@ -186,28 +193,41 @@ const defaultWinStates = (): Record<WinType, WinState> => ({
 function getLiveBank(h: number) { return h % 22 }
 
 // ─── Ticket Generator (same 3×9 / 15-number card the consoles always used) ───
-function generateDevice(id: number): Device {
+// `drawn` is the wall. The contract refuses any card holding a number that is
+// already out, so a cold card can only be printed from numbers still undrawn —
+// that is the rule that stops a sniper minting a nearly finished board, and it
+// means a late-round card prints from a thinner pool.
+function generateDevice(id: number, drawn?: Set<number>): Device {
   const nftId = `TICKET-${String(id).padStart(4, '0')}`
-  const colCounts = Array(9).fill(1)
-  Array.from({ length: 9 }, (_, i) => i).sort(() => Math.random() - 0.5).slice(0, 6).forEach(i => colCounts[i]++)
-  const colRows: number[][] = colCounts.map(cnt => [0, 1, 2].sort(() => Math.random() - 0.5).slice(0, cnt))
-  const rowCounts = [0, 0, 0]; colRows.forEach(rows => rows.forEach(r => rowCounts[r]++))
-  let att = 0
-  while ((rowCounts[0] !== 5 || rowCounts[1] !== 5 || rowCounts[2] !== 5) && att < 200) {
-    att++; colCounts.fill(1)
+
+  // A column must supply as many numbers as it has filled rows, and every one
+  // of them must still be on the wall. If the wall took them all, redraw the
+  // column layout rather than print a card the mint would reject.
+  const coldPools = COL_RANGES.map(([lo, hi]) => {
+    const pool: number[] = []
+    for (let n = lo; n <= hi; n++) if (!drawn?.has(n)) pool.push(n)
+    return pool
+  })
+
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const colCounts = Array(9).fill(1)
     Array.from({ length: 9 }, (_, i) => i).sort(() => Math.random() - 0.5).slice(0, 6).forEach(i => colCounts[i]++)
-    colRows.splice(0, 9, ...colCounts.map(cnt => [0, 1, 2].sort(() => Math.random() - 0.5).slice(0, cnt)))
-    rowCounts.fill(0); colRows.forEach(rows => rows.forEach(r => rowCounts[r]++))
+    const colRows: number[][] = colCounts.map(cnt => [0, 1, 2].sort(() => Math.random() - 0.5).slice(0, cnt))
+    const rowCounts = [0, 0, 0]; colRows.forEach(rows => rows.forEach(r => rowCounts[r]++))
+    if (rowCounts[0] !== 5 || rowCounts[1] !== 5 || rowCounts[2] !== 5) continue
+    if (coldPools.some((pool, ci) => pool.length < colRows[ci].length)) continue
+
+    const grid: Cell[][] = Array.from({ length: 3 }, () => Array(9).fill(null).map(() => ({ num: null, matched: false, clicked: false, missed: false })))
+    for (let ci = 0; ci < 9; ci++) {
+      const rows = colRows[ci].sort((a, b) => a - b)
+      // Each column draws from its own ten-number range, so no two cells can
+      // repeat: one shuffle of the column's cold pool is enough.
+      const picked = [...coldPools[ci]].sort(() => Math.random() - 0.5).slice(0, rows.length).sort((a, b) => a - b)
+      rows.forEach((r, i) => { grid[r][ci] = { num: picked[i], matched: false, clicked: false, missed: false } })
+    }
+    return { id, nftId, walletAddr: null, grid, claimed: new Set(), active: false, corrupted: false }
   }
-  const used = new Set<number>()
-  const grid: Cell[][] = Array.from({ length: 3 }, () => Array(9).fill(null).map(() => ({ num: null, matched: false, clicked: false, missed: false })))
-  for (let ci = 0; ci < 9; ci++) {
-    const [lo, hi] = COL_RANGES[ci]; const rows = colRows[ci].sort((a, b) => a - b)
-    const avail: number[] = []; for (let n = lo; n <= hi; n++)if (!used.has(n)) avail.push(n)
-    const picked = avail.sort(() => Math.random() - 0.5).slice(0, rows.length).sort((a, b) => a - b)
-    picked.forEach(n => used.add(n)); rows.forEach((r, i) => { grid[r][ci] = { num: picked[i], matched: false, clicked: false, missed: false } })
-  }
-  return { id, nftId, walletAddr: null, grid, claimed: new Set(), active: false, corrupted: false }
+  throw new Error('Not enough numbers left on the wall for a cold ticket')
 }
 
 // ─── Carnival projections ────────────────────────────────────────────────────
@@ -598,13 +618,13 @@ function MintPanel({ wallet, devices, mintCount, mintToken, setMintCount, setMin
                   <span style={{ fontFamily: 'Syne,sans-serif', fontSize: 16, fontWeight: 800, color: '#fbbf24', textShadow: '0 0 8px rgba(245,158,11,0.4)' }}>${DEVICE_PRICE_USDC.toFixed(2)}<span style={{ fontSize: 9, fontWeight: 400, color: '#b9a7d6', marginLeft: 3 }}>USD</span></span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>ANY COIN: ETH · USDG · USDC · USDT · X<span style={{ color: '#453071' }}> | </span>1000 X LOCK 50% OFF</span>
+                  <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#2a1a3d' }}>ANY COIN: USDG · USDC · USDT · X<span style={{ color: '#453071' }}> | </span>1000 X LOCK 50% OFF</span>
                   <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#f59e0b' }}>1 HEIST = live from /api/session-state</span>
                 </div>
               </div>
               <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#453071', marginBottom: 6 }}>SELECT TOKEN</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
-                {['ETH', 'USDG', 'USDC', 'USDT', 'X'].map(t => (
+                {['USDG', 'USDC', 'USDT', 'X'].map(t => (
                   <button key={t} onClick={() => setMintToken(t)} style={{
                     ...btnBase, padding: '10px 6px', fontSize: 10,
                     background: mintToken === t ? '#2e1065' : 'transparent',
@@ -816,9 +836,16 @@ function HackingDevice({ device, currentNum, clickWindowOpen, calledNums, onCell
         {/* ══ BOTTOM PLATE — RANSOM actuator + readouts ══ */}
         <footer className="cd-foot">
           <span className="cd-threat" title={`Security countermeasure tier ${Math.min(bankruptCount + 1, 3)}`}>{Math.min(bankruptCount + 1, 3)}</span>
-          <button onClick={doClaim} disabled={!canClaim} className="cd-ransom" data-settled={device.claimed.size > 0 ? '1' : '0'}>
+          <button onClick={doClaim} disabled={!canClaim} className="cd-ransom" data-settled={device.claimed.size > 0 ? '1' : '0'} title={canClaim ? 'Claim the reserved ransom from your wallet' : undefined}>
             {device.claimed.size > 0 && !canClaim ? `SETTLED ×${device.claimed.size}` : 'RANSOM'}
           </button>
+          {/* An on-chain reservation dies at the next draw — say so while it is live. */}
+          {canClaim && device.onChainId != null && timer > 0 && (
+            <span className="cd-expiry" title="Claim before the next number is drawn, or it goes to the treasury"
+              style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#f472b6', whiteSpace: 'nowrap' }}>
+              {timer}s
+            </span>
+          )}
           <span className="cd-ff" data-on={canClaim ? '1' : '0'} title={`Fast Five — ${Math.min(nc, 5)}/5 keys buffered`}>
             <b>{Math.min(nc, 5)}/5</b>
             <i>FF</i>
@@ -2160,11 +2187,11 @@ function LobbyMapWithOverlays({
                       aria-expanded={mintTokenMenuOpen}
                       aria-label="Select mint token"
                       style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '7px 8px', borderRadius: 3, border: '1px solid rgba(255,209,102,0.25)', cursor: 'pointer', fontFamily: "'Share Tech Mono',monospace", lineHeight: 1, minHeight: 24 }}
-                    >{mintToken || 'ETH'} ▾</button>
+                    >{mintToken || 'USDG'} ▾</button>
                     {mintTokenMenuOpen && (
                       <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 3, background: '#09040e', border: '1px solid rgba(255,209,102,0.35)', borderRadius: 4, zIndex: 60, minWidth: 64, boxShadow: '0 6px 18px rgba(0,0,0,0.6)' }}>
-                        {(['ETH', 'USDG', 'USDC', 'USDT', 'X'] as const).map(t => (
-                          <div key={t} onClick={() => { if (setMintToken) setMintToken(t); setMintTokenMenuOpen(false) }} style={{ padding: '3px 8px', fontSize: 7.5, cursor: 'pointer', color: (mintToken || 'ETH') === t ? '#ffd166' : '#b9a7d6', fontWeight: (mintToken || 'ETH') === t ? 800 : 400, background: (mintToken || 'ETH') === t ? 'rgba(255,209,102,0.1)' : 'transparent' }}>{t}</div>
+                        {(['USDG', 'USDC', 'USDT', 'X'] as const).map(t => (
+                          <div key={t} onClick={() => { if (setMintToken) setMintToken(t); setMintTokenMenuOpen(false) }} style={{ padding: '3px 8px', fontSize: 7.5, cursor: 'pointer', color: (mintToken || 'USDG') === t ? '#ffd166' : '#b9a7d6', fontWeight: (mintToken || 'USDG') === t ? 800 : 400, background: (mintToken || 'USDG') === t ? 'rgba(255,209,102,0.1)' : 'transparent' }}>{t}</div>
                         ))}
                       </div>
                     )}
@@ -3350,11 +3377,14 @@ function Ransome() {
     usdtBalance,
     xBalance,
     isDiscountEligible,
+    xTokensPerTicket,
     connect: connectEvm,
     disconnect: disconnectEvm,
     switchNetwork: switchEvmNetwork,
     lockXTokens,
     mintConsoles,
+    readDrawnNumbers,
+    claimConsoleWin,
     refreshBalances,
   } = useEvmWallet()
 
@@ -3384,7 +3414,7 @@ function Ransome() {
   const [announcement, setAnnouncement] = useState<string | null>(null)
   const [bankruptCount, setBankruptCount] = useState(0)
   const [mintCount, setMintCount] = useState(1)
-  const [mintToken, setMintToken] = useState('ETH')
+  const [mintToken, setMintToken] = useState('USDG')
   const [mtrxDelegated, setMtrxDelegated] = useState(false)
   const [mtrxBalance, setMtrxBalance] = useState(0)
   const [solAddress, setSolAddress] = useState('')
@@ -3457,17 +3487,14 @@ function Ransome() {
     const isDisc = isDiscountEligible
     const pricePer = isDisc ? 0.25 : 0.50
     const totalUsd = mintCount * pricePer
-    if (mintToken === 'ETH') {
-      const estEth = ((totalUsd / 2500) * 1.05).toFixed(5)
-      return `${mintCount}× $${pricePer.toFixed(2)} (~${estEth} ETH) · $${totalUsd.toFixed(2)}${isDisc ? ' (50% OFF)' : ''}`
-    }
     if (mintToken === 'X') {
-      const pricePerX = isDisc ? 25 : 50
-      const totalX = mintCount * pricePerX
-      return `${totalX} X · $${totalUsd.toFixed(2)}${isDisc ? ' (50% OFF)' : ''}`
+      // USD-denominated: the token amount follows the on-chain price, not a constant.
+      if (xTokensPerTicket <= 0n) return `${mintCount}× $${pricePer.toFixed(2)} — TOKEN PRICE UNSET`
+      const totalX = xTokensPerTicket * BigInt(mintCount)
+      return `${totalX} RAFFLE · $${totalUsd.toFixed(2)}${isDisc ? ' (50% OFF)' : ''}`
     }
     return `${totalUsd.toFixed(2)} ${mintToken} · $${totalUsd.toFixed(2)}${isDisc ? ' (50% OFF)' : ''}`
-  }, [chain, mintCount, mintToken, mtrxDelegated, isDiscountEligible])
+  }, [chain, mintCount, mintToken, mtrxDelegated, isDiscountEligible, xTokensPerTicket])
 
   // ── Persist & restore state ──────────────────────────────────────────────
   const resumeRef = useRef(false)
@@ -3932,6 +3959,36 @@ function Ransome() {
     if (winStates[wt].claimed) return
     const dev = devices.find(d => d.id === devId)
     if (!dev) return
+
+    // ── EVM: the RANSOM actuator IS the claim ────────────────────────────
+    // The contract reserved this tier at the draw that completed it, so the
+    // button only has to hand the player's own wallet a transaction. No server
+    // is in this path, no amount is passed, and the authority key cannot mint
+    // a payout — `claimWin` derives both the owner and the number on chain.
+    if (chain === 'evm' && evmConnected && evmAddress && dev.onChainId != null) {
+      const onChainType = wt.startsWith('FULL_HOUSE') ? 4 : (WIN_TYPE_INDEX[wt] ?? 0)
+      // The board rides along with the claim. The contract hashes it against
+      // the ticket's on-chain commitment and recomputes the tier from the
+      // draws that existed when the win was declared — so the payout is
+      // proved, not granted. `null` cells go as 0, exactly what was hashed at
+      // mint.
+      const board = dev.grid.flatMap(row => row.map(c => c.num ?? 0))
+      try {
+        announce(`⚿ RANSOM — SIGN THE CLAIM IN YOUR WALLET…`)
+        const res = await claimConsoleWin(dev.onChainId, onChainType, board)
+        const paid = Number(res.amount) / 1e18
+        setDevices(ds => ds.map(d => d.id !== devId ? d : { ...d, claimed: new Set(Array.from(d.claimed).concat([wt])) }))
+        setWinStates(prev => ({ ...prev, [wt]: { ...prev[wt], claimed: true, claimable: false, claimers: [dev.nftId], flickering: false, bursting: true } }))
+        if (wt.startsWith('FULL_HOUSE')) setBankruptCount(b => Math.min(b + 1, 3))
+        setWinRecords(r => [...r, { wt, claimers: [dev.nftId], round: roundNum, split: paid, heistEach: paid }])
+        setLastWinAmount(a => a + paid)
+        announce(`✅ RANSOM PAID ON-CHAIN\n${WIN_LABELS[wt]} → ${paid.toLocaleString(undefined, { maximumFractionDigits: 2 })}\n${String(res.tx).slice(0, 18)}…`)
+      } catch (e: any) {
+        announce(`⚠ CLAIM REJECTED: ${e?.shortMessage || e?.message || e}`)
+      }
+      return
+    }
+
     // Add to pending claimers for this win type
     const claimers = pendingClaimers.current[wt]
     if (!claimers.includes(dev.nftId)) {
@@ -4118,14 +4175,24 @@ function Ransome() {
     // EVM chain (Robinhood, Sepolia, etc.) — real on-chain mint via useEvmWallet
     if (chain === 'evm' && evmConnected && evmAddress) {
       try {
-        const nd = Array.from({ length: count }, (_, i) => ({ ...generateDevice(devices.length + i), walletAddr: evmAddress }))
+        // Cold-board rule: the contract rejects any card holding a number that
+        // is already on the wall, so read the wall and print from what is left.
+        const { drawn: wall } = await readDrawnNumbers()
+        const coldWall = new Set(wall)
+        const nd = Array.from({ length: count }, (_, i) => ({ ...generateDevice(devices.length + i, coldWall), walletAddr: evmAddress }))
         const rawGrids = nd.map(d => d.grid.map(row => row.map(c => c.num || 0)))
         
-        const tokenForMint = (['USDG', 'USDC', 'USDT', 'ETH', 'X'].includes(mintToken) ? mintToken : 'ETH') as 'USDG' | 'USDC' | 'USDT' | 'ETH' | 'X'
+        // No ETH rail: the contract has no mintWithETH, so only tokens already
+        // priced in the ticket's own unit are offered.
+        const tokenForMint = (['USDG', 'USDC', 'USDT', 'X'].includes(mintToken) ? mintToken : 'USDG') as 'USDG' | 'USDC' | 'USDT' | 'X'
         
         announce(`◈ MINTING ${count} TICKET${count > 1 ? 'S' : ''} WITH ${tokenForMint}...`)
         const result = await mintConsoles(tokenForMint, count, rawGrids)
         const txHash = (result as any)?.receipt?.transactionHash || (result as any)?.mintTx || (result as any)?.tx || 'tx'
+        // The contract numbered these tickets; carry the ids so the RANSOM
+        // actuator can address the right one when a tier is won.
+        const chainIds: number[] = Array.isArray((result as any)?.deviceIds) ? (result as any).deviceIds : []
+        chainIds.forEach((cid, i) => { if (nd[i]) nd[i] = { ...nd[i], onChainId: cid } })
 
         // Register grids server-side so claims can be verified
         try {
@@ -4408,7 +4475,7 @@ function Ransome() {
               }}>
                 <span style={{ fontSize: 8, fontWeight: 700, color: '#fbbf24', letterSpacing: '0.05em' }}>QUICK MINT</span>
                 <span style={{ fontSize: 7, color: '#ffd166', background: 'rgba(255,209,102,0.12)', padding: '1px 4px', borderRadius: 3 }}>
-                  {mintToken || 'ETH'}
+                  {mintToken || 'USDG'}
                 </span>
               </div>
 

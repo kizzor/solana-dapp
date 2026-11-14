@@ -42,6 +42,10 @@ desktop.ini
 # Build artifacts
 tsconfig.tsbuildinfo
 
+# Hardhat build output
+artifacts/
+cache/
+
 # Python
 __pycache__/
 *.pyc
@@ -50,3 +54,11 @@ __pycache__/
 
 # Local UI smoke-test screenshots (debug artifacts)
 ui-verify-*.png
+
+# Local harness state: deployment JSON, env blocks, node/app logs, DOM checks.
+# Addresses here are public local-chain values, but it must never be committable.
+.tmp-explore/
+
+# Local-chain deployment record (produced by deploy-live on localhost).
+# Real-chain records stay committed so the resume file can point at them.
+deployments/31337.json

@@ -3,6 +3,10 @@ pragma solidity ^0.8.20;
 
 import "./interfaces/IERC20.sol";
 
+interface IStakingVaultNotifier {
+    function notifyRewardAmount(uint256 amount) external;
+}
+
 /**
  * @title RansomeVault
  * @notice Holds the accumulated X token prize pool and the 1% treasury reserve.
@@ -15,6 +19,12 @@ contract RansomeVault {
     address public owner;
     address public gameContract;
     address public treasuryWallet;
+    /// @dev The JackpotRouter — the only address allowed to use the skim-free
+    ///      jackpot door. Separate from gameContract on purpose: ticket deposits
+    ///      pay the 1% treasury skim, jackpot injections must not.
+    address public jackpotRouter;
+    /// @dev XLockVault — accrues staking yield from non-fuel fee inflows.
+    address public stakingVault;
 
     uint256 public prizePoolReserve;
     uint256 public treasuryReserve;
@@ -36,6 +46,11 @@ contract RansomeVault {
     event TreasuryClaimed(address indexed recipient, uint256 xAmount);
     event GameContractUpdated(address indexed newGameContract);
     event TreasuryWalletUpdated(address indexed newTreasuryWallet);
+    event JackpotRouterUpdated(address indexed newJackpotRouter);
+    event JackpotCredited(address indexed router, uint256 amount, uint256 newPrizeReserve);
+    event StakingVaultUpdated(address indexed stakingVault);
+    event StakingRewardPaid(address indexed user, uint256 amount, uint256 newPrizeReserve);
+    event PrizeForfeited(address indexed game, uint256 amount, uint256 newPrizeReserve, uint256 newTreasuryReserve);
     event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -45,6 +60,11 @@ contract RansomeVault {
 
     modifier onlyGame() {
         require(msg.sender == gameContract, "RansomeVault: not game contract");
+        _;
+    }
+
+    modifier onlyJackpotRouter() {
+        require(jackpotRouter != address(0) && msg.sender == jackpotRouter, "RansomeVault: not jackpot router");
         _;
     }
 
@@ -79,6 +99,61 @@ contract RansomeVault {
         totalXPrizeAccumulated += totalXAmount;
 
         emit PrizeDeposited(msg.sender, totalXAmount, prizeShare, fee);
+    }
+
+    /**
+     * @notice Skim-free jackpot door — 100% of `amount` becomes prize reserve.
+     * @dev Unlike depositPrize, this takes NO treasury cut. The tokens must already
+     *      be in the vault (JackpotRouter transfers them here before calling).
+     *      This keeps the public claim exact: "29 of every 30 bps of the platform
+     *      fee funds the jackpot" — not 29 minus 1%.
+     * @param amount HEIST amount already transferred in.
+     * @return newReserve prizePoolReserve after crediting.
+     */
+    function creditJackpot(uint256 amount, bytes32 source) external onlyJackpotRouter nonReentrant returns (uint256 newReserve) {
+        require(amount > 0, "RansomeVault: zero jackpot");
+        prizePoolReserve += amount;
+        totalXPrizeAccumulated += amount;
+        newReserve = prizePoolReserve;
+        emit JackpotCredited(msg.sender, amount, newReserve);
+
+        // Staking yield is funded by real fee inflows (swap slice, perps bridge/builder),
+        // NOT by the 10% lock fuel (source == "lock"), which stays jackpot-only.
+        if (stakingVault != address(0) && source != bytes32("lock")) {
+            try IStakingVaultNotifier(stakingVault).notifyRewardAmount(amount) {} catch {}
+        }
+    }
+
+    /// @notice Pays an accrued staking yield out of the prize reserve.
+    /// @dev Only the staking vault (XLockVault) may call this.
+    function claimStakingReward(address user, uint256 amount) external nonReentrant returns (uint256 newReserve) {
+        require(msg.sender == stakingVault && stakingVault != address(0), "RansomeVault: not staking vault");
+        require(user != address(0), "RansomeVault: zero user");
+        require(amount > 0, "RansomeVault: zero reward");
+        require(prizePoolReserve >= amount, "RansomeVault: insufficient prize reserve");
+        require(xToken.balanceOf(address(this)) >= amount, "RansomeVault: insufficient X balance");
+
+        prizePoolReserve -= amount;
+        newReserve = prizePoolReserve;
+        require(xToken.transfer(user, amount), "RansomeVault: reward transfer failed");
+        emit StakingRewardPaid(user, amount, newReserve);
+    }
+
+    /**
+     * @notice Moves prize money that nobody claimed into the treasury reserve.
+     * @dev The tokens stay in this contract; only the accounting moves. Used by
+     *      the game for the two forfeiture rules (unclaimed at the next draw,
+     *      and the round-end leftover). Since the money is already here, this
+     *      can never fail for lack of balance.
+     */
+    function forfeitToTreasury(uint256 amount) external onlyGame nonReentrant {
+        require(amount > 0, "RansomeVault: zero forfeiture");
+        require(prizePoolReserve >= amount, "RansomeVault: forfeiture exceeds prize reserve");
+
+        prizePoolReserve -= amount;
+        treasuryReserve += amount;
+
+        emit PrizeForfeited(msg.sender, amount, prizePoolReserve, treasuryReserve);
     }
 
     /**
@@ -127,6 +202,18 @@ contract RansomeVault {
         require(_gameContract != address(0), "RansomeVault: zero address");
         gameContract = _gameContract;
         emit GameContractUpdated(_gameContract);
+    }
+
+    function setJackpotRouter(address _jackpotRouter) external onlyOwner {
+        require(_jackpotRouter != address(0), "RansomeVault: zero address");
+        jackpotRouter = _jackpotRouter;
+        emit JackpotRouterUpdated(_jackpotRouter);
+    }
+
+    function setStakingVault(address _stakingVault) external onlyOwner {
+        require(_stakingVault != address(0), "RansomeVault: zero address");
+        stakingVault = _stakingVault;
+        emit StakingVaultUpdated(_stakingVault);
     }
 
     function setTreasuryWallet(address _treasuryWallet) external onlyOwner {
