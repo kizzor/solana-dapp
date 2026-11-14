@@ -4,7 +4,7 @@
 
    Direction (repaint, 2026-11-06; deepened to royal purple same day):
      · violet-black surfaces, one accent temperature: **deep royal purple**
-       (`--rf-royal #6d28d9`, depth `#4c1d95`, lifted edge `#8b5cf6`). Every filled
+       (`--rf-royal #F72585`, depth `#F72585`, lifted edge `#C490E4`). Every filled
        control is royal purple — never white, never bright magenta.
      · **neon white is type and glow only**: body text, the jackpot figure, hairline
        highlights. It is never a button or panel background.
@@ -20,36 +20,36 @@
      already carries the purple + neon-white repaint, the storefront must not
      invent a second palette. */
   /* near-black room, one violet light source — the reference is tubes, not paint */
-  --rf-void: #040308;
-  --rf-bg: #07050c;
-  --rf-surface: #0c0816;
-  --rf-raised: #130d22;
-  --rf-hover: #1a1130;
+  --rf-void: #0D0A14;
+  --rf-bg: #0D0A14;
+  --rf-surface: #151022;
+  --rf-raised: #151022;
+  --rf-hover: #151022;
   --rf-line: rgba(186, 166, 255, 0.10);
   --rf-line-strong: rgba(206, 190, 255, 0.22);
 
-  --rf-ink: #f1f0ff;
-  --rf-dim: #b9abdd;
-  --rf-faint: #82759f;
+  --rf-ink: #F8F9FA;
+  --rf-dim: #9D94B8;
+  --rf-faint: #9D94B8;
 
-  --rf-up: #2bcaa5;
-  --rf-down: #ff4d8d;
-  --rf-cyan: #1fbff4;
+  --rf-up: #06D6A0;
+  --rf-down: #F72585;
+  --rf-cyan: #2CE6E2;
 
   /* bright violet tube is the theme; lavender white is the light inside it */
-  --rf-accent: #9072ff;
-  --rf-accent-hot: #c9bcff;
-  --rf-accent-deep: #6a3bff;
+  --rf-accent: #2CE6E2;
+  --rf-accent-hot: #C490E4;
+  --rf-accent-deep: #F72585;
   /* royal purple: every filled control (CTA, wallet, pod play, mint) uses this,
      never white. White is reserved for type and the jackpot figure. */
-  --rf-royal: #7c3aed;
-  --rf-royal-hot: #9072ff;
-  --rf-royal-deep: #340a76;
-  --rf-neon: #f1f0ff;
-  --rf-neon-soft: #ddd6ff;
+  --rf-royal: #F72585;
+  --rf-royal-hot: #2CE6E2;
+  --rf-royal-deep: #F72585;
+  --rf-neon: #F8F9FA;
+  --rf-neon-soft: #C490E4;
 
-  --rf-glow-purple: 0 0 16px rgba(144, 114, 255, 0.55), 0 0 44px rgba(124, 58, 237, 0.28);
-  --rf-glow-royal: 0 0 18px rgba(144, 114, 255, 0.72), 0 0 54px rgba(124, 58, 237, 0.36);
+  --rf-glow-purple: 0 0 16px rgba(144, 114, 255, 0.55), 0 0 44px rgba(247, 37, 133, 0.28);
+  --rf-glow-royal: 0 0 18px rgba(144, 114, 255, 0.72), 0 0 54px rgba(247, 37, 133, 0.36);
 
   /* ── liquid crystal: everything is pearl-glass, nothing is a flat fill ──
      fill = translucent lilac haze, rim = iris edge (violet → white → periwinkle),
@@ -57,20 +57,20 @@
   --rf-glass-fill:
     linear-gradient(160deg, rgba(180, 160, 255, 0.10), rgba(255, 255, 255, 0.015) 44%, rgba(106, 59, 255, 0.11));
   --rf-glass-rim:
-    linear-gradient(150deg, rgba(222, 212, 255, 0.42), rgba(144, 114, 255, 0.30) 40%, rgba(31, 191, 244, 0.14) 66%, rgba(201, 188, 255, 0.40));
+    linear-gradient(150deg, rgba(222, 212, 255, 0.42), rgba(144, 114, 255, 0.30) 40%, rgba(44, 230, 226, 0.14) 66%, rgba(201, 188, 255, 0.40));
   --rf-glass-inner:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     inset 0 -18px 40px rgba(30, 4, 60, 0.35);
   --rf-glass-outer: 0 18px 44px rgba(10, 2, 26, 0.55), 0 0 26px rgba(109, 40, 217, 0.10);
   --rf-blur: blur(18px) saturate(165%);
-  --rf-iris: linear-gradient(115deg, #e9d5ff, #ffffff 26%, #a78bfa 48%, #6d28d9 70%, #e9d5ff);
+  --rf-iris: linear-gradient(115deg, #e9d5ff, #ffffff 26%, #a78bfa 48%, #F72585 70%, #e9d5ff);
 
   /* legacy names — now neon white, type only (see header comment) */
   --rf-gold: #f5f7ff;
   --rf-gold-dim: #9a93ba;
 
-  --rf-creator: #9072ff;
-  --rf-jackpot: #f1f0ff;
+  --rf-creator: #2CE6E2;
+  --rf-jackpot: #F8F9FA;
   --rf-treasury: #6f6788;
 
   --rf-display: 'Syne', 'Segoe UI', system-ui, sans-serif;
@@ -125,7 +125,7 @@
   pointer-events: none;
   overflow: hidden;
   background:
-    radial-gradient(58% 40% at 22% 6%, rgba(124, 58, 237, 0.26), transparent 70%),
+    radial-gradient(58% 40% at 22% 6%, rgba(247, 37, 133, 0.26), transparent 70%),
     radial-gradient(46% 34% at 78% 2%, rgba(167, 139, 250, 0.20), transparent 72%),
     radial-gradient(50% 38% at 50% 46%, rgba(255, 255, 255, 0.05), transparent 70%);
   animation: rf-drift 30s ease-in-out infinite alternate;
@@ -388,7 +388,7 @@
   border: 1px solid transparent;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.04) 48%, rgba(30, 4, 60, 0.28)) padding-box,
-    linear-gradient(180deg, #a78bfa, #6d28d9 58%, #3b0f6b) border-box;
+    linear-gradient(180deg, #a78bfa, #F72585 58%, #3b0f6b) border-box;
   color: var(--rf-ink);
   font-size: 12.5px;
   font-weight: 700;
@@ -517,7 +517,7 @@
 }
 
 .rf-chip.is-live {
-  border-color: rgba(52, 211, 153, 0.32);
+  border-color: rgba(6, 214, 160, 0.32);
   color: #6ee7b7;
   background: rgba(16, 185, 129, 0.08);
 }
@@ -612,7 +612,7 @@
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.40), rgba(255, 255, 255, 0.04) 46%, rgba(30, 4, 60, 0.30)) padding-box,
-    linear-gradient(180deg, #a78bfa, #6d28d9 58%, #3b0f6b) border-box;
+    linear-gradient(180deg, #a78bfa, #F72585 58%, #3b0f6b) border-box;
   color: var(--rf-ink);
   font-size: 11.5px;
   font-weight: 700;
@@ -1101,7 +1101,7 @@
   display: block;
   height: 100%;
   border-radius: 3px;
-  background: linear-gradient(90deg, #7c3aed, var(--rf-accent));
+  background: linear-gradient(90deg, #F72585, var(--rf-accent));
   transition: width 0.5s var(--rf-ease);
 }
 
@@ -1397,7 +1397,7 @@
   border-radius: 10px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.40), rgba(255, 255, 255, 0.05) 45%, rgba(28, 4, 58, 0.34)) padding-box,
-    linear-gradient(180deg, #a78bfa, #6d28d9 56%, #3b0f6b) border-box;
+    linear-gradient(180deg, #a78bfa, #F72585 56%, #3b0f6b) border-box;
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;
@@ -2637,8 +2637,8 @@
   background:
     radial-gradient(52% 34% at 50% -6%, rgba(144, 114, 255, 0.30), transparent 70%),
     radial-gradient(34% 28% at 6% 28%, rgba(106, 59, 255, 0.26), transparent 72%),
-    radial-gradient(30% 26% at 95% 20%, rgba(31, 191, 244, 0.10), transparent 74%),
-    radial-gradient(60% 46% at 50% 102%, rgba(124, 58, 237, 0.14), transparent 70%);
+    radial-gradient(30% 26% at 95% 20%, rgba(44, 230, 226, 0.10), transparent 74%),
+    radial-gradient(60% 46% at 50% 102%, rgba(247, 37, 133, 0.14), transparent 70%);
 }
 
 .rf-glow::before {
@@ -2647,7 +2647,7 @@
 }
 
 .rf-glow::after {
-  background: radial-gradient(circle, rgba(31, 191, 244, 0.32), transparent 66%);
+  background: radial-gradient(circle, rgba(44, 230, 226, 0.32), transparent 66%);
   opacity: 0.38;
 }
 
@@ -2676,7 +2676,7 @@
     rgba(201, 188, 255, 0.55),
     transparent
   );
-  filter: drop-shadow(0 0 5px rgba(144, 114, 255, 0.8)) drop-shadow(0 0 14px rgba(124, 58, 237, 0.5));
+  filter: drop-shadow(0 0 5px rgba(144, 114, 255, 0.8)) drop-shadow(0 0 14px rgba(247, 37, 133, 0.5));
   opacity: 0.75;
   pointer-events: none;
 }
@@ -2700,11 +2700,11 @@
 .rf-cta {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.06) 42%, rgba(26, 4, 56, 0.4)) padding-box,
-    linear-gradient(180deg, #c9bcff, #9072ff 38%, #6a3bff 74%, #3b0f8f) border-box;
+    linear-gradient(180deg, #C490E4, #2CE6E2 38%, #F72585 74%, #3b0f8f) border-box;
   box-shadow:
     0 0 0 1px rgba(201, 188, 255, 0.18),
     0 0 18px rgba(144, 114, 255, 0.35),
-    0 0 44px rgba(124, 58, 237, 0.18),
+    0 0 44px rgba(247, 37, 133, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
@@ -2729,7 +2729,7 @@
   color: var(--rf-ink);
   box-shadow:
     inset 0 0 0 1px rgba(144, 114, 255, 0.35),
-    0 0 14px rgba(124, 58, 237, 0.18);
+    0 0 14px rgba(247, 37, 133, 0.18);
 }
 
 .rf-tab.is-on::after {
@@ -2739,7 +2739,7 @@
   right: 22%;
   bottom: 1px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, #c9bcff, #9072ff, transparent);
+  background: linear-gradient(90deg, transparent, #C490E4, #2CE6E2, transparent);
   filter: drop-shadow(0 0 4px rgba(144, 114, 255, 0.9));
 }
 
@@ -2859,7 +2859,7 @@
 .rf-cta.is-graduate {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.04) 44%, rgba(4, 1, 14, 0.55)) padding-box,
-    linear-gradient(180deg, #f1f0ff, #9072ff 34%, #6a3bff 78%, #2a0663) border-box;
+    linear-gradient(180deg, #F8F9FA, #2CE6E2 34%, #F72585 78%, #2a0663) border-box;
   color: #0a0413;
 }
 
@@ -3096,7 +3096,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(180deg, #f3e8ff, #a78bfa 26%, #6d28d9 74%, #3b0f6b);
+  background: linear-gradient(180deg, #f3e8ff, #a78bfa 26%, #F72585 74%, #3b0f6b);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.65),
     0 -12px 24px rgba(167, 139, 250, 0.35);
@@ -4396,7 +4396,7 @@
 .rf-perps-submit.is-short {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.06) 42%, rgba(62, 4, 28, 0.4)) padding-box,
-    linear-gradient(180deg, #ffb3cf, #ff4d8d 42%, #a3134a 76%, #4a071e) border-box;
+    linear-gradient(180deg, #ffb3cf, #F72585 42%, #a3134a 76%, #4a071e) border-box;
   box-shadow:
     0 0 18px rgba(255, 77, 141, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.45);
@@ -4682,7 +4682,7 @@
     transition: color 0.12s ease, background 0.12s ease;
   }
   .rf-mobilenav-btn:hover { color: var(--rf-ink, #fff); }
-  .rf-mobilenav-btn.is-on { color: var(--rf-accent, #a855f7); }
+  .rf-mobilenav-btn.is-on { color: var(--rf-accent, #2CE6E2); }
   .rf-mobilenav-btn.is-on svg { filter: drop-shadow(0 0 6px currentColor); }
   /* keep content above the fixed bar */
   .rf-main { padding-bottom: 72px; }

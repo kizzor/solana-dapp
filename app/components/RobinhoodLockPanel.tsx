@@ -384,7 +384,7 @@ export function RobinhoodLockPanel({
       {/* DEV MODE TEST CONTROLS — TODO(final polish): hide in production */}
       {address && (
         <div style={{
-          background: 'rgba(245, 158, 11, 0.05)',
+          background: 'rgba(255, 183, 3, 0.05)',
           border: '1px dashed #f59e0b55',
           borderRadius: 8,
           padding: '10px 12px',

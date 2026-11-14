@@ -14,7 +14,7 @@ type RegistryState = {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const containerStyle: React.CSSProperties = {
   minHeight: '100vh',
-  background: 'linear-gradient(180deg, #0a0612 0%, #0e0819 60%, #150d24 100%)',
+  background: 'linear-gradient(180deg, #0D0A14 0%, #0D0A14 60%, #151022 100%)',
   color: '#e2e8f0',
   fontFamily: 'DM Mono,monospace',
   position: 'relative' as const,
@@ -23,7 +23,7 @@ const cardStyle: React.CSSProperties = {
   background: 'rgba(22, 12, 42, 0.55)',
   backdropFilter: 'blur(14px) saturate(1.2)',
   WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
-  border: '1px solid rgba(216, 180, 254, 0.22)',
+  border: '1px solid rgba(139, 158, 232, 0.22)',
   borderRadius: 14,
   boxShadow: '0 8px 32px rgba(0,0,0,0.40), 0 0 32px rgba(124,58,237,0.08), inset 0 1px 0 rgba(255,255,255,0.10)',
   padding: '14px 16px',
@@ -42,7 +42,7 @@ const btnBase: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: '100%',
   background: 'rgba(10, 6, 18, 0.55)',
-  border: '1px solid rgba(216, 180, 254, 0.25)',
+  border: '1px solid rgba(139, 158, 232, 0.25)',
   borderRadius: 8,
   padding: '8px 10px',
   fontFamily: 'DM Mono,monospace',
@@ -163,7 +163,7 @@ export default function AdminPage() {
                 {loading ? '...' : 'AUTHENTICATE →'}
               </button>
               {msg && (
-                <div style={{ marginTop: 8, fontSize: 8, color: msg.startsWith('✅') ? '#22c55e' : '#ef4444', textAlign: 'center' }}>
+                <div style={{ marginTop: 8, fontSize: 8, color: msg.startsWith('✅') ? '#06D6A0' : '#ef4444', textAlign: 'center' }}>
                   {msg}
                 </div>
               )}
@@ -214,7 +214,7 @@ export default function AdminPage() {
             background: msg.startsWith('✅') ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
             border: `1px solid ${msg.startsWith('✅') ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
             borderRadius: 8, padding: '10px 14px', marginBottom: 12,
-            fontSize: 9, color: msg.startsWith('✅') ? '#22c55e' : '#ef4444',
+            fontSize: 9, color: msg.startsWith('✅') ? '#06D6A0' : '#ef4444',
           }}>
             {msg}
           </div>
@@ -229,7 +229,7 @@ export default function AdminPage() {
             <div style={{ fontSize: 9, color: '#4a7fa5' }}>Loading...</div>
           ) : registry ? (
             <div style={{ display: 'grid', gap: 8 }}>
-              <InfoRow label="Status" value={registry.paused ? '🔴 PAUSED' : '🟢 ACTIVE'} color={registry.paused ? '#ef4444' : '#22c55e'} />
+              <InfoRow label="Status" value={registry.paused ? '🔴 PAUSED' : '🟢 ACTIVE'} color={registry.paused ? '#ef4444' : '#06D6A0'} />
               {registry.paused && pauseEndLeft > 0 && (
                 <InfoRow label="Resumes in" value={fmtDuration(pauseEndLeft)} color="#f59e0b" />
               )}
@@ -286,7 +286,7 @@ export default function AdminPage() {
               disabled={!!actionLoading || !registry?.paused}
               style={{
                 ...btnBase, flex: 1, padding: '10px',
-                background: !registry?.paused ? '#0a1628' : 'linear-gradient(135deg,#22c55e,#16a34a)',
+                background: !registry?.paused ? '#0a1628' : 'linear-gradient(135deg,#06D6A0,#16a34a)',
                 color: !registry?.paused ? '#1a3f1a' : '#fff',
                 opacity: !registry?.paused ? 0.5 : 1,
                 cursor: !registry?.paused ? 'default' : 'pointer',

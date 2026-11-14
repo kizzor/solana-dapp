@@ -98,7 +98,7 @@ export default function SlotMachine({
     roll: { color: '#ff7a18', anim: 'carnivalStrobe 0.1s infinite', label: 'REELS ROLLING…', hot: true },
     open: { color: '#6ee7b7', anim: 'carnivalStrobe 0.85s infinite', label: 'PLAY WINDOW OPEN', hot: true },
     lobby: { color: '#c084fc', anim: 'carnivalStrobe 1.3s infinite', label: 'ROUND INITIATING', hot: false },
-    idle: { color: '#22d3ee', anim: 'carnivalStrobe 2.4s infinite', label: 'AWAITING DRAW', hot: false },
+    idle: { color: '#2CE6E2', anim: 'carnivalStrobe 2.4s infinite', label: 'AWAITING DRAW', hot: false },
   }
   const led = LED_MODES[ledMode]
 
@@ -107,7 +107,7 @@ export default function SlotMachine({
     { wt: 'EARLY_FIVE', code: 'FF', label: 'FAST FIVE', pct: 5, color: '#f59e0b' },
     { wt: 'TOP_LINE', code: 'TA', label: 'TOP LINE', pct: 5, color: '#c084fc' },
     { wt: 'MIDDLE_LINE', code: 'CA', label: 'MID LINE', pct: 5, color: '#a78bfa' },
-    { wt: 'BOTTOM_LINE', code: 'BA', label: 'BOTTOM', pct: 5, color: '#fbbf24' },
+    { wt: 'BOTTOM_LINE', code: 'BA', label: 'BOTTOM', pct: 5, color: '#FFB703' },
     { wt: 'FULL_HOUSE_1', code: 'FB1', label: 'FULL BANK I', pct: 19.5, color: '#f472b6' },
     { wt: 'FULL_HOUSE_2', code: 'FB2', label: 'FULL BANK II', pct: 19.5, color: '#ec4899' },
     { wt: 'FULL_HOUSE_3', code: 'FB3', label: 'JACKPOT', pct: 40, color: '#ff007f' },
@@ -149,7 +149,7 @@ export default function SlotMachine({
         {/* bulb arch — alternating candy bulbs, chase delay staggering */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: compact ? 6 : 8, marginTop: compact ? 6 : 9 }}>
           {Array.from({ length: compact ? 13 : 21 }, (_, i) => {
-            const cols = ['#ffd166', '#ff7a18', '#22d3ee', '#ff007f']
+            const cols = ['#ffd166', '#ff7a18', '#2CE6E2', '#ff007f']
             return <div key={i} style={{
               width: compact ? 6 : 8, height: compact ? 6 : 8, borderRadius: '50%', color: cols[i % cols.length],
               background: 'currentColor',
@@ -200,7 +200,7 @@ export default function SlotMachine({
                 {prev5.map((n, i) => (
                   <div key={i} style={{
                     width: compact ? 18 : 24, height: compact ? 18 : 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'radial-gradient(circle at 35% 30%,#fff3c4,#f59e0b 55%,#92400e)', border: '1px solid #fbbf24',
+                    background: 'radial-gradient(circle at 35% 30%,#fff3c4,#f59e0b 55%,#92400e)', border: '1px solid #FFB703',
                     fontFamily: 'Syne,sans-serif', fontSize: compact ? 8 : 10, fontWeight: 800, color: '#3b1d04',
                     boxShadow: '0 0 7px rgba(245,158,11,0.55)', opacity: 0.85 - i * 0.13, margin: 1,
                   }}>{n}</div>

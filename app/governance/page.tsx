@@ -34,7 +34,7 @@ function ProgressBar({ for: f, against, total }: { for: number; against: number;
   const aPct = total > 0 ? (against / total) * 100 : 0
   return (
     <div style={{ width: '100%', height: 6, background: '#0a1628', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
-      <div style={{ height: '100%', width: `${fPct}%`, background: '#22c55e', borderRadius: '3px 0 0 3px', transition: 'width 0.5s ease' }} />
+      <div style={{ height: '100%', width: `${fPct}%`, background: '#06D6A0', borderRadius: '3px 0 0 3px', transition: 'width 0.5s ease' }} />
       <div style={{ flex: 1 }} />
       <div style={{ height: '100%', width: `${aPct}%`, background: '#ef4444', borderRadius: '0 3px 3px 0', transition: 'width 0.5s ease' }} />
     </div>
@@ -172,7 +172,7 @@ export default function GovernancePage() {
   // ── Styles ───────────────────────────────────────────────────────────────────
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
-    background: 'linear-gradient(180deg, #0a0612 0%, #0e0819 60%, #150d24 100%)',
+    background: 'linear-gradient(180deg, #0D0A14 0%, #0D0A14 60%, #151022 100%)',
     color: '#e2e8f0',
     fontFamily: 'DM Mono,monospace',
     position: 'relative' as const,
@@ -182,7 +182,7 @@ export default function GovernancePage() {
     background: 'rgba(22, 12, 42, 0.60)',
     backdropFilter: 'blur(14px) saturate(1.25)',
     WebkitBackdropFilter: 'blur(14px) saturate(1.25)',
-    borderBottom: '1px solid rgba(216, 180, 254, 0.22)',
+    borderBottom: '1px solid rgba(139, 158, 232, 0.22)',
     boxShadow: '0 8px 32px rgba(0,0,0,0.45), 0 0 40px rgba(124,58,237,0.10), inset 0 1px 0 rgba(255,255,255,0.12)',
     padding: '16px 20px',
     display: 'flex',
@@ -204,7 +204,7 @@ export default function GovernancePage() {
     background: 'rgba(22, 12, 42, 0.55)',
     backdropFilter: 'blur(14px) saturate(1.2)',
     WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
-    border: '1px solid rgba(216, 180, 254, 0.22)',
+    border: '1px solid rgba(139, 158, 232, 0.22)',
     borderRadius: 14,
     boxShadow: '0 8px 32px rgba(0,0,0,0.40), 0 0 32px rgba(124,58,237,0.08), inset 0 1px 0 rgba(255,255,255,0.10)',
     padding: '14px 16px',
@@ -228,7 +228,7 @@ export default function GovernancePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ fontSize: 8, color: '#4a7fa5' }}>{wallet ? wallet.slice(0, 6) + '...' : 'Not connected'}</div>
           {mtrxDelegated && (
-            <div style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 6, padding: '4px 8px', fontSize: 8, color: '#22c55e' }}>
+            <div style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 6, padding: '4px 8px', fontSize: 8, color: '#06D6A0' }}>
               ✓ DELEGATED
             </div>
           )}
@@ -240,8 +240,8 @@ export default function GovernancePage() {
         {/* Stats bar */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <StatBox label="Total Proposals" value={suggestions.length} color="#4da6ff" />
-          <StatBox label="Active" value={suggestions.filter(s => s.status === 'active').length} color="#22c55e" />
-          <StatBox label="Passed" value={suggestions.filter(s => s.status === 'passed').length} color="#a855f7" />
+          <StatBox label="Active" value={suggestions.filter(s => s.status === 'active').length} color="#06D6A0" />
+          <StatBox label="Passed" value={suggestions.filter(s => s.status === 'passed').length} color="#2CE6E2" />
           <StatBox label="MTRX Balance" value={mtrxBalance > 0 ? `${mtrxBalance.toFixed(1)}` : '—'} color="#f59e0b" />
         </div>
 
@@ -271,8 +271,8 @@ export default function GovernancePage() {
             </div>
             <div style={{ fontSize: 8, color: '#4a7fa5', lineHeight: 1.6, marginBottom: 12 }}>
               Delegate 1,000 MTRX tokens to the governance vault to unlock:
-              <br />• <strong style={{ color: '#22c55e' }}>50% discount</strong> on minting hacking devices ($0.25 instead of $0.50)
-              <br />• <strong style={{ color: '#a855f7' }}>Voting rights</strong> in governance proposals
+              <br />• <strong style={{ color: '#06D6A0' }}>50% discount</strong> on minting hacking devices ($0.25 instead of $0.50)
+              <br />• <strong style={{ color: '#2CE6E2' }}>Voting rights</strong> in governance proposals
               <br />• <strong style={{ color: '#f59e0b' }}>Create proposals</strong> for the community
               <br /><br />
               No lockup — withdraw anytime. Your MTRX stays in your wallet; we verify your balance on-chain.
@@ -308,7 +308,7 @@ export default function GovernancePage() {
                 />
                 <button onClick={checkDelegation} disabled={checkingDelegation || solAddress.length < 32} style={{
                   ...btnBase,
-                  background: 'linear-gradient(135deg,#a855f7,#7c3aed)',
+                  background: 'linear-gradient(135deg,#2CE6E2,#F72585)',
                   color: '#fff',
                   padding: '8px 14px',
                   fontSize: 8,
@@ -319,7 +319,7 @@ export default function GovernancePage() {
               </div>
               {mtrxBalance > 0 && (
                 <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <div style={{ fontSize: 9, color: mtrxDelegated ? '#22c55e' : '#f59e0b' }}>
+                  <div style={{ fontSize: 9, color: mtrxDelegated ? '#06D6A0' : '#f59e0b' }}>
                     {mtrxDelegated
                       ? `✓ Delegated — ${mtrxBalance.toFixed(2)} MTRX`
                       : `⚠ ${mtrxBalance.toFixed(2)} MTRX (need 1,000)`}
@@ -468,7 +468,7 @@ export default function GovernancePage() {
             <button onClick={submitSuggestion} disabled={submitting || !mtrxDelegated} style={{
               ...btnBase,
               width: '100%',
-              background: submitting ? '#0a1628' : 'linear-gradient(135deg,#a855f7,#7c3aed)',
+              background: submitting ? '#0a1628' : 'linear-gradient(135deg,#2CE6E2,#F72585)',
               color: submitting ? '#2a5a7a' : '#fff',
               padding: '12px',
               fontSize: 11,
@@ -479,7 +479,7 @@ export default function GovernancePage() {
             </button>
 
             {submitMsg && (
-              <div style={{ marginTop: 8, fontSize: 8, color: submitMsg.includes('✅') ? '#22c55e' : '#ef4444', textAlign: 'center' }}>
+              <div style={{ marginTop: 8, fontSize: 8, color: submitMsg.includes('✅') ? '#06D6A0' : '#ef4444', textAlign: 'center' }}>
                 {submitMsg}
               </div>
             )}
@@ -520,8 +520,8 @@ export default function GovernancePage() {
                             background: s.status === 'passed' ? 'rgba(168,85,247,0.15)' :
                               s.status === 'active' ? 'rgba(34,197,94,0.15)' :
                               s.status === 'rejected' ? 'rgba(239,68,68,0.15)' : 'rgba(79,170,255,0.15)',
-                            color: s.status === 'passed' ? '#a855f7' :
-                              s.status === 'active' ? '#22c55e' :
+                            color: s.status === 'passed' ? '#2CE6E2' :
+                              s.status === 'active' ? '#06D6A0' :
                               s.status === 'rejected' ? '#ef4444' : '#4da6ff',
                             textTransform: 'uppercase',
                           }}>
@@ -541,7 +541,7 @@ export default function GovernancePage() {
                     <div style={{ marginBottom: 8 }}>
                       <ProgressBar for={s.votesFor} against={s.votesAgainst} total={totalVotes} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 7, color: '#4a7fa5', marginTop: 3 }}>
-                        <span style={{ color: '#22c55e' }}>{s.votesFor} FOR</span>
+                        <span style={{ color: '#06D6A0' }}>{s.votesFor} FOR</span>
                         <span style={{ color: '#ef4444' }}>{s.votesAgainst} AGAINST</span>
                       </div>
                     </div>
@@ -552,7 +552,7 @@ export default function GovernancePage() {
                         <button onClick={() => castVote(s.id, 'for')} disabled={votingId === s.id} style={{
                           ...btnBase, flex: 1, padding: '8px', fontSize: 8,
                           background: 'rgba(34,197,94,0.1)',
-                          color: '#22c55e',
+                          color: '#06D6A0',
                           border: '1px solid rgba(34,197,94,0.3)',
                           opacity: votingId === s.id ? 0.5 : 1,
                         }}>
@@ -570,7 +570,7 @@ export default function GovernancePage() {
                       </div>
                     )}
                     {isActive && hasVoted && (
-                      <div style={{ fontSize: 8, color: userVote === 'for' ? '#22c55e' : '#ef4444', textAlign: 'center', padding: 6 }}>
+                      <div style={{ fontSize: 8, color: userVote === 'for' ? '#06D6A0' : '#ef4444', textAlign: 'center', padding: 6 }}>
                         You voted <strong>{userVote === 'for' ? 'FOR' : 'AGAINST'}</strong>
                       </div>
                     )}
